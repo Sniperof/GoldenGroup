@@ -22,7 +22,7 @@ const maintenanceLabels: Record<string, string> = {
     '1 Year': 'سنة واحدة',
 };
 
-const serviceLabels: Record<string, { label: string; Icon: React.FC<{ size?: number; className?: string }> }> = {
+const serviceLabels: Record<string, { label: string; Icon: any }> = {
     'Installation': { label: 'تركيب', Icon: Wrench },
     'Maintenance': { label: 'صيانة', Icon: PenTool },
     'Delivery': { label: 'توصيل', Icon: Truck },
