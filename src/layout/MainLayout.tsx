@@ -1,0 +1,248 @@
+import { useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    LayoutDashboard, Route, Users, BookUser, Globe,
+    ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
+    Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
+    FileText, FilePlus2, Headset, Settings
+} from 'lucide-react';
+
+const navItems = [
+    { path: '/', label: 'لوحة القيادة', icon: LayoutDashboard },
+    { path: '/geo', label: 'الهيكل الجغرافي', icon: Globe },
+    { path: '/devices', label: 'دليل الأجهزة', icon: Gem },
+    { path: '/routes', label: 'إدارة المسارات', icon: Route },
+    { path: '/clients', label: 'سجل العملاء', icon: BookUser },
+    { path: '/employees', label: 'إدارة الفرق', icon: Users },
+    { path: '/telemarketer', label: 'المسوّق الهاتفي', icon: Headset },
+    { path: '/settings', label: 'إعدادات النظام', icon: Settings },
+];
+
+const planningChildren = [
+    { path: '/planning/overview', label: 'ملخص الخطة', icon: Eye },
+    { path: '/planning/schedule', label: 'جدولة الفرق', icon: UsersRound },
+    { path: '/planning/assign', label: 'تعيين المسارات', icon: MapPinned },
+];
+
+const operationsChildren = [
+    { path: '/tasks/today', label: 'مهام اليوم', icon: Calendar },
+    { path: '/tasks/emergency', label: 'طوارئ', icon: AlertTriangle },
+    { path: '/tasks/dues', label: 'مستحقات', icon: DollarSign },
+    { path: '/tasks/periodic', label: 'صيانة دورية', icon: RefreshCw },
+    { path: '/tasks/returns', label: 'إرجاع', icon: RotateCcw },
+    { path: '/tasks/followup', label: 'متابعة', icon: PhoneCall },
+];
+
+const contractsChildren = [
+    { path: '/contracts', label: 'سجل العقود', icon: FileText },
+    { path: '/contracts/new', label: 'عقد جديد', icon: FilePlus2 },
+];
+
+export default function MainLayout() {
+    const location = useLocation();
+    const isPlanningActive = location.pathname.startsWith('/planning');
+    const isOperationsActive = location.pathname.startsWith('/tasks');
+    const isContractsActive = location.pathname.startsWith('/contracts');
+    const [planningOpen, setPlanningOpen] = useState(isPlanningActive);
+    const [operationsOpen, setOperationsOpen] = useState(isOperationsActive);
+    const [contractsOpen, setContractsOpen] = useState(isContractsActive);
+
+    return (
+        <div className="flex h-screen bg-slate-50">
+            {/* Sidebar */}
+            <aside className="w-64 bg-white border-l border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
+                {/* Logo */}
+                <div className="p-5 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                            <Gem className="w-4 h-4 text-white" />
+                        </div>
+                        <span className="text-xl font-bold text-slate-800 tracking-wide">Golden CRM</span>
+                    </div>
+                </div>
+
+                {/* Navigation */}
+                <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+                    {navItems.map(item => (
+                        <NavLink
+                            key={item.path}
+                            to={item.path}
+                            end={item.path === '/'}
+                            className={({ isActive }) =>
+                                `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                    ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`
+                            }
+                        >
+                            <item.icon className="w-5 h-5" />
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
+
+                    {/* Planning Parent */}
+                    <div>
+                        <button
+                            onClick={() => setPlanningOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isPlanningActive
+                                ? 'bg-sky-50 text-sky-600 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                        >
+                            <ClipboardList className="w-5 h-5" />
+                            <span className="flex-1">التخطيط اليومي</span>
+                            <motion.div animate={{ rotate: planningOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {planningOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    {planningChildren.map(child => (
+                                        <NavLink
+                                            key={child.path}
+                                            to={child.path}
+                                            className={({ isActive }) =>
+                                                `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
+                                                    ? 'text-sky-600 bg-sky-50 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`
+                                            }
+                                        >
+                                            <child.icon className="w-4 h-4" />
+                                            <span>{child.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Operations Parent */}
+                    <div>
+                        <button
+                            onClick={() => setOperationsOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isOperationsActive
+                                ? 'bg-sky-50 text-sky-600 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                        >
+                            <Briefcase className="w-5 h-5" />
+                            <span className="flex-1">العمليات والمهام</span>
+                            <motion.div animate={{ rotate: operationsOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {operationsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    {operationsChildren.map(child => (
+                                        <NavLink
+                                            key={child.path}
+                                            to={child.path}
+                                            className={({ isActive }) =>
+                                                `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
+                                                    ? 'text-sky-600 bg-sky-50 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`
+                                            }
+                                        >
+                                            <child.icon className="w-4 h-4" />
+                                            <span>{child.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Contracts Parent */}
+                    <div>
+                        <button
+                            onClick={() => setContractsOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isContractsActive
+                                ? 'bg-sky-50 text-sky-600 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                        >
+                            <FileText className="w-5 h-5" />
+                            <span className="flex-1">إدارة العقود</span>
+                            <motion.div animate={{ rotate: contractsOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {contractsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    {contractsChildren.map(child => (
+                                        <NavLink
+                                            key={child.path}
+                                            to={child.path}
+                                            end={child.path === '/contracts'}
+                                            className={({ isActive }) =>
+                                                `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
+                                                    ? 'text-sky-600 bg-sky-50 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`
+                                            }
+                                        >
+                                            <child.icon className="w-4 h-4" />
+                                            <span>{child.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+
+                </nav>
+
+                {/* User Profile */}
+                <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+                    <div className="flex items-center gap-3 p-2 rounded-lg">
+                        <div className="relative">
+                            <img
+                                src="https://ui-avatars.com/api/?name=Ibrahim+Obaid&background=0ea5e9&color=fff"
+                                alt="User"
+                                className="w-10 h-10 rounded-full border border-slate-200"
+                            />
+                            <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-700 truncate">إبراهيم عبيد</p>
+                            <p className="text-xs text-slate-500 truncate">مدير النظام</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 overflow-hidden bg-slate-50">
+                <Outlet />
+            </main>
+        </div>
+    );
+}
