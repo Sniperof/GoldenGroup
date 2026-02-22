@@ -78,13 +78,13 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                 } else {
                     setContacts([emptyContact(true)]);
                 }
-                if (initialData.latitude && initialData.longitude) {
-                    setMapPosition([initialData.latitude, initialData.longitude]);
+                if (initialData.gpsCoordinates) {
+                    setMapPosition([initialData.gpsCoordinates.lat, initialData.gpsCoordinates.lng]);
                 } else {
                     setMapPosition(null);
                 }
             } else {
-                setFormData({ status: 'New', sourceChannel: 'App', referrerType: 'Other', governorate: '1' });
+                setFormData({ sourceChannel: 'App', referrerType: 'Other', governorate: '1' });
                 setFirstName(''); setKunya(''); setLastName(''); setFatherName('');
                 setContacts([emptyContact(true)]);
                 setMapPosition(null);
@@ -129,10 +129,9 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
         updateForm('neighborhood', sel.neighborhoodId);
     }, [updateForm]);
 
-    // -- Map --
     const handleLocationSelect = useCallback((lat: number, lng: number) => {
         setMapPosition([lat, lng]);
-        setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+        setFormData(prev => ({ ...prev, gpsCoordinates: { lat, lng } }));
     }, []);
 
     // -- Save --
@@ -151,8 +150,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
             name: fullName,
             mobile: primaryNumber,
             contacts: contacts.filter(c => c.number.trim()),
-            latitude: mapPosition?.[0],
-            longitude: mapPosition?.[1],
+            gpsCoordinates: mapPosition ? { lat: mapPosition[0], lng: mapPosition[1] } : undefined,
         } as Client);
     };
 

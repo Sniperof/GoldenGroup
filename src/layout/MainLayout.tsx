@@ -5,7 +5,7 @@ import {
     LayoutDashboard, Route, Users, BookUser, Globe,
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
-    FileText, FilePlus2, Headset, Settings
+    FileText, FilePlus2, Headset, Settings, UserPlus
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
     { path: '/devices', label: 'دليل الأجهزة', icon: Gem },
     { path: '/routes', label: 'إدارة المسارات', icon: Route },
     { path: '/clients', label: 'سجل العملاء', icon: BookUser },
+    { path: '/candidates', label: 'المرشحون', icon: UserPlus },
     { path: '/employees', label: 'إدارة الفرق', icon: Users },
     { path: '/telemarketer', label: 'المسوّق الهاتفي', icon: Headset },
     { path: '/settings', label: 'إعدادات النظام', icon: Settings },

@@ -1,0 +1,19 @@
+src/components/AssignAgentModal.tsx(35,21): error TS2322: Type '{ children: Element[]; initial: { opacity: number; scale: number; }; animate: { opacity: number; scale: number; }; exit: { opacity: number; scale: number; }; width: string; className: string; }' is not assignable to type 'IntrinsicAttributes & Omit<HTMLMotionProps<"div">, "ref"> & RefAttributes<HTMLDivElement>'.
+  Property 'width' does not exist on type 'IntrinsicAttributes & Omit<HTMLMotionProps<"div">, "ref"> & RefAttributes<HTMLDivElement>'.
+src/components/ClientModal.tsx(81,33): error TS2339: Property 'latitude' does not exist on type 'Client'.
+src/components/ClientModal.tsx(81,57): error TS2339: Property 'longitude' does not exist on type 'Client'.
+src/components/ClientModal.tsx(82,49): error TS2339: Property 'latitude' does not exist on type 'Client'.
+src/components/ClientModal.tsx(82,71): error TS2339: Property 'longitude' does not exist on type 'Client'.
+src/components/ClientModal.tsx(87,31): error TS2353: Object literal may only specify known properties, and 'status' does not exist in type 'SetStateAction<Partial<Client>>'.
+src/pages/candidates/CandidatesEntry.tsx(166,84): error TS2304: Cannot find name 'setSessionDetailsId'.
+src/pages/candidates/CandidatesEntry.tsx(167,66): error TS2304: Cannot find name 'Info'.
+src/pages/candidates/CandidatesEntry.tsx(267,14): error TS2304: Cannot find name 'SessionDetailsModal'.
+src/pages/candidates/CandidatesEntry.tsx(268,28): error TS2304: Cannot find name 'sessionDetailsId'.
+src/pages/candidates/CandidatesEntry.tsx(269,25): error TS2304: Cannot find name 'sessionDetailsId'.
+src/pages/candidates/CandidatesEntry.tsx(270,32): error TS2304: Cannot find name 'setSessionDetailsId'.
+src/pages/Dashboard.tsx(63,140): error TS2339: Property 'status' does not exist on type 'Client'.
+src/pages/Dashboard.tsx(69,107): error TS2339: Property 'status' does not exist on type 'Client'.
+src/pages/Dashboard.tsx(69,185): error TS2339: Property 'status' does not exist on type 'Client'.
+src/pages/Dashboard.tsx(70,48): error TS2339: Property 'status' does not exist on type 'Client'.
+src/pages/Dashboard.tsx(70,82): error TS2339: Property 'status' does not exist on type 'Client'.
+src/pages/Dashboard.tsx(99,162): error TS2339: Property 'status' does not exist on type 'Client'.

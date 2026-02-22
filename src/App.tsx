@@ -6,6 +6,7 @@ import GeoSettings from './pages/GeoSettings';
 import RouteManager from './pages/RouteManager';
 import Employees from './pages/Employees';
 import Clients from './pages/Clients';
+import CandidatesEntry from './pages/candidates/CandidatesEntry';
 import TeamScheduler from './pages/planning/TeamScheduler';
 import RouteAssigner from './pages/planning/RouteAssigner';
 import PlanOverview from './pages/planning/PlanOverview';
@@ -34,6 +35,7 @@ export default function App() {
                         <Route path="/routes" element={<RouteManager />} />
                         <Route path="/employees" element={<Employees />} />
                         <Route path="/clients" element={<Clients />} />
+                        <Route path="/candidates" element={<CandidatesEntry />} />
                         <Route path="/planning/schedule" element={<TeamScheduler />} />
                         <Route path="/planning/assign" element={<RouteAssigner />} />
                         <Route path="/planning/overview" element={<PlanOverview />} />

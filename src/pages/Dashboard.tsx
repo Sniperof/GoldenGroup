@@ -60,14 +60,14 @@ export default function Dashboard() {
                                     <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-sky-50 transition-colors cursor-pointer group">
                                         <div className="relative">
                                             <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=0ea5e9&color=fff&size=32`} alt="" className="w-9 h-9 rounded-full border border-gray-100 group-hover:border-sky-200 transition-colors" />
-                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${c.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
+                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${c.candidateStatus === 'Qualified' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm text-slate-800 font-semibold truncate group-hover:text-sky-700 transition-colors">{c.name}</p>
                                             <p className="text-xs text-slate-500">{c.mobile}</p>
                                         </div>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : c.status === 'New' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`}>
-                                            {c.status === 'Active' ? 'فعّال' : c.status === 'New' ? 'جديد' : 'غير فعّال'}
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.candidateStatus === 'Qualified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                            {c.candidateStatus === 'Qualified' ? 'فعّال' : 'جديد'}
                                         </span>
                                     </div>
                                 ))}
@@ -96,7 +96,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">العملاء الجدد</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{clients.filter(c => c.status === 'New').length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{clients.filter(c => c.isCandidate).length}</span>
                         </div>
                     </div>
                 </motion.div>
