@@ -1,67 +1,174 @@
 import { useState } from 'react';
-import { DollarSign, Eye } from 'lucide-react';
-import { defaultTasks, defaultGeoUnits } from '../../lib/defaultData';
-import type { Task } from '../../lib/types';
+import { DollarSign, UserPlus, AlertTriangle, TrendingDown, Flag } from 'lucide-react';
+import { useCollectionStore } from '../../hooks/useCollectionStore';
+import { defaultEmployees } from '../../lib/defaultData';
 import SmartTable from '../../components/SmartTable';
-import type { ColumnDef, FilterDef } from '../../components/SmartTable';
-import Customer360Modal from '../../components/Customer360Modal';
-import { LocationBadge, getLocationBadgeProps } from '../../components/GeoSmartSearch';
+import type { ColumnDef, FilterDef, BulkActionDef } from '../../components/SmartTable';
+import CollectionModal from '../../components/CollectionModal';
+import AssignAgentModal from '../../components/AssignAgentModal';
+import { Due } from '../../lib/types';
 
-const statusConfig: Record<string, { label: string; style: string }> = {
-    pending: { label: 'قيد الانتظار', style: 'bg-gray-50 text-slate-600 border-gray-200' },
-    'in-progress': { label: 'قيد التنفيذ', style: 'bg-blue-50 text-blue-700 border-blue-200' },
-    completed: { label: 'مكتمل', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-};
-
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric' });
+// Helper for date formatting
+const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatMoney = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
 
 export default function Dues() {
-    const tasks = defaultTasks.filter(t => t.type === 'dues');
-    const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+    const { dues, getKPIs } = useCollectionStore();
+    const kpis = getKPIs();
 
-    const columns: ColumnDef<Task>[] = [
-        { key: 'customerName', label: 'العميل', sortable: true, render: (t) => <span className="text-sm font-semibold text-slate-800">{t.customerName}</span> },
-        { key: 'context', label: 'التفاصيل', render: (t) => <span className="text-sm text-slate-600">{t.context}</span> },
-        { key: 'location', label: 'الموقع', sortable: true, render: (t) => { const lp = getLocationBadgeProps(t.location, defaultGeoUnits); return <LocationBadge {...lp} />; } },
-        { key: 'dueDate', label: 'التاريخ', sortable: true, render: (t) => <span className="text-sm text-slate-500">{formatDate(t.dueDate)}</span> },
+    // Modals State
+    const [selectedDue, setSelectedDue] = useState<(Due & { customerName: string; mobile: string }) | null>(null);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [selectedDueIds, setSelectedDueIds] = useState<number[]>([]);
+
+    // Column Definitions
+    const columns: ColumnDef<typeof dues[0]>[] = [
+        { key: 'customerName', label: 'العميل', sortable: true, render: (d) => <span className="text-sm font-bold text-slate-800">{d.customerName}</span> },
+        { key: 'mobile', label: 'الموبايل', render: (d) => <span className="text-sm font-mono text-slate-500 dir-ltr">{d.mobile}</span> },
+        {
+            key: 'type', label: 'النوع', sortable: true,
+            render: (d) => <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">{d.type === 'Installment' ? 'قسط' : d.type === 'Down Payment' ? 'دفعة أولى' : 'صيانة'}</span>
+        },
+        {
+            key: 'remainingBalance', label: 'المتبقي', sortable: true,
+            render: (d) => <span className="text-sm font-bold text-slate-900">{formatMoney(d.remainingBalance)}</span>
+        },
+        {
+            key: 'adjustedDate', label: 'تاريخ الاستحقاق', sortable: true,
+            render: (d) => <span className="text-sm text-slate-600">{formatDate(d.adjustedDate)}</span>
+        },
+        {
+            key: 'assignedTelemarketerId', label: 'الموظف المسند', sortable: true,
+            render: (d) => {
+                const agent = defaultEmployees.find(e => e.id === d.assignedTelemarketerId);
+                return agent ? (
+                    <div className="flex items-center gap-1.5">
+                        <img src={agent.avatar} alt="" className="w-5 h-5 rounded-full" />
+                        <span className="text-xs text-slate-700">{agent.name}</span>
+                    </div>
+                ) : <span className="text-xs text-slate-400 italic">-- غير مسند --</span>;
+            }
+        },
         {
             key: 'status', label: 'الحالة', sortable: true,
-            render: (t) => {
-                const s = statusConfig[t.status];
-                return <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${s.style}`}>{s.label}</span>;
+            render: (d) => {
+                const styles: Record<string, string> = {
+                    'Pending': 'bg-gray-100 text-slate-600',
+                    'Partial': 'bg-amber-50 text-amber-700 border-amber-200',
+                    'Paid': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    'Overdue': 'bg-red-50 text-red-700 border-red-200',
+                };
+                return (
+                    <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${styles[d.status] || styles.Pending}`}>
+                            {d.status === 'Pending' ? 'انتظار' : d.status === 'Partial' ? 'دفع جزئي' : d.status === 'Paid' ? 'مدفوع' : 'متأخر'}
+                        </span>
+                        {d.escalated && <Flag className="w-4 h-4 text-red-500 fill-red-500" />}
+                    </div>
+                );
             },
         },
     ];
 
+    // Filters
     const filters: FilterDef[] = [
-        { key: 'status', label: 'جميع الحالات', options: [{ value: 'pending', label: 'قيد الانتظار' }, { value: 'in-progress', label: 'قيد التنفيذ' }, { value: 'completed', label: 'مكتمل' }] },
+        { key: 'status', label: 'جميع الحالات', options: [{ value: 'Pending', label: 'انتظار' }, { value: 'Overdue', label: 'متأخر' }, { value: 'Partial', label: 'دفع جزئي' }, { value: 'Paid', label: 'مدفوع' }] },
+        { key: 'type', label: 'جميع الأنواع', options: [{ value: 'Installment', label: 'قسط' }, { value: 'Maintenance Fee', label: 'رسوم صيانة' }] },
     ];
 
+    // Bulk Actions
+    const bulkActions: BulkActionDef<typeof dues[0]>[] = [
+        {
+            label: 'إسناد لموظف',
+            icon: UserPlus,
+            onClick: (items) => {
+                setSelectedDueIds(items.map(i => i.id));
+                setIsAssignModalOpen(true);
+            }
+        }
+    ];
+
+    // Row Styling Logic
+    const getRowClass = (d: typeof dues[0]) => {
+        if (d.status === 'Paid') return 'opacity-60 bg-gray-50'; // Paid rows dim
+
+        const today = new Date();
+        const due = new Date(d.adjustedDate);
+        const diffTime = today.getTime() - due.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 30) return 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500'; // Critical Overdue
+        if (diffDays > 0) return 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-500'; // Overdue
+
+        return '';
+    };
+
     return (
-        <>
-            <SmartTable<Task>
-                title="المستحقات المالية"
-                icon={DollarSign}
-                data={tasks}
-                columns={columns}
-                filters={filters}
-                searchKeys={['customerName', 'context', 'location']}
-                searchPlaceholder="بحث عن عميل..."
-                getId={(t) => t.id}
-                onRowClick={(t) => setSelectedCustomer(t.customerName)}
-                actions={(t) => t.status === 'pending' ? (
-                    <button onClick={(e) => { e.stopPropagation(); setSelectedCustomer(t.customerName); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors">
-                        <Eye className="w-3.5 h-3.5" /><span>عرض</span>
-                    </button>
-                ) : null}
-                emptyIcon={DollarSign}
-                emptyMessage="لا توجد مستحقات"
+        <div className="flex flex-col h-full space-y-6">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-8 pt-6">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-slate-500 text-sm font-medium mb-1">إجمالي الديون المتبقية</p>
+                        <h3 className="text-2xl font-bold text-slate-900">{formatMoney(kpis.totalRemaining)}</h3>
+                    </div>
+                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+                        <DollarSign className="w-6 h-6" />
+                    </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-slate-500 text-sm font-medium mb-1">نسبة المتأخرات (&gt;30 يوم)</p>
+                        <h3 className="text-2xl font-bold text-slate-900">{kpis.overdueRate.toFixed(1)}%</h3>
+                    </div>
+                    <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
+                        <TrendingDown className="w-6 h-6" />
+                    </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-slate-500 text-sm font-medium mb-1">ديون غير مسندة</p>
+                        <h3 className="text-2xl font-bold text-slate-900">{kpis.unassignedDues}</h3>
+                    </div>
+                    <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+                        <AlertTriangle className="w-6 h-6" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Smart Table */}
+            <div className="flex-1 overflow-hidden">
+                <SmartTable
+                    title="لوحة التحصيل"
+                    icon={DollarSign}
+                    data={dues}
+                    columns={columns}
+                    filters={filters}
+                    searchKeys={['customerName', 'mobile']}
+                    searchPlaceholder="بحث في المستحقات..."
+                    getId={(d) => d.id}
+                    onRowClick={(d) => setSelectedDue(d)}
+                    bulkActions={bulkActions}
+                    rowClassName={getRowClass}
+                    emptyIcon={DollarSign}
+                    emptyMessage="لا توجد مستحقات تطابق البحث"
+                />
+            </div>
+
+            {/* Modals */}
+            <CollectionModal
+                isOpen={!!selectedDue}
+                onClose={() => setSelectedDue(null)}
+                due={selectedDue}
             />
-            <Customer360Modal
-                isOpen={!!selectedCustomer}
-                onClose={() => setSelectedCustomer(null)}
-                customerName={selectedCustomer}
+
+            <AssignAgentModal
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                selectedDueIds={selectedDueIds}
             />
-        </>
+        </div>
     );
 }

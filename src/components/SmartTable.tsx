@@ -91,7 +91,8 @@ export default function SmartTable<T>({
     emptyIcon: EmptyIcon,
     emptyMessage = 'لا توجد بيانات',
     getId,
-}: SmartTableProps<T>) {
+    rowClassName,
+}: SmartTableProps<T> & { rowClassName?: (item: T) => string }) {
 
     /* ---------- state ---------- */
     const [search, setSearch] = useState('');
@@ -341,12 +342,13 @@ export default function SmartTable<T>({
                             ) : sorted.map((item, rowIdx) => {
                                 const id = getId(item);
                                 const isSelected = selected.has(id);
+                                const customRowClass = rowClassName ? rowClassName(item) : '';
                                 return (
                                     <motion.tr
                                         key={String(id)}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className={`transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-sky-50/60' : rowIdx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-sky-50/80`}
+                                        className={`transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-sky-50/60' : ''} ${!isSelected && rowIdx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-sky-50/80 ${customRowClass}`}
                                         onClick={() => onRowClick?.(item)}
                                     >
                                         {bulkActions && (

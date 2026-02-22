@@ -18,6 +18,62 @@ export interface Route {
     status: string;
 }
 
+export type ReferralType = 'Existing Client' | 'Supervisor' | 'Technician' | 'App' | 'Direct Call' | 'Marketing Visit' | 'Maintenance Visit' | 'Campaign' | 'Other';
+export type ReferralOriginChannel = 'App' | 'Visit' | 'Call' | 'Maintenance' | 'Campaign' | 'Field Activity';
+
+export interface ReferralSession {
+    id: number;
+    referralType: ReferralType;
+    referralEntityId: number | null;
+    referralNameSnapshot: string;
+    referralAddressText: string;
+    referralOriginChannel: ReferralOriginChannel;
+    referralNotes?: string;
+    referralDate: string; // New required field
+    referralReason: string; // New required field
+    ownerUserId: number;
+    status: 'Open' | 'Closed';
+    createdAt: string;
+    createdBy: number;
+}
+
+export type CandidateStatus = 'New' | 'Contacted' | 'Qualified' | 'Junk';
+export type ReferralConfirmationStatus = 'Pending' | 'Confirmed' | 'Rejected';
+export type DuplicateType = 'Candidate' | 'Client' | 'Both';
+
+export interface Candidate {
+    id: number;
+    // Constraint: At least one of firstName or nickname must be filled
+    firstName: string | null;
+    lastName?: string;
+    nickname: string | null;
+    mobile: string;
+    addressText: string;
+    ownerUserId: number;
+    status: CandidateStatus;
+
+    // Referral Data (Mandatory & Mode fields)
+    referralSessionId: number | null; // Nullable for Direct Mode
+    referralDate: string; // Required
+    referralReason: string; // Required
+    referralType: ReferralType; // Required
+    referralOriginChannel: ReferralOriginChannel; // Required
+    referralNameSnapshot: string; // Required
+    referralEntityId: number | null;
+
+    referralConfirmationStatus: ReferralConfirmationStatus;
+    candidateNotes?: string;
+
+    // Duplication Tracking
+    duplicateFlag: boolean;
+    duplicateType: DuplicateType | null;
+    duplicateReferenceId: number | null;
+
+    convertedToLeadId: number | null;
+    createdAt: string;
+    createdBy: number;
+}
+
 export interface Employee {
     id: number;
     name: string;
@@ -49,17 +105,25 @@ export interface Client {
     governorate: string;
     district: string;
     neighborhood: string;
-    detailedAddress: string;
-    latitude?: number;
-    longitude?: number;
-    sourceChannel: string;
-    referrerType: string;
+    detailedAddress?: string;
+    gpsCoordinates?: { lat: number; lng: number };
+
+    // Lineage fields (transferred from Candidate/ReferralSession)
+    sourceChannel?: string;
+    referrerType?: string;
+    referrerId?: number; // legacy
     referrerName?: string;
-    status: 'New' | 'Active' | 'Inactive';
+    referralEntityId?: number | null;
+    referralDate?: string;
+    referralReason?: string;
+    referralSessionId?: number | null;
+    referralAddressText?: string;
+
     createdAt: string;
     isCandidate?: boolean;
+    targetClient?: string;
+    candidateStatus?: string;
 }
-
 export interface Visit {
     id: string;
     date: string;
@@ -121,11 +185,20 @@ export type ContractStatus = 'draft' | 'active' | 'completed' | 'cancelled';
 export type PaymentType = 'cash' | 'installment';
 export type MaintenancePlan = '3' | '6' | '12';
 
-export interface Installment {
+export type DueType = 'Installment' | 'Maintenance Fee' | 'Down Payment';
+export type DueStatus = 'Pending' | 'Partial' | 'Paid' | 'Overdue';
+
+export interface Due {
     id: number;
-    dueDate: string;
-    amount: number;
-    status: 'pending' | 'paid' | 'overdue';
+    contractId: number;
+    type: DueType;
+    scheduledDate: string; // Original legal date
+    adjustedDate: string; // Active operational date
+    originalAmount: number;
+    remainingBalance: number;
+    assignedTelemarketerId: number | null;
+    status: DueStatus;
+    escalated: boolean;
 }
 
 export interface Contract {
@@ -140,11 +213,11 @@ export interface Contract {
     serialNumber: string;
     maintenancePlan: MaintenancePlan;
     basePrice: number;
-    finalPrice: number;
+    finalPrice: number; // Represents TotalAmount
     paymentType: PaymentType;
     downPayment: number;
     installmentsCount: number;
-    installments: Installment[];
+    dues: Due[]; // Renamed from installments
     deliveryDate: string;
     installationDate: string;
     status: ContractStatus;

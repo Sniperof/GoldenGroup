@@ -9,40 +9,13 @@ import { useNavigate } from 'react-router-dom';
 /*  Sample contracts                                                    */
 /* ------------------------------------------------------------------ */
 
-const sampleContracts: Contract[] = [
-    {
-        id: 1, contractNumber: 'CNT-2026-001', customerId: 1, customerName: 'خالد السامرائي',
-        contractDate: '2026-01-15', deviceModelId: 1, deviceModelName: 'Golden 7 Stages',
-        serialNumber: 'SN-A1234', maintenancePlan: '6', basePrice: 250000, finalPrice: 250000,
-        paymentType: 'installment', downPayment: 50000, installmentsCount: 6,
-        installments: [], deliveryDate: '2026-01-20', installationDate: '2026-01-22',
-        status: 'active', createdAt: '2026-01-15',
-    },
-    {
-        id: 2, contractNumber: 'CNT-2026-002', customerId: 4, customerName: 'عبد الرحمن الجبوري',
-        contractDate: '2026-02-01', deviceModelId: 3, deviceModelName: 'Office Dispenser Pro',
-        serialNumber: 'SN-B5678', maintenancePlan: '6', basePrice: 650000, finalPrice: 650000,
-        paymentType: 'cash', downPayment: 650000, installmentsCount: 0,
-        installments: [], deliveryDate: '2026-02-05', installationDate: '2026-02-06',
-        status: 'active', createdAt: '2026-02-01',
-    },
-    {
-        id: 3, contractNumber: 'CNT-2026-003', customerId: 6, customerName: 'فادي الموصلي',
-        contractDate: '2026-02-10', deviceModelId: 2, deviceModelName: 'Industrial RO System 5000GPD',
-        serialNumber: 'SN-C9012', maintenancePlan: '3', basePrice: 4500000, finalPrice: 4200000,
-        paymentType: 'installment', downPayment: 1000000, installmentsCount: 12,
-        installments: [], deliveryDate: '2026-02-15', installationDate: '2026-02-18',
-        status: 'active', createdAt: '2026-02-10',
-    },
-    {
-        id: 4, contractNumber: 'CNT-2025-047', customerId: 3, customerName: 'سلمى حسين',
-        contractDate: '2025-11-05', deviceModelId: 1, deviceModelName: 'Golden 7 Stages',
-        serialNumber: 'SN-D3456', maintenancePlan: '12', basePrice: 250000, finalPrice: 250000,
-        paymentType: 'cash', downPayment: 250000, installmentsCount: 0,
-        installments: [], deliveryDate: '2025-11-10', installationDate: '2025-11-12',
-        status: 'completed', createdAt: '2025-11-05',
-    },
-];
+import { mockContracts } from '../../lib/mockData';
+
+/* ------------------------------------------------------------------ */
+/*  Sample contracts                                                    */
+/* ------------------------------------------------------------------ */
+
+const sampleContracts = mockContracts;
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                              */
