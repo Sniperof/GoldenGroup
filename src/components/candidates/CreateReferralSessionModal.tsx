@@ -8,19 +8,19 @@ import { defaultGeoUnits } from '../../lib/defaultData';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSessionCreated?: (sessionId: number) => void;
+    onSheetCreated?: (sheetId: number) => void;
 }
 
 const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
     { value: 'Existing Client', label: 'عميل حالي', icon: User },
-    { value: 'Supervisor', label: 'مشرف', icon: Building2 },
-    { value: 'Technician', label: 'فني', icon: Building2 },
+    { value: 'Supervisor', label: 'مشرف (شخصي)', icon: Building2 },
+    { value: 'Technician', label: 'فني / موظف', icon: Building2 },
     { value: 'App', label: 'تطبيق', icon: PhoneCall },
     { value: 'Marketing Visit', label: 'زيارة تسويق', icon: Handshake },
     { value: 'Maintenance Visit', label: 'زيارة صيانة', icon: Handshake },
     { value: 'Campaign', label: 'حملة ترويجية', icon: User },
     { value: 'Direct Call', label: 'اتصال مباشر', icon: PhoneCall },
-    { value: 'Other', label: 'أخرى', icon: User },
+    { value: 'Other', label: 'طرف خارجي', icon: User },
 ];
 
 const channels: { value: ReferralOriginChannel; label: string }[] = [
@@ -32,21 +32,20 @@ const channels: { value: ReferralOriginChannel; label: string }[] = [
     { value: 'Field Activity', label: 'نشاط ترويجي' }
 ];
 
-export default function CreateReferralSessionModal({ isOpen, onClose, onSessionCreated }: Props) {
-    const addReferralSession = useCandidateStore(state => state.addReferralSession);
+export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreated }: Props) {
+    const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
     const [referralType, setReferralType] = useState<ReferralType>('Existing Client');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
     const [nameSnapshot, setNameSnapshot] = useState('');
     const [addressSelection, setAddressSelection] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
-    const [referralReason, setReferralReason] = useState('');
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
 
     const handleSave = () => {
-        if (!nameSnapshot.trim() || !referralDate || !referralReason.trim()) {
-            setError('الرجاء تعبئة جميع الحقول الإلزامية (اسم المصدر، تاريخ الاستقطاب، وسبب الاستقطاب).');
+        if (!nameSnapshot.trim() || !referralDate) {
+            setError('الرجاء تعبئة جميع الحقول الإلزامية (اسم الوسيط، وتاريخ الورقة).');
             return;
         }
 
@@ -55,23 +54,26 @@ export default function CreateReferralSessionModal({ isOpen, onClose, onSessionC
         const matchingUnit = defaultGeoUnits.find(u => u.id === Number(unitId));
         const addressText = matchingUnit ? matchingUnit.name : 'غير محدد';
 
-        const newId = addReferralSession({
-            referralType,
-            referralOriginChannel: originChannel,
-            referralNameSnapshot: nameSnapshot,
-            referralAddressText: addressText,
-            referralEntityId: null, // Stub for future entity linking
-            referralDate: new Date(referralDate).toISOString(),
-            referralReason,
-            referralNotes: notes,
-            ownerUserId: 1, // Mocked to current supervisor
-            status: 'Open',
-            createdBy: 1
-        });
+        try {
+            const newId = addReferralSheet({
+                referralType,
+                referralOriginChannel: originChannel,
+                referralNameSnapshot: nameSnapshot,
+                referralAddressText: addressText,
+                referralEntityId: null, 
+                referralDate: new Date(referralDate).toISOString(),
+                referralNotes: notes,
+                ownerUserId: 1, // Auto-assigned to current supervisor (Mocked)
+                status: 'New',
+                createdBy: 1
+            });
 
-        if (onSessionCreated) onSessionCreated(newId);
-        resetState();
-        onClose();
+            if (onSheetCreated) onSheetCreated(newId);
+            resetState();
+            onClose();
+        } catch (e: any) {
+            setError(e.message);
+        }
     };
 
     const resetState = () => {
@@ -80,7 +82,6 @@ export default function CreateReferralSessionModal({ isOpen, onClose, onSessionC
         setNameSnapshot('');
         setAddressSelection({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
         setReferralDate(new Date().toISOString().split('T')[0]);
-        setReferralReason('');
         setNotes('');
         setError('');
     };
@@ -98,8 +99,8 @@ export default function CreateReferralSessionModal({ isOpen, onClose, onSessionC
                             <PlusCircle className="w-5 h-5 text-amber-600" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-slate-800">إنشاء جلسة استقطاب (Referral Session)</h2>
-                            <p className="text-sm text-slate-500">تجميع مجموعة مرشحين تحت مصدر واحد</p>
+                            <h2 className="text-xl font-bold text-slate-800">إضافة ورقة ترشيح جديدة (New Referral Sheet)</h2>
+                            <p className="text-sm text-slate-500">تسجيل قائمة أسماء جديدة تحت وسيط محدد</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
@@ -115,81 +116,67 @@ export default function CreateReferralSessionModal({ isOpen, onClose, onSessionC
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع المرجع (Referral Type)</label>
-                        <select
-                            value={referralType}
-                            onChange={(e) => setReferralType(e.target.value as ReferralType)}
-                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
-                        >
-                            {referralTypes.map(rt => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">اسم المرجع/المصدر المطلق <span className="text-red-500">*</span></label>
-                        <input
-                            type="text"
-                            value={nameSnapshot}
-                            onChange={(e) => setNameSnapshot(e.target.value)}
-                            placeholder="مثال: حملة مول بغداد، أو اسم العميل..."
-                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
-                        />
-                    </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">تاريخ الاستقطاب <span className="text-red-500">*</span></label>
-                            <input
-                                type="date"
-                                value={referralDate}
-                                onChange={(e) => setReferralDate(e.target.value)}
-                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">سبب الاستقطاب <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">نوع الوسيط (Mediator Type)</label>
                             <select
-                                value={referralReason}
-                                onChange={(e) => setReferralReason(e.target.value)}
+                                value={referralType}
+                                onChange={(e) => setReferralType(e.target.value as ReferralType)}
                                 className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
                             >
-                                <option value="" disabled>-- إختر السبب --</option>
-                                <option value="توسيع الشبكة">توسيع الشبكة</option>
-                                <option value="ترشيح من عميل">ترشيح من عميل</option>
-                                <option value="أخرى">أخرى</option>
+                                {referralTypes.map(rt => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">طريقة الوصول (Method)</label>
+                            <select
+                                value={originChannel}
+                                onChange={(e) => setOriginChannel(e.target.value as ReferralOriginChannel)}
+                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
+                            >
+                                {channels.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">قناة الاستقطاب (Channel)</label>
-                        <select
-                            value={originChannel}
-                            onChange={(e) => setOriginChannel(e.target.value as ReferralOriginChannel)}
+                        <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط / المصدر (Mediator Name) <span className="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            value={nameSnapshot}
+                            onChange={(e) => setNameSnapshot(e.target.value)}
+                            placeholder="مثال: أبو محمد الناطور، أو اسم العميل..."
                             className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
-                        >
-                            {channels.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <GeoSmartSearch
-                            label="منطقة الاستقطاب / سكن العميل"
-                            geoUnits={defaultGeoUnits}
-                            value={addressSelection}
-                            onChange={setAddressSelection}
-                            placeholder="ابحث عن المنطقة..."
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">ملاحظات الجلسة (اختياري)</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">تاريخ الورقة (Sheet Date) <span className="text-red-500">*</span></label>
+                        <input
+                            type="date"
+                            value={referralDate}
+                            onChange={(e) => setReferralDate(e.target.value)}
+                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
+                        />
+                    </div>
+
+                    <div>
+                        <GeoSmartSearch
+                            label="النطاق الجغرافي / منطقة العمل"
+                            geoUnits={defaultGeoUnits}
+                            value={addressSelection}
+                            onChange={setAddressSelection}
+                            placeholder="ابحث عن المنطقة المستهدفة..."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">ملاحظات عامة (Notes)</label>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            placeholder="تفاصيل إضافية حول كيفية جلب هؤلاء المرشحين..."
+                            placeholder="تفاصيل إضافية حول هذه الورقة..."
                             className="w-full p-3 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 resize-none"
                         />
                     </div>
@@ -202,7 +189,7 @@ export default function CreateReferralSessionModal({ isOpen, onClose, onSessionC
                     </button>
                     <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-500/20 rounded-xl transition-all">
                         <Save className="w-4 h-4" />
-                        حفظ الجلسة
+                        حفظ الورقة
                     </button>
                 </div>
 

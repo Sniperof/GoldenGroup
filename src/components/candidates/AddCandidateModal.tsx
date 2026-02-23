@@ -3,7 +3,7 @@ import { X, UserPlus, Save, PlusCircle, Building2, User, Search, MapPin, Calenda
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
 import { defaultGeoUnits } from '../../lib/defaultData';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import CreateReferralSessionModal from './CreateReferralSessionModal';
+import CreateReferralSheetModal from './CreateReferralSessionModal'; // Filename kept for now, component renamed
 import { ReferralType, ReferralOriginChannel } from '../../lib/types';
 
 interface AddCandidateModalProps {
@@ -22,16 +22,17 @@ const initialCandidateState = {
 
 export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModalProps) {
     const addCandidate = useCandidateStore(state => state.addCandidate);
-    const referralSessions = useCandidateStore(state => state.referralSessions);
+    const referralSheets = useCandidateStore(state => state.referralSheets); // Updated
 
-    const activeSessions = useMemo(() => referralSessions.filter(s => s.status === 'Open'), [referralSessions]);
+    // Filter only active sheets (New or In-Progress)
+    const activeSheets = useMemo(() => referralSheets.filter(s => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
 
     // Mode Toggle
     const [isDirectMode, setIsDirectMode] = useState(false);
 
-    // Section A: Mode B (Session-based)
-    const [selectedSessionId, setSelectedSessionId] = useState<number | ''>('');
-    const [isCreateSessionOpen, setIsCreateSessionOpen] = useState(false);
+    // Section A: Mode B (Sheet-based)
+    const [selectedSheetId, setSelectedSheetId] = useState<number | ''>('');
+    const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
 
     // Section A: Mode A (Direct Referral)
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
@@ -46,8 +47,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
     const [error, setError] = useState('');
 
     const validateForm = () => {
-        if (!isDirectMode && !selectedSessionId) {
-            setError('يجب اختيار جلسة استقطاب في وضع (جلسة الاستقطاب).');
+        if (!isDirectMode && !selectedSheetId) {
+            setError('يجب اختيار ورقة ترشيح في وضع (ورقة الترشيح).');
             return false;
         }
         if (isDirectMode && (!referralDate || !referralReason || !referralNameSnapshot)) {
@@ -74,9 +75,9 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
         try {
             if (!isDirectMode) {
-                // Mode B: Session
-                const session = activeSessions.find(s => s.id === selectedSessionId);
-                if (!session) throw new Error("الجلسة المحددة غير صالحة");
+                // Mode B: Sheet-based
+                const sheet = activeSheets.find(s => s.id === selectedSheetId);
+                if (!sheet) throw new Error("الورقة المحددة غير صالحة");
 
                 addCandidate({
                     firstName: candidateData.firstName || null,
@@ -85,13 +86,13 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     mobile: candidateData.mobile,
                     addressText: candidateAddressText,
 
-                    referralSessionId: session.id,
-                    referralDate: session.referralDate,
-                    referralReason: session.referralReason,
-                    referralType: session.referralType,
-                    referralOriginChannel: session.referralOriginChannel,
-                    referralNameSnapshot: session.referralNameSnapshot,
-                    referralEntityId: session.referralEntityId,
+                    referralSheetId: sheet.id, // Updated
+                    referralDate: sheet.referralDate,
+                    referralReason: 'Part of Sheet', // Implicit
+                    referralType: sheet.referralType,
+                    referralOriginChannel: sheet.referralOriginChannel,
+                    referralNameSnapshot: sheet.referralNameSnapshot,
+                    referralEntityId: sheet.referralEntityId,
 
                     candidateNotes: candidateData.candidateNotes,
                     ownerUserId: 1,
@@ -109,7 +110,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     mobile: candidateData.mobile,
                     addressText: candidateAddressText,
 
-                    referralSessionId: null,
+                    referralSheetId: null, // Direct has no sheet
                     referralDate: new Date(referralDate).toISOString(),
                     referralReason,
                     referralType,
@@ -136,7 +137,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
     const resetAndClose = () => {
         setIsDirectMode(false);
-        setSelectedSessionId('');
+        setSelectedSheetId('');
         setCandidateData(initialCandidateState);
         setReferralDate(new Date().toISOString().split('T')[0]);
         setReferralReason('');
@@ -160,8 +161,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 <UserPlus className="w-5 h-5 text-sky-600" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">إضافة مرشح جديد</h2>
-                                <p className="text-sm text-slate-500">إدخال مرشح باختيار وضع الاستقطاب (مباشر / جلسة)</p>
+                                <h2 className="text-xl font-bold text-slate-800">إضافة اسم جديد</h2>
+                                <p className="text-sm text-slate-500"></p>
                             </div>
                         </div>
                         <button onClick={resetAndClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
@@ -183,46 +184,44 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 onClick={() => setIsDirectMode(false)}
                                 className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${!isDirectMode ? 'bg-amber-100 text-amber-800 shadow-sm border border-amber-200' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                عبر جلسة استقطاب مفتوحة
+                                عبر ورقة ترشيح
                             </button>
                             <button
                                 onClick={() => setIsDirectMode(true)}
                                 className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${isDirectMode ? 'bg-indigo-100 text-indigo-800 shadow-sm border border-indigo-200' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                استقطاب مباشر (بدون جلسة)
+                                استقطاب مباشر (بدون ورقة)
                             </button>
                         </div>
 
                         {/* SECTION A */}
                         <div className="space-y-4">
-                            <h3 className={`text-sm font-bold text-slate-800 border-r-4 pr-2 ${!isDirectMode ? 'border-amber-500' : 'border-indigo-500'}`}>
-                                أولاً: مصدر الاستقطاب {isDirectMode ? '(مباشر)' : '(جلسة)'}
-                            </h3>
+<div className="mb-2"></div>
 
                             {!isDirectMode ? (
-                                /* MODE B: Session-based */
+                                /* MODE B: Sheet-based */
                                 <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 flex items-end gap-3 transition-all">
                                     <div className="flex-1">
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">اختر الجلسة النشطة المفتوحة <span className="text-red-500">*</span></label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">اختر ورقة الترشيح المفتوحة <span className="text-red-500">*</span></label>
                                         <select
-                                            value={selectedSessionId}
-                                            onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : '')}
+                                            value={selectedSheetId}
+                                            onChange={(e) => setSelectedSheetId(e.target.value ? Number(e.target.value) : '')}
                                             className="w-full p-2.5 rounded-xl border border-amber-200 bg-white focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
                                         >
-                                            <option value="" disabled>-- اختر الجلسة للإرتباط بها --</option>
-                                            {activeSessions.map(session => (
-                                                <option key={session.id} value={session.id}>
-                                                    [#{session.id}] {session.referralNameSnapshot} - {session.referralOriginChannel} ({session.referralType})
+                                            <option value="" disabled>-- اختر الورقة للإرتباط بها --</option>
+                                            {activeSheets.map(sheet => (
+                                                <option key={sheet.id} value={sheet.id}>
+                                                    [#{sheet.id}] {sheet.referralNameSnapshot} - {sheet.stats.totalCandidates} أسماء
                                                 </option>
                                             ))}
                                         </select>
                                     </div>
                                     <button
-                                        onClick={() => setIsCreateSessionOpen(true)}
+                                        onClick={() => setIsCreateSheetOpen(true)}
                                         className="flex items-center gap-2 px-4 py-2.5 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl text-sm font-bold shadow-sm transition-all h-[42px]"
                                     >
                                         <PlusCircle className="w-4 h-4" />
-                                        جلسة جديدة
+                                        ورقة جديدة
                                     </button>
                                 </div>
                             ) : (
@@ -230,22 +229,13 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-4 transition-all">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />تاريخ الاستقطاب *</label>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />التاريخ *</label>
                                             <input type="date" value={referralDate} onChange={e => setReferralDate(e.target.value)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1"><FileText className="w-3.5 h-3.5" />سبب الاستقطاب *</label>
-                                            <select value={referralReason} onChange={e => setReferralReason(e.target.value)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
-                                                <option value="" disabled>-- إختر السبب --</option>
-                                                <option value="توسيع الشبكة">توسيع الشبكة</option>
-                                                <option value="ترشيح من عميل">ترشيح من عميل</option>
-                                                <option value="أخرى">أخرى</option>
-                                            </select>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع المصدر *</label>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع الوسيط *</label>
                                             <select value={referralType} onChange={e => setReferralType(e.target.value as ReferralType)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
                                                 <option value="Existing Client">عميل حالي</option>
                                                 <option value="Supervisor">مشرف</option>
@@ -254,7 +244,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">قناة الاستقطاب *</label>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">طريقة الوصول *</label>
                                             <select value={originChannel} onChange={e => setOriginChannel(e.target.value as ReferralOriginChannel)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
                                                 <option value="Visit">زيارة ميدانية</option>
                                                 <option value="Call">اتصال هاتفي</option>
@@ -263,17 +253,10 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">اسم المصدر المطلق *</label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">الوسيط *</label>
                                         <input type="text" value={referralNameSnapshot} onChange={e => setReferralNameSnapshot(e.target.value)} placeholder="اسم العميل أو الجهة..." className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
                                     </div>
-                                    <div>
-                                        <GeoSmartSearch
-                                            label="منطقة عمل المصدر"
-                                            geoUnits={defaultGeoUnits}
-                                            value={referralContextAddress}
-                                            onChange={setReferralContextAddress}
-                                        />
-                                    </div>
+                                    {/* Geo Removed */}
                                 </div>
                             )}
                         </div>
@@ -329,10 +312,10 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                 </div>
             </div>
 
-            <CreateReferralSessionModal
-                isOpen={isCreateSessionOpen}
-                onClose={() => setIsCreateSessionOpen(false)}
-                onSessionCreated={(id) => { setSelectedSessionId(id); setIsDirectMode(false); }}
+            <CreateReferralSheetModal
+                isOpen={isCreateSheetOpen}
+                onClose={() => setIsCreateSheetOpen(false)}
+                onSheetCreated={(id) => { setSelectedSheetId(id); setIsDirectMode(false); }}
             />
         </>
     );
