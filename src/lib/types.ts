@@ -21,19 +21,34 @@ export interface Route {
 export type ReferralType = 'Existing Client' | 'Supervisor' | 'Technician' | 'App' | 'Direct Call' | 'Marketing Visit' | 'Maintenance Visit' | 'Campaign' | 'Other';
 export type ReferralOriginChannel = 'App' | 'Visit' | 'Call' | 'Maintenance' | 'Campaign' | 'Field Activity';
 
-export interface ReferralSession {
+// --- Referral Sheet (Previously Session) ---
+export interface ReferralSheetStats {
+    totalCandidates: number;
+    qualityPercentage: number; // e.g. 85% valid numbers
+    conversionPercentage: number; // e.g. 10% became Leads
+}
+
+export interface ReferralSheet {
     id: number;
     referralType: ReferralType;
     referralEntityId: number | null;
-    referralNameSnapshot: string;
+    referralNameSnapshot: string; // "Mediator Name"
     referralAddressText: string;
     referralOriginChannel: ReferralOriginChannel;
     referralNotes?: string;
-    referralDate: string; // New required field
-    referralReason: string; // New required field
-    ownerUserId: number;
-    status: 'Open' | 'Closed';
-    createdAt: string;
+    
+    // Core Timing
+    referralDate: string; // The "Sheet Date" (Manual)
+    
+    // Ownership
+    ownerUserId: number; // The Supervisor/User who owns this sheet
+    
+    status: 'New' | 'In-Progress' | 'Completed' | 'Archived';
+    
+    // Stats
+    stats: ReferralSheetStats;
+
+    createdAt: string; // System Timestamp
     createdBy: number;
 }
 
@@ -52,16 +67,16 @@ export interface Candidate {
     ownerUserId: number;
     status: CandidateStatus;
 
-    // Referral Data (Mandatory & Mode fields)
-    referralSessionId: number | null; // Nullable for Direct Mode
-    referralDate: string; // Required
-    referralReason: string; // Required
-    referralType: ReferralType; // Required
-    referralOriginChannel: ReferralOriginChannel; // Required
-    referralNameSnapshot: string; // Required
+    // Referral Data (Lineage)
+    referralSheetId: number | null; // Renamed from Session
+    referralDate: string; 
+    referralReason: string; 
+    referralType: ReferralType; 
+    referralOriginChannel: ReferralOriginChannel; 
+    referralNameSnapshot: string; 
     referralEntityId: number | null;
 
-    referralConfirmationStatus: ReferralConfirmationStatus;
+    referralConfirmationStatus: ReferralConfirmationStatus; // Deprecated but kept for compatibility
     candidateNotes?: string;
 
     // Duplication Tracking
@@ -108,7 +123,7 @@ export interface Client {
     detailedAddress?: string;
     gpsCoordinates?: { lat: number; lng: number };
 
-    // Lineage fields (transferred from Candidate/ReferralSession)
+    // Lineage fields
     sourceChannel?: string;
     referrerType?: string;
     referrerId?: number; // legacy
@@ -116,7 +131,7 @@ export interface Client {
     referralEntityId?: number | null;
     referralDate?: string;
     referralReason?: string;
-    referralSessionId?: number | null;
+    referralSheetId?: number | null; // Renamed
     referralAddressText?: string;
 
     createdAt: string;
@@ -264,4 +279,3 @@ export interface MaintenanceRequest {
         recommendations: string;
     };
 }
-
