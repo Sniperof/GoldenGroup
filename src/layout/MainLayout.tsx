@@ -5,7 +5,8 @@ import {
     LayoutDashboard, Route, Users, BookUser, Globe,
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
-    FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon
+    FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const navItems = [
@@ -49,8 +50,10 @@ export default function MainLayout() {
     const [operationsOpen, setOperationsOpen] = useState(isOperationsActive);
     const [contractsOpen, setContractsOpen] = useState(isContractsActive);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const toggleSidebar = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+    const toggleCollapse = () => setIsCollapsed(!isCollapsed);
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -85,17 +88,31 @@ export default function MainLayout() {
 
             {/* Sidebar */}
             <aside className={`
-                fixed lg:static inset-y-0 right-0 w-64 bg-white border-l border-slate-200 flex flex-col z-50 shadow-sm flex-shrink-0 transition-transform duration-300 transform
+                fixed lg:static inset-y-0 right-0 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-white border-l border-slate-200 flex flex-col z-50 shadow-sm flex-shrink-0 transition-all duration-300 transform
                 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
             `}>
-                {/* Logo */}
-                <div className="hidden lg:block p-5 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
+                {/* Logo & Toggle Header */}
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                    <div className={`flex items-center gap-3 ${isCollapsed ? 'lg:hidden' : 'flex'} ${isMobileMenuOpen ? 'flex' : ''}`}>
                         <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
                             <Gem className="w-4 h-4 text-white" />
                         </div>
                         <span className="text-xl font-bold text-slate-800 tracking-wide">Golden CRM</span>
                     </div>
+                    {/* Desktop Collapse Toggle */}
+                    <button
+                        onClick={toggleCollapse}
+                        className="hidden lg:flex p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        {isCollapsed ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                    </button>
+                    {/* Mobile Close Button */}
+                    <button
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        <CloseIcon className="w-6 h-6" />
+                    </button>
                 </div>
 
                 {/* Navigation */}
@@ -106,22 +123,23 @@ export default function MainLayout() {
                             to={item.path}
                             end={item.path === '/'}
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className={({ isActive }) =>
+                            className={({ isActive }: { isActive: boolean }) =>
                                 `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
                                     ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                                }`
+                                } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
                             }
+                            title={isCollapsed ? item.label : ''}
                         >
-                            <item.icon className="w-5 h-5" />
-                            <span>{item.label}</span>
+                            <item.icon className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                            <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>{item.label}</span>
                         </NavLink>
                     ))}
 
                     {/* Planning Parent */}
-                    <div>
+                    <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
-                            onClick={() => setPlanningOpen(o => !o)}
+                            onClick={() => setPlanningOpen((o: boolean) => !o)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isPlanningActive
                                 ? 'bg-sky-50 text-sky-600 font-bold'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -148,7 +166,7 @@ export default function MainLayout() {
                                             key={child.path}
                                             to={child.path}
                                             onClick={() => setIsMobileMenuOpen(false)}
-                                            className={({ isActive }) =>
+                                            className={({ isActive }: { isActive: boolean }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
                                                     ? 'text-sky-600 bg-sky-50 font-bold'
                                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -165,9 +183,9 @@ export default function MainLayout() {
                     </div>
 
                     {/* Operations Parent */}
-                    <div>
+                    <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
-                            onClick={() => setOperationsOpen(o => !o)}
+                            onClick={() => setOperationsOpen((o: boolean) => !o)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isOperationsActive
                                 ? 'bg-sky-50 text-sky-600 font-bold'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -194,7 +212,7 @@ export default function MainLayout() {
                                             key={child.path}
                                             to={child.path}
                                             onClick={() => setIsMobileMenuOpen(false)}
-                                            className={({ isActive }) =>
+                                            className={({ isActive }: { isActive: boolean }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
                                                     ? 'text-sky-600 bg-sky-50 font-bold'
                                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -211,9 +229,9 @@ export default function MainLayout() {
                     </div>
 
                     {/* Contracts Parent */}
-                    <div>
+                    <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
-                            onClick={() => setContractsOpen(o => !o)}
+                            onClick={() => setContractsOpen((o: boolean) => !o)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isContractsActive
                                 ? 'bg-sky-50 text-sky-600 font-bold'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -240,7 +258,8 @@ export default function MainLayout() {
                                             key={child.path}
                                             to={child.path}
                                             end={child.path === '/contracts'}
-                                            className={({ isActive }) =>
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className={({ isActive }: { isActive: boolean }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
                                                     ? 'text-sky-600 bg-sky-50 font-bold'
                                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -261,7 +280,7 @@ export default function MainLayout() {
 
                 {/* User Profile */}
                 <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-                    <div className="flex items-center gap-3 p-2 rounded-lg">
+                    <div className={`flex items-center gap-3 p-2 rounded-lg ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}>
                         <div className="relative">
                             <img
                                 src="https://ui-avatars.com/api/?name=Ibrahim+Obaid&background=0ea5e9&color=fff"
@@ -270,7 +289,7 @@ export default function MainLayout() {
                             />
                             <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
                             <p className="text-sm font-semibold text-slate-700 truncate">إبراهيم عبيد</p>
                             <p className="text-xs text-slate-500 truncate">مدير النظام</p>
                         </div>
