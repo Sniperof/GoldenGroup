@@ -5,7 +5,7 @@ import {
     LayoutDashboard, Route, Users, BookUser, Globe,
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
-    FileText, FilePlus2, Headset, Settings, UserPlus
+    FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon
 } from 'lucide-react';
 
 const navItems = [
@@ -48,13 +48,48 @@ export default function MainLayout() {
     const [planningOpen, setPlanningOpen] = useState(isPlanningActive);
     const [operationsOpen, setOperationsOpen] = useState(isOperationsActive);
     const [contractsOpen, setContractsOpen] = useState(isContractsActive);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const toggleSidebar = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
     return (
-        <div className="flex h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50 overflow-hidden">
+            {/* Mobile Header */}
+            <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-30">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                        <Gem className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-lg font-bold text-slate-800">Golden CRM</span>
+                </div>
+                <button
+                    onClick={toggleSidebar}
+                    className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                    {isMobileMenuOpen ? <CloseIcon className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </button>
+            </header>
+
+            {/* Mobile Overlay */}
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40"
+                    />
+                )}
+            </AnimatePresence>
+
             {/* Sidebar */}
-            <aside className="w-64 bg-white border-l border-slate-200 flex flex-col z-20 shadow-sm flex-shrink-0">
+            <aside className={`
+                fixed lg:static inset-y-0 right-0 w-64 bg-white border-l border-slate-200 flex flex-col z-50 shadow-sm flex-shrink-0 transition-transform duration-300 transform
+                ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+            `}>
                 {/* Logo */}
-                <div className="p-5 border-b border-slate-100">
+                <div className="hidden lg:block p-5 border-b border-slate-100">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
                             <Gem className="w-4 h-4 text-white" />
@@ -64,12 +99,13 @@ export default function MainLayout() {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+                <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 mt-16 lg:mt-0">
                     {navItems.map(item => (
                         <NavLink
                             key={item.path}
                             to={item.path}
                             end={item.path === '/'}
+                            onClick={() => setIsMobileMenuOpen(false)}
                             className={({ isActive }) =>
                                 `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
                                     ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
@@ -111,6 +147,7 @@ export default function MainLayout() {
                                         <NavLink
                                             key={child.path}
                                             to={child.path}
+                                            onClick={() => setIsMobileMenuOpen(false)}
                                             className={({ isActive }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
                                                     ? 'text-sky-600 bg-sky-50 font-bold'
@@ -156,6 +193,7 @@ export default function MainLayout() {
                                         <NavLink
                                             key={child.path}
                                             to={child.path}
+                                            onClick={() => setIsMobileMenuOpen(false)}
                                             className={({ isActive }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
                                                     ? 'text-sky-600 bg-sky-50 font-bold'
@@ -241,7 +279,7 @@ export default function MainLayout() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-hidden bg-slate-50">
+            <main className="flex-1 overflow-hidden bg-slate-50 mt-16 lg:mt-0">
                 <Outlet />
             </main>
         </div>

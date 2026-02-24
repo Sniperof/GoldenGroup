@@ -114,7 +114,7 @@ export default function Clients() {
     return (
         <div className="space-y-6">
             {/* Header Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl w-fit">
+            <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl w-full sm:w-fit overflow-x-auto whitespace-nowrap scrollbar-hide">
                 <button
                     onClick={() => setActiveTab('clients')}
                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}

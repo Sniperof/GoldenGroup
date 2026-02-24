@@ -191,11 +191,11 @@ export default function SmartTable<T>({
     /*  Render                                                           */
     /* ---------------------------------------------------------------- */
     return (
-        <div className="h-full overflow-y-auto p-8 custom-scroll">
+        <div className="h-full overflow-y-auto p-4 md:p-8 custom-scroll">
             {/* ==================== HEADER ==================== */}
-            <div className="flex items-end justify-between mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
                         <Icon className="w-5 h-5 text-sky-600" />
                     </div>
                     <div>
@@ -207,11 +207,11 @@ export default function SmartTable<T>({
                     </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
                     {hasActiveFilters && (
                         <button
                             onClick={resetFilters}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors whitespace-nowrap"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>إعادة ضبط</span>
@@ -219,7 +219,7 @@ export default function SmartTable<T>({
                     )}
                     <button
                         onClick={() => exportCSV(columns, sorted, title)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors whitespace-nowrap"
                     >
                         <Download className="w-3.5 h-3.5" />
                         <span>تصدير Excel</span>

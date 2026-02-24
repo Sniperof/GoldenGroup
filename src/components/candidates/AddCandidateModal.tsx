@@ -307,13 +307,13 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                         </div>
                     </div>
 
-                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-                        <button onClick={resetAndClose} className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors">إلغاء</button>
-                        <div className="flex gap-3">
-                            <button onClick={() => handleSave(true)} className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 rounded-xl transition-colors">
+                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+                        <button onClick={resetAndClose} className="w-full sm:w-auto px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors">إلغاء</button>
+                        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                            <button onClick={() => handleSave(true)} className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 rounded-xl transition-colors w-full sm:w-auto">
                                 <PlusCircle className="w-4 h-4" /> حفظ وإضافة آخر
                             </button>
-                            <button onClick={() => handleSave(false)} className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-500/20 rounded-xl transition-colors">
+                            <button onClick={() => handleSave(false)} className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-500/20 rounded-xl transition-colors w-full sm:w-auto">
                                 <Save className="w-4 h-4" /> حفظ وإغلاق
                             </button>
                         </div>
