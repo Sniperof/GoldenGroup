@@ -14,7 +14,7 @@ interface CandidateState {
     addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'duplicateFlag' | 'duplicateType' | 'duplicateReferenceId' | 'status' | 'referralConfirmationStatus' | 'convertedToLeadId' | 'referralSheetId'> & { referralSheetId: number | null }) => void;
     qualifyCandidate: (candidateId: number) => void;
     markJunk: (candidateId: number) => void;
-    
+
     // Stats Helpers
     updateSheetStats: (sheetId: number) => void;
 }
@@ -22,7 +22,7 @@ interface CandidateState {
 const mockSheets: ReferralSheet[] = [
     {
         id: 1,
-        referralType: 'Direct Call',
+        referralType: 'Personal',
         referralEntityId: null,
         referralNameSnapshot: 'حملة المنصور الميدانية',
         referralAddressText: 'بغداد، الكرخ، حي المنصور',
@@ -54,7 +54,7 @@ const mockCandidates: Candidate[] = [
         referralSheetId: 1,
         referralDate: new Date().toISOString(),
         referralReason: 'تسويق عام',
-        referralType: 'Campaign',
+        referralType: 'Personal',
         referralOriginChannel: 'Campaign',
         referralNameSnapshot: 'حملة المنصور الميدانية',
         referralEntityId: null,
@@ -77,7 +77,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
         let newId = 1;
         set((state) => {
             // DUPLICATE SHEET CHECK
-            const existingSheet = state.referralSheets.find(s => 
+            const existingSheet = state.referralSheets.find(s =>
                 s.ownerUserId === sheetData.ownerUserId &&
                 s.referralNameSnapshot === sheetData.referralNameSnapshot &&
                 s.referralDate.split('T')[0] === sheetData.referralDate.split('T')[0]
@@ -88,7 +88,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
             }
 
             newId = state.referralSheets.length > 0 ? Math.max(...state.referralSheets.map(s => s.id)) + 1 : 1;
-            
+
             const newSheet: ReferralSheet = {
                 ...sheetData,
                 id: newId,
@@ -180,7 +180,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
 
             const newCandidate: Candidate = {
                 ...candidateData,
-                status: 'New',
+                status: 'Prospect',
                 referralConfirmationStatus: 'Pending',
                 duplicateFlag: isDupe,
                 duplicateType: dupeType,
@@ -192,9 +192,8 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
 
             return { candidates: [...state.candidates, newCandidate] };
         });
-        
+
         // Auto update stats if sheet exists
-        const state = get();
         if (candidateData.referralSheetId) {
             get().updateSheetStats(candidateData.referralSheetId);
         }
@@ -263,7 +262,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
         set((state) => ({
             candidates: state.candidates.map(c => c.id === candidateId ? { ...c, status: 'Junk' } : c)
         }));
-        
+
         // Update stats
         const candidate = get().candidates.find(c => c.id === candidateId);
         if (candidate?.referralSheetId) {

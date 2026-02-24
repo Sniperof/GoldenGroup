@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { X, UserPlus, Save, PlusCircle, Building2, User, Search, MapPin, Calendar, FileText } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, UserPlus, Save, PlusCircle, Calendar } from 'lucide-react';
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
 import { defaultGeoUnits } from '../../lib/defaultData';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
@@ -21,11 +21,11 @@ const initialCandidateState = {
 };
 
 export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModalProps) {
-    const addCandidate = useCandidateStore(state => state.addCandidate);
-    const referralSheets = useCandidateStore(state => state.referralSheets); // Updated
+    const addCandidate = useCandidateStore((state: any) => state.addCandidate);
+    const referralSheets = useCandidateStore((state: any) => state.referralSheets); // Updated
 
     // Filter only active sheets (New or In-Progress)
-    const activeSheets = useMemo(() => referralSheets.filter(s => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
+    const activeSheets = useMemo(() => referralSheets.filter((s: any) => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
 
     // Mode Toggle
     const [isDirectMode, setIsDirectMode] = useState(false);
@@ -37,10 +37,9 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
     // Section A: Mode A (Direct Referral)
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
     const [referralReason, setReferralReason] = useState('');
-    const [referralType, setReferralType] = useState<ReferralType>('Existing Client');
+    const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
     const [referralNameSnapshot, setReferralNameSnapshot] = useState('');
-    const [referralContextAddress, setReferralContextAddress] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
 
     // Section B: Candidate
     const [candidateData, setCandidateData] = useState(initialCandidateState);
@@ -76,7 +75,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         try {
             if (!isDirectMode) {
                 // Mode B: Sheet-based
-                const sheet = activeSheets.find(s => s.id === selectedSheetId);
+                const sheet = activeSheets.find((s: any) => s.id === selectedSheetId);
                 if (!sheet) throw new Error("الورقة المحددة غير صالحة");
 
                 addCandidate({
@@ -100,8 +99,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                 });
             } else {
                 // Mode A: Direct
-                const contextUnitId = referralContextAddress.neighborhoodId || referralContextAddress.subId || referralContextAddress.regionId || referralContextAddress.govId;
-                const contextAddressText = defaultGeoUnits.find(u => u.id === Number(contextUnitId))?.name || 'غير محدد';
+                // const contextUnitId = referralContextAddress.neighborhoodId || referralContextAddress.subId || referralContextAddress.regionId || referralContextAddress.govId;
+                // const contextAddressText = defaultGeoUnits.find(u => u.id === Number(contextUnitId))?.name || 'غير محدد';
 
                 addCandidate({
                     firstName: candidateData.firstName || null,
@@ -142,7 +141,6 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         setReferralDate(new Date().toISOString().split('T')[0]);
         setReferralReason('');
         setReferralNameSnapshot('');
-        setReferralContextAddress({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
         setError('');
         onClose();
     };
@@ -196,7 +194,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
                         {/* SECTION A */}
                         <div className="space-y-4">
-<div className="mb-2"></div>
+                            <div className="mb-2"></div>
 
                             {!isDirectMode ? (
                                 /* MODE B: Sheet-based */
@@ -209,7 +207,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                             className="w-full p-2.5 rounded-xl border border-amber-200 bg-white focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
                                         >
                                             <option value="" disabled>-- اختر الورقة للإرتباط بها --</option>
-                                            {activeSheets.map(sheet => (
+                                            {activeSheets.map((sheet: any) => (
                                                 <option key={sheet.id} value={sheet.id}>
                                                     [#{sheet.id}] {sheet.referralNameSnapshot} - {sheet.stats.totalCandidates} أسماء
                                                 </option>
@@ -237,24 +235,29 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع الوسيط *</label>
                                             <select value={referralType} onChange={e => setReferralType(e.target.value as ReferralType)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
-                                                <option value="Existing Client">عميل حالي</option>
-                                                <option value="Supervisor">مشرف</option>
-                                                <option value="Technician">فني</option>
-                                                <option value="Direct Call">اتصال مباشر</option>
+                                                <option value="Personal">شخصي</option>
+                                                <option value="Client">عميل</option>
+                                                <option value="Employee">موظف</option>
+                                                <option value="Unknown">مجهول</option>
                                             </select>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">طريقة الوصول *</label>
                                             <select value={originChannel} onChange={e => setOriginChannel(e.target.value as ReferralOriginChannel)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
-                                                <option value="Visit">زيارة ميدانية</option>
-                                                <option value="Call">اتصال هاتفي</option>
-                                                <option value="Field Activity">نشاط ترويجي</option>
+                                                <option value="App">تطبيق</option>
+                                                <option value="Visit">زيارة</option>
+                                                <option value="Campaign">حملة</option>
+                                                <option value="Acquaintance">معرفة</option>
                                             </select>
                                         </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-600 mb-1.5">الوسيط *</label>
                                         <input type="text" value={referralNameSnapshot} onChange={e => setReferralNameSnapshot(e.target.value)} placeholder="اسم العميل أو الجهة..." className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">سبب الاستقطاب *</label>
+                                        <input type="text" value={referralReason} onChange={e => setReferralReason(e.target.value)} placeholder="مثلاً: حملة فيسبوك، ترشيح صديق..." className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
                                     </div>
                                     {/* Geo Removed */}
                                 </div>
@@ -282,7 +285,15 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
                             <div>
                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5 text-red-500">رقم الهاتف *</label>
-                                <input type="tel" value={candidateData.mobile} onChange={e => { setCandidateData({ ...candidateData, mobile: e.target.value }); setError(''); }} className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm" dir="ltr" />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="tel"
+                                        value={candidateData.mobile}
+                                        onChange={e => { setCandidateData({ ...candidateData, mobile: e.target.value }); setError(''); }}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                        dir="ltr"
+                                    />
+                                </div>
                             </div>
 
                             <div>
@@ -296,7 +307,6 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                         </div>
                     </div>
 
-                    {/* Footer */}
                     <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
                         <button onClick={resetAndClose} className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors">إلغاء</button>
                         <div className="flex gap-3">

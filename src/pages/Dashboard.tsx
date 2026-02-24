@@ -13,13 +13,13 @@ export default function Dashboard() {
     const [routes] = useState<RouteType[]>(() => StorageManager.load('routes', []));
 
     const stats = [
-        { label: 'العملاء', value: clients.length, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
-        { label: 'الموظفون النشطون', value: defaultEmployees.filter(e => e.status === 'active').length, icon: UserCheck, color: 'from-emerald-500 to-teal-600', delta: '+3' },
-        { label: 'المسارات', value: routes.length, icon: Route, color: 'from-amber-500 to-orange-600', delta: `${routes.length}` },
-        { label: 'الأحياء المغطاة', value: routes.reduce((s, r) => s + r.points.length, 0), icon: MapPin, color: 'from-rose-500 to-pink-600', delta: 'محطة' },
+        { label: 'العملاء', value: clients?.length || 0, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
+        { label: 'الموظفون النشطون', value: defaultEmployees?.filter(e => e.status === 'active').length || 0, icon: UserCheck, color: 'from-emerald-500 to-teal-600', delta: '+3' },
+        { label: 'المسارات', value: routes?.length || 0, icon: Route, color: 'from-amber-500 to-orange-600', delta: `${routes?.length || 0}` },
+        { label: 'الأحياء المغطاة', value: (routes || []).reduce((s, r) => s + (r?.points?.length || 0), 0), icon: MapPin, color: 'from-rose-500 to-pink-600', delta: 'محطة' },
     ];
 
-    const recentClients = clients.slice(-5).reverse();
+    const recentClients = (clients || []).slice(-5).reverse();
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
@@ -59,15 +59,15 @@ export default function Dashboard() {
                                 {recentClients.map(c => (
                                     <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-sky-50 transition-colors cursor-pointer group">
                                         <div className="relative">
-                                            <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=0ea5e9&color=fff&size=32`} alt="" className="w-9 h-9 rounded-full border border-gray-100 group-hover:border-sky-200 transition-colors" />
-                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${c.candidateStatus === 'Qualified' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                            <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(c?.name || '')}&background=0ea5e9&color=fff&size=32`} alt="" className="w-9 h-9 rounded-full border border-gray-100 group-hover:border-sky-200 transition-colors" />
+                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${c?.candidateStatus === 'Qualified' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-slate-800 font-semibold truncate group-hover:text-sky-700 transition-colors">{c.name}</p>
-                                            <p className="text-xs text-slate-500">{c.mobile}</p>
+                                            <p className="text-sm text-slate-800 font-semibold truncate group-hover:text-sky-700 transition-colors">{c?.name || 'بدون اسم'}</p>
+                                            <p className="text-xs text-slate-500">{c?.mobile || '--'}</p>
                                         </div>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c.candidateStatus === 'Qualified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                            {c.candidateStatus === 'Qualified' ? 'فعّال' : 'جديد'}
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${c?.candidateStatus === 'Qualified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                            {c?.candidateStatus === 'Qualified' ? 'فعّال' : 'جديد'}
                                         </span>
                                     </div>
                                 ))}
@@ -92,11 +92,11 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">المسارات المعرّفة</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{routes.length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{(routes || []).length}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">العملاء الجدد</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{clients.filter(c => c.isCandidate).length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{(clients || []).filter(c => c.isCandidate).length}</span>
                         </div>
                     </div>
                 </motion.div>

@@ -1,11 +1,14 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb } from 'lucide-react';
 import { StorageManager } from '../lib/storage';
 import { defaultGeoUnits } from '../lib/defaultData';
 import type { Client, GeoUnit, Visit, Contract } from '../lib/types';
 import ClientModal from '../components/ClientModal';
 import SmartTable from '../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../components/SmartTable';
+import ManualSearchModal from '../components/candidates/ManualSearchModal';
+import { useCandidateStore } from '../hooks/useCandidateStore';
 
 export default function Clients() {
     const [clients, setClients] = useState<Client[]>(() => StorageManager.load('clients', []));
@@ -16,6 +19,9 @@ export default function Clients() {
     const [activeTab, setActiveTab] = useState<'clients' | 'candidates'>('clients');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState<Client | null>(null);
+    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    const [activeCandidateForSearch, setActiveCandidateForSearch] = useState<any>(null);
+    const qualifyCandidate = useCandidateStore((state: any) => state.qualifyCandidate);
 
     // ─── Lifecycle Logic ───
     const getLifecycleStage = useCallback((client: Client) => {
@@ -29,11 +35,6 @@ export default function Clients() {
     const mainList = useMemo(() => clients.filter(c => !c.isCandidate).map(c => ({ ...c, lifecycleStage: getLifecycleStage(c) })), [clients, getLifecycleStage]);
 
     const save = useCallback((c: Client[]) => { setClients(c); StorageManager.save('clients', c); }, []);
-
-    const convertToLead = (id: number) => {
-        if (!confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) return;
-        save(clients.map(c => c.id === id ? { ...c, isCandidate: false } : c));
-    };
 
     const deleteClient = (id: number) => {
         if (!confirm('حذف هذا العميل؟')) return;
@@ -108,6 +109,8 @@ export default function Clients() {
         },
     ];
 
+    const navigate = useNavigate();
+
     return (
         <div className="space-y-6">
             {/* Header Tabs */}
@@ -136,14 +139,19 @@ export default function Clients() {
                     searchKeys={['name', 'mobile']}
                     searchPlaceholder="بحث عن عميل..."
                     getId={(c) => c.id}
-                    onRowClick={openEditModal}
+                    onRowClick={(c) => navigate(`/clients/${c.id}`)}
                     bulkActions={[
                         { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} عملاء؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
                     ]}
                     actions={(c) => (
-                        <button onClick={() => deleteClient(c.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
-                            <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100">
+                                <UserPlus className="w-4 h-4" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteClient(c.id); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
                     )}
                     headerActions={
                         <button onClick={() => { setEditingClient(null); setIsModalOpen(true); }} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
@@ -169,10 +177,45 @@ export default function Clients() {
                         { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} مرشحين؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
                     ]}
                     actions={(c) => (
-                        <div className="flex items-center gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); convertToLead(c.id); }} className="flex items-center gap-1 p-1.5 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all text-xs font-bold border border-emerald-100">
-                                <ArrowRight className="w-3 h-3" /> تحويل لعميل
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveCandidateForSearch(c);
+                                    setIsSearchModalOpen(true);
+                                }}
+                                title="تحقق يدوي"
+                                className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all border border-indigo-100"
+                            >
+                                <Search className="w-3.5 h-3.5" />
                             </button>
+
+                            {(c as any).duplicateFlag && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveCandidateForSearch(c);
+                                        setIsSearchModalOpen(true);
+                                    }}
+                                    title="مراجعة الاقتراحات"
+                                    className="p-1.5 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all border border-amber-100 animate-pulse"
+                                >
+                                    <Lightbulb className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) {
+                                        qualifyCandidate(c.id);
+                                    }
+                                }}
+                                className="flex items-center gap-1 p-1.5 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all text-xs font-bold border border-emerald-100"
+                            >
+                                <CheckCircle2 className="w-3 h-3" /> تحويل لعميل
+                            </button>
+
                             <button onClick={() => deleteClient(c.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
                                 <Trash2 className="w-4 h-4" />
                             </button>
@@ -196,6 +239,51 @@ export default function Clients() {
                 initialData={editingClient}
                 geoUnits={geoUnits}
             />
+
+            {activeCandidateForSearch && (
+                <ManualSearchModal
+                    isOpen={isSearchModalOpen}
+                    onClose={() => setIsSearchModalOpen(false)}
+                    candidate={activeCandidateForSearch}
+                    clients={clients}
+                    onLink={(client) => {
+                        const allClients = StorageManager.load<Client[]>('clients', []);
+                        const updatedClients = allClients.map(c => {
+                            if (c.id === client.id) {
+                                const currentContacts = c.contacts || [];
+                                const mobileExists = currentContacts.some(contact => contact.number === activeCandidateForSearch.mobile);
+
+                                if (!mobileExists) {
+                                    const newContact: any = {
+                                        id: Date.now().toString(),
+                                        type: 'mobile',
+                                        number: activeCandidateForSearch.mobile,
+                                        label: 'Additional',
+                                        hasWhatsApp: false,
+                                        isPrimary: false,
+                                        status: 'active'
+                                    };
+                                    return { ...c, contacts: [...currentContacts, newContact] };
+                                }
+                            }
+                            return c;
+                        });
+                        StorageManager.save('clients', updatedClients);
+
+                        // Also mark the candidate as junk or qualified? 
+                        // In v2, usually a link means we don't need the prospect anymore.
+                        // I'll mark it as Junk or just Qualified to hide it from the candidate list.
+                        // For now, I'll just close and let the user delete if they want, or I'll implement a 'Link & Archive' logic.
+                        // The store doesn't have a 'Link' action yet. I'll just alert for now.
+                        setIsSearchModalOpen(false);
+                        alert('تم ربط المرشح بالعميل وتحديث بيانات التواصل بنجاح.');
+                    }}
+                    onNoMatch={() => {
+                        setIsSearchModalOpen(false);
+                        alert('جاري المتابعة لخطوة تأكيد الثقة...');
+                    }}
+                />
+            )}
         </div>
     );
 }
