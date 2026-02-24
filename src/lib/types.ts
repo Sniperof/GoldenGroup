@@ -18,8 +18,8 @@ export interface Route {
     status: string;
 }
 
-export type ReferralType = 'Existing Client' | 'Supervisor' | 'Technician' | 'App' | 'Direct Call' | 'Marketing Visit' | 'Maintenance Visit' | 'Campaign' | 'Other';
-export type ReferralOriginChannel = 'App' | 'Visit' | 'Call' | 'Maintenance' | 'Campaign' | 'Field Activity';
+export type ReferralType = 'Personal' | 'Client' | 'Employee' | 'Unknown';
+export type ReferralOriginChannel = 'App' | 'Visit' | 'Campaign' | 'Acquaintance';
 
 // --- Referral Sheet (Previously Session) ---
 export interface ReferralSheetStats {
@@ -36,15 +36,15 @@ export interface ReferralSheet {
     referralAddressText: string;
     referralOriginChannel: ReferralOriginChannel;
     referralNotes?: string;
-    
+
     // Core Timing
     referralDate: string; // The "Sheet Date" (Manual)
-    
+
     // Ownership
     ownerUserId: number; // The Supervisor/User who owns this sheet
-    
+
     status: 'New' | 'In-Progress' | 'Completed' | 'Archived';
-    
+
     // Stats
     stats: ReferralSheetStats;
 
@@ -52,7 +52,7 @@ export interface ReferralSheet {
     createdBy: number;
 }
 
-export type CandidateStatus = 'New' | 'Contacted' | 'Qualified' | 'Junk';
+export type CandidateStatus = 'Prospect' | 'New' | 'Contacted' | 'Qualified' | 'Junk';
 export type ReferralConfirmationStatus = 'Pending' | 'Confirmed' | 'Rejected';
 export type DuplicateType = 'Candidate' | 'Client' | 'Both';
 
@@ -69,11 +69,11 @@ export interface Candidate {
 
     // Referral Data (Lineage)
     referralSheetId: number | null; // Renamed from Session
-    referralDate: string; 
-    referralReason: string; 
-    referralType: ReferralType; 
-    referralOriginChannel: ReferralOriginChannel; 
-    referralNameSnapshot: string; 
+    referralDate: string;
+    referralReason: string;
+    referralType: ReferralType;
+    referralOriginChannel: ReferralOriginChannel;
+    referralNameSnapshot: string;
     referralEntityId: number | null;
 
     referralConfirmationStatus: ReferralConfirmationStatus; // Deprecated but kept for compatibility

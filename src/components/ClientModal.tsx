@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Phone, MapPin, Share2, Save, Plus, Trash2, MessageCircle, MapPinned } from 'lucide-react';
+import { X, User, Users, Phone, MapPin, Share2, Save, Plus, Trash2, MessageCircle, MapPinned } from 'lucide-react';
 import type { Client, GeoUnit, ContactEntry, ContactType, ContactStatus } from '../lib/types';
 import MapPicker from './MapPicker';
 import GeoSmartSearch from './GeoSmartSearch';
 import type { GeoSelection } from './GeoSmartSearch';
+import { useCandidateStore } from '../hooks/useCandidateStore';
+import { StorageManager } from '../lib/storage';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -14,13 +16,14 @@ interface ClientModalProps {
     geoUnits: GeoUnit[];
 }
 
-type Tab = 'identity' | 'contact' | 'location' | 'referral';
+type Tab = 'identity' | 'contact' | 'location' | 'referral' | 'network';
 
 const tabsDef: { id: Tab; label: string; icon: any }[] = [
     { id: 'identity', label: 'الهوية', icon: User },
     { id: 'contact', label: 'التواصل', icon: Phone },
     { id: 'location', label: 'الموقع', icon: MapPin },
     { id: 'referral', label: 'الوسيط', icon: Share2 },
+    { id: 'network', label: 'الترشيحات والشبكة', icon: Users },
 ];
 
 const contactTypeConfig: Record<ContactType, { label: string; emoji: string }> = {
@@ -46,6 +49,9 @@ const emptyContact = (isPrimary = false): ContactEntry => ({
 export default function ClientModal({ isOpen, onClose, onSave, initialData, geoUnits }: ClientModalProps) {
     const [activeTab, setActiveTab] = useState<Tab>('identity');
     const [formData, setFormData] = useState<Partial<Client>>({});
+
+    const { candidates } = useCandidateStore();
+    const allClients = StorageManager.load<Client[]>('clients', []);
 
     // Identity fields
     const [firstName, setFirstName] = useState('');
@@ -133,6 +139,48 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
         setMapPosition([lat, lng]);
         setFormData(prev => ({ ...prev, gpsCoordinates: { lat, lng } }));
     }, []);
+
+    const broughtBy = useMemo(() => {
+        if (!initialData) return null;
+        if (initialData.referrerType === 'Client' && initialData.referralEntityId) {
+            return allClients.find(c => c.id === initialData.referralEntityId);
+        }
+        return null;
+    }, [initialData, allClients]);
+
+    const referralsList = useMemo(() => {
+        if (!initialData || !initialData.id) return [];
+        const cid = initialData.id;
+
+        const clientRefs = allClients
+            .filter(c => c.referralEntityId === cid && c.referrerType === 'Client')
+            .map(c => ({
+                id: c.id,
+                name: c.name,
+                status: c.isCandidate ? 'Candidate' : (c.candidateStatus || 'Client'),
+                method: c.referralSheetId ? `ورقة #${c.referralSheetId}` : 'مباشر',
+                date: c.referralDate || c.createdAt,
+                type: 'client' as const
+            }));
+
+        const candRefs = candidates
+            .filter(c => c.referralEntityId === cid && c.referralType === 'Client')
+            .map(c => ({
+                id: c.id,
+                name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.nickname || '',
+                status: c.status,
+                method: c.referralSheetId ? `ورقة #${c.referralSheetId}` : 'مباشر',
+                date: c.referralDate,
+                type: 'candidate' as const
+            }));
+
+        const unconvertedCandRefs = candRefs.filter(cr => {
+            const cand = candidates.find(c => c.id === cr.id);
+            return cand && !cand.convertedToLeadId;
+        });
+
+        return [...clientRefs, ...unconvertedCandRefs].sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime());
+    }, [initialData, allClients, candidates]);
 
     // -- Save --
     const handleSave = () => {
@@ -407,6 +455,77 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
                                             placeholder="اختياري"
                                         />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ============ NETWORK TAB ============ */}
+                            {activeTab === 'network' && (
+                                <div className="space-y-6">
+                                    {/* The Origin Card */}
+                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                            <Share2 className="w-4 h-4 text-sky-600" />
+                                            المصدر - من أين أتى؟
+                                        </h3>
+                                        {formData.referrerName ? (
+                                            <div className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-xs text-slate-500 mb-0.5">{formData.sourceChannel}</p>
+                                                    <p className="text-sm font-bold text-slate-800">{formData.referrerName}</p>
+                                                </div>
+                                                {formData.referrerType === 'Client' && broughtBy && (
+                                                    <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${broughtBy.name}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
+                                                        عرض البروفايل
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-slate-500 text-center py-2">لا يوجد مُعرّف (غير محدد)</p>
+                                        )}
+                                    </div>
+
+                                    {/* The Referrals Table */}
+                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between shadow-sm z-10">
+                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                <Users className="w-4 h-4 text-emerald-600" />
+                                                الإنتاج - شبكة الترشيحات ({referralsList.length})
+                                            </h3>
+                                        </div>
+                                        {referralsList.length === 0 ? (
+                                            <p className="text-sm text-slate-500 text-center py-6">لم يقم بترشيح أحد بعد</p>
+                                        ) : (
+                                            <div className="overflow-x-auto max-h-[200px] overflow-y-auto custom-scroll">
+                                                <table className="w-full text-right text-sm">
+                                                    <thead className="bg-gray-50/50 sticky top-0 backdrop-blur-sm shadow-[0_1px_0_theme(colors.gray.200)]">
+                                                        <tr className="text-xs text-slate-500">
+                                                            <th className="px-4 py-2 font-medium">الاسم</th>
+                                                            <th className="px-4 py-2 font-medium">الحالة</th>
+                                                            <th className="px-4 py-2 font-medium">الطريقة</th>
+                                                            <th className="px-4 py-2 font-medium">التاريخ</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {referralsList.map((ref, idx) => (
+                                                            <tr key={`${ref.type}-${ref.id}`} className="hover:bg-gray-50/50 transition-colors">
+                                                                <td className="px-4 py-2.5 font-semibold text-slate-700">{ref.name}</td>
+                                                                <td className="px-4 py-2.5">
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ref.status === 'New' || ref.status === 'Candidate' ? 'bg-sky-50 text-sky-700 border border-sky-100' :
+                                                                        ref.status === 'Qualified' || ref.status === 'Client' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                                                            'bg-gray-100 text-gray-700 border border-gray-200'
+                                                                        }`}>
+                                                                        {ref.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-2.5 text-xs text-slate-500">{ref.method}</td>
+                                                                <td className="px-4 py-2.5 text-xs text-slate-500 font-mono tracking-wide">{ref.date?.split('T')[0] || '--'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}

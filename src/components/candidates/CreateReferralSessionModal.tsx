@@ -12,30 +12,23 @@ interface Props {
 }
 
 const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
-    { value: 'Existing Client', label: 'عميل حالي', icon: User },
-    { value: 'Supervisor', label: 'مشرف (شخصي)', icon: Building2 },
-    { value: 'Technician', label: 'فني / موظف', icon: Building2 },
-    { value: 'App', label: 'تطبيق', icon: PhoneCall },
-    { value: 'Marketing Visit', label: 'زيارة تسويق', icon: Handshake },
-    { value: 'Maintenance Visit', label: 'زيارة صيانة', icon: Handshake },
-    { value: 'Campaign', label: 'حملة ترويجية', icon: User },
-    { value: 'Direct Call', label: 'اتصال مباشر', icon: PhoneCall },
-    { value: 'Other', label: 'طرف خارجي', icon: User },
+    { value: 'Personal', label: 'شخصي', icon: User },
+    { value: 'Client', label: 'عميل', icon: Handshake },
+    { value: 'Employee', label: 'موظف', icon: Building2 },
+    { value: 'Unknown', label: 'مجهول', icon: Search }
 ];
 
 const channels: { value: ReferralOriginChannel; label: string }[] = [
-    { value: 'Visit', label: 'زيارة ميدانية' },
-    { value: 'Call', label: 'اتصال هاتفي' },
-    { value: 'App', label: 'تطبيق الجوال' },
-    { value: 'Maintenance', label: 'أثناء الصيانة' },
-    { value: 'Campaign', label: 'حملة خارجية' },
-    { value: 'Field Activity', label: 'نشاط ترويجي' }
+    { value: 'App', label: 'تطبيق' },
+    { value: 'Visit', label: 'زيارة' },
+    { value: 'Campaign', label: 'حملة' },
+    { value: 'Acquaintance', label: 'معرفة' }
 ];
 
 export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreated }: Props) {
     const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
-    const [referralType, setReferralType] = useState<ReferralType>('Existing Client');
+    const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
     const [nameSnapshot, setNameSnapshot] = useState('');
     const [addressSelection, setAddressSelection] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
@@ -60,7 +53,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                 referralOriginChannel: originChannel,
                 referralNameSnapshot: nameSnapshot,
                 referralAddressText: addressText,
-                referralEntityId: null, 
+                referralEntityId: null,
                 referralDate: new Date(referralDate).toISOString(),
                 referralNotes: notes,
                 ownerUserId: 1, // Auto-assigned to current supervisor (Mocked)
@@ -77,7 +70,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     };
 
     const resetState = () => {
-        setReferralType('Existing Client');
+        setReferralType('Personal');
         setOriginChannel('Visit');
         setNameSnapshot('');
         setAddressSelection({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
