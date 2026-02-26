@@ -3,6 +3,7 @@ import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { UserPlus, Search, Filter, Phone, Trash2, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
 import AddCandidateModal from './AddCandidateModal';
 import { Candidate } from '../../lib/types';
+import { getEntityContacts, getPrimaryContact } from '../../lib/contactUtils';
 
 export default function CandidatesEntry() {
     const candidates = useCandidateStore(state => state.candidates);
@@ -16,12 +17,12 @@ export default function CandidatesEntry() {
 
     // Filter Logic
     const filteredCandidates = candidates.filter(c => {
-        const matchesSearch = 
+        const matchesSearch =
             (c.firstName?.includes(searchTerm) || false) ||
             (c.nickname?.includes(searchTerm) || false) ||
             c.mobile.includes(searchTerm) ||
             c.referralNameSnapshot.includes(searchTerm);
-        
+
         const matchesStatus = filterStatus === 'All' ? true : c.status === filterStatus;
 
         return matchesSearch && matchesStatus;
@@ -43,15 +44,15 @@ export default function CandidatesEntry() {
                 <div className="flex items-center gap-3">
                     <div className="relative">
                         <Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="بحث (اسم، موبايل، وسيط)..." 
+                        <input
+                            type="text"
+                            placeholder="بحث (اسم، موبايل، وسيط)..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-4 pr-10 py-2 w-64 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20 text-sm transition-all"
                         />
                     </div>
-                    <select 
+                    <select
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value as any)}
                         className="px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 focus:border-sky-400"
@@ -61,7 +62,7 @@ export default function CandidatesEntry() {
                         <option value="Qualified">تم التحويل (Qualified)</option>
                         <option value="Junk">مرفوض (Junk)</option>
                     </select>
-                    <button 
+                    <button
                         onClick={() => setIsAddModalOpen(true)}
                         className="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-sky-600/20 transition-all hover:-translate-y-0.5"
                     >
@@ -89,7 +90,7 @@ export default function CandidatesEntry() {
                             {filteredCandidates.length > 0 ? (
                                 filteredCandidates.map((candidate) => {
                                     const sheet = referralSheets.find(s => s.id === candidate.referralSheetId);
-                                    
+
                                     return (
                                         <tr key={candidate.id} className={`hover:bg-slate-50/80 transition-colors ${candidate.duplicateFlag ? 'bg-amber-50/30' : ''}`}>
                                             <td className="px-6 py-4">
@@ -103,9 +104,16 @@ export default function CandidatesEntry() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2 text-slate-600 font-mono text-sm" dir="ltr">
-                                                    <Phone className="w-3 h-3 text-slate-400" />
-                                                    {candidate.mobile}
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2 text-slate-600 font-mono text-sm" dir="ltr">
+                                                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                                        <span>{getPrimaryContact(candidate).number}</span>
+                                                    </div>
+                                                    {getEntityContacts(candidate).length > 1 && (
+                                                        <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100 self-start">
+                                                            {getEntityContacts(candidate).length} أرقام تواصل
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {candidate.duplicateFlag && (
                                                     <div className="flex items-center gap-1 mt-1 text-amber-600 text-[10px] font-bold">
@@ -138,14 +146,14 @@ export default function CandidatesEntry() {
                                                 <div className="flex items-center gap-2">
                                                     {candidate.status === 'New' && (
                                                         <>
-                                                            <button 
+                                                            <button
                                                                 onClick={() => qualifyCandidate(candidate.id)}
                                                                 title="تحويل لـ Lead"
                                                                 className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors border border-transparent hover:border-emerald-200"
                                                             >
                                                                 <CheckCircle className="w-4 h-4" />
                                                             </button>
-                                                            <button 
+                                                            <button
                                                                 onClick={() => markJunk(candidate.id)}
                                                                 title="رفض / Junk"
                                                                 className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors border border-transparent hover:border-red-200"

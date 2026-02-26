@@ -63,7 +63,9 @@ export interface Candidate {
     lastName?: string;
     nickname: string | null;
     mobile: string;
+    contacts?: ContactEntry[];
     addressText: string;
+    geoUnitId: number | null;
     ownerUserId: number;
     status: CandidateStatus;
 
@@ -133,6 +135,8 @@ export interface Client {
     neighborhood: string;
     detailedAddress?: string;
     gpsCoordinates?: { lat: number; lng: number };
+    occupation?: string;
+    waterSource?: string;
 
     // Lineage fields
     sourceChannel?: string;
@@ -165,6 +169,7 @@ export interface Visit {
 export interface TeamSlot {
     supervisor: number | null;
     technician: number | null;
+    telemarketers?: number[];
 }
 
 export interface SoloSlot {
@@ -292,3 +297,61 @@ export interface MaintenanceRequest {
         recommendations: string;
     };
 }
+
+// --- Telemarketing Engine ---
+export type CallOutcome = 'no_answer' | 'busy' | 'rejected' | 'booked';
+
+export interface TaskListItem {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    name: string;
+    mobile: string;
+    contactNumber?: string;
+    contactLabel?: string;
+    addressText: string;
+    geoUnitId: number | null;
+    status: 'pending' | 'called' | 'booked';
+    callOutcome?: CallOutcome;
+}
+
+export interface TaskList {
+    id: string;
+    teamKey: string;
+    date: string;
+    items: TaskListItem[];
+    createdAt: string;
+}
+
+export interface CallLog {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    taskListId: string;
+    teamKey: string;
+    outcome: CallOutcome;
+    contactLabel?: string;
+    contactNumber?: string;
+    notes: string;
+    timestamp: string;
+    calledBy: number;
+}
+
+export interface Appointment {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    customerName: string;
+    customerAddress: string;
+    customerMobile: string;
+    teamKey: string;
+    date: string;
+    timeSlot: string;
+    occupation: string;
+    waterSource: string;
+    notes: string;
+    createdAt: string;
+    createdBy: number;
+}
+
+export const WORKING_HOURS = { start: 9, end: 17, slotMinutes: 60 };
