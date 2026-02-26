@@ -49,7 +49,7 @@ export default function Clients() {
                 ...clientData,
                 id: Math.max(0, ...clients.map(c => c.id)) + 1,
                 createdAt: new Date().toISOString(),
-                status: 'New',
+                status: 'Suggested',
                 isCandidate: activeTab === 'candidates' // Auto-flag based on active tab
             } as Client;
             save([...clients, newClient]);
@@ -90,7 +90,7 @@ export default function Clients() {
     ];
 
     const candidateColumns: ColumnDef<Client>[] = [
-        { key: 'name', label: 'الاسم المرشح', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
+        { key: 'name', label: 'الاسم المقترح', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
         { key: 'mobile', label: 'رقم الهاتف', sortable: true, render: (c) => <span className="font-mono text-slate-600">{c.mobile}</span> },
         { key: 'sourceChannel', label: 'المصدر', sortable: true, render: (c) => <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">{c.sourceChannel || 'N/A'}</span> },
         { key: 'createdAt', label: 'تاريخ الإضافة', sortable: true, render: (c) => <span className="text-sm text-slate-500">{c.createdAt?.slice(0, 10)}</span> },
@@ -125,7 +125,7 @@ export default function Clients() {
                     onClick={() => setActiveTab('candidates')}
                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'candidates' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    المرشحين (Drafts)
+                    الأسماء المقترحة
                 </button>
             </div>
 
@@ -164,17 +164,17 @@ export default function Clients() {
                 />
             ) : (
                 <SmartTable<Client>
-                    title="قائمة المرشحين (Candidate Drafts)"
+                    title="الأسماء المقترحة (Suggested Names)"
                     icon={Users}
                     data={candidateList}
                     columns={candidateColumns}
                     filters={[]}
                     searchKeys={['name', 'mobile']}
-                    searchPlaceholder="بحث في المرشحين..."
+                    searchPlaceholder="بحث في الأسماء المقترحة..."
                     getId={(c) => c.id}
                     onRowClick={openEditModal}
                     bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} مرشحين؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} اسم مقترح؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
                     ]}
                     actions={(c) => (
                         <div className="flex items-center gap-2">
@@ -207,13 +207,13 @@ export default function Clients() {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) {
+                                    if (confirm('هل أنت متأكد من تحويل هذا الاسم المقترح إلى عميل محتمل؟')) {
                                         qualifyCandidate(c.id);
                                     }
                                 }}
                                 className="flex items-center gap-1 p-1.5 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all text-xs font-bold border border-emerald-100"
                             >
-                                <CheckCircle2 className="w-3 h-3" /> تحويل لعميل
+                                <CheckCircle2 className="w-3 h-3" /> تحويل لعميل محتمل
                             </button>
 
                             <button onClick={() => deleteClient(c.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
@@ -224,11 +224,11 @@ export default function Clients() {
                     headerActions={
                         <button onClick={() => { setEditingClient(null); setIsModalOpen(true); }} className="flex items-center gap-2 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
                             <UserPlus className="w-4 h-4" />
-                            <span>إضافة مرشح</span>
+                            <span>إضافة اسم مقترح</span>
                         </button>
                     }
                     emptyIcon={Users}
-                    emptyMessage="لا يوجد مرشحين"
+                    emptyMessage="لا يوجد أسماء مقترحة"
                 />
             )}
 
@@ -276,7 +276,7 @@ export default function Clients() {
                         // For now, I'll just close and let the user delete if they want, or I'll implement a 'Link & Archive' logic.
                         // The store doesn't have a 'Link' action yet. I'll just alert for now.
                         setIsSearchModalOpen(false);
-                        alert('تم ربط المرشح بالعميل وتحديث بيانات التواصل بنجاح.');
+                        alert('تم ربط الاسم المقترح بالعميل وتحديث بيانات التواصل بنجاح.');
                     }}
                     onNoMatch={() => {
                         setIsSearchModalOpen(false);

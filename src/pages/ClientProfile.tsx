@@ -205,16 +205,32 @@ function OverviewTab({ client }: { client: Client }) {
 function NetworkTab({ client, metrics, allClients, candidates }: any) {
     const referralsList = useMemo(() => {
         const cid = client.id;
-        const clientRefs = allClients
-            .filter((c: any) => c.referralEntityId === cid && c.referrerType === 'Client')
-            .map((c: any) => ({
-                id: c.id,
-                name: c.name,
-                status: c.isCandidate ? 'Candidate' : (c.candidateStatus || 'Client'),
-                method: c.referralSheetId ? `ورقة #${c.referralSheetId}` : 'مباشر',
-                date: c.referralDate || c.createdAt,
-                type: 'client'
-            }));
+        const clientRefs: any[] = [];
+        allClients.forEach((c: any) => {
+            const referrersToCheck = c.referrers && c.referrers.length > 0
+                ? c.referrers
+                : [{
+                    referralEntityId: c.referralEntityId,
+                    referrerType: c.referrerType,
+                    referralSheetId: c.referralSheetId,
+                    referralDate: c.referralDate
+                }];
+
+            referrersToCheck.forEach((r: any) => {
+                if (r.referralEntityId === cid && r.referrerType === 'Client') {
+                    if (!clientRefs.some(ref => ref.id === c.id && ref.date === (r.referralDate || c.createdAt))) {
+                        clientRefs.push({
+                            id: c.id,
+                            name: c.name,
+                            status: c.isCandidate ? 'Candidate' : (c.candidateStatus || 'Client'),
+                            method: r.referralSheetId ? `ورقة #${r.referralSheetId}` : 'مباشر',
+                            date: r.referralDate || c.createdAt,
+                            type: 'client'
+                        });
+                    }
+                }
+            });
+        });
 
         const candRefs = candidates
             .filter((c: any) => c.referralEntityId === cid && c.referralType === 'Client')
@@ -232,7 +248,7 @@ function NetworkTab({ client, metrics, allClients, candidates }: any) {
 
     const originTouchpoints = useMemo(() => {
         // Find all candidate records for this client's mobile
-        const relatedCandidates = candidates.filter(c => c.mobile === client.mobile);
+        const relatedCandidates = candidates.filter((c: any) => c.mobile === client.mobile);
 
         type Touchpoint = {
             id: string | number;
@@ -244,7 +260,7 @@ function NetworkTab({ client, metrics, allClients, candidates }: any) {
             isConversion: boolean;
         };
 
-        const points: Touchpoint[] = relatedCandidates.map(c => ({
+        const points: Touchpoint[] = relatedCandidates.map((c: any) => ({
             id: `cand-${c.id}`,
             date: c.referralDate || c.createdAt,
             type: c.referralType || 'Unknown',
@@ -254,15 +270,28 @@ function NetworkTab({ client, metrics, allClients, candidates }: any) {
             isConversion: false
         }));
 
-        // Add the primary client creation/referral event as the final conversion
-        points.push({
-            id: `client-${client.id}`,
-            date: client.referralDate || client.createdAt,
-            type: client.referrerType || 'Unknown',
-            channel: client.sourceChannel || 'Unknown',
-            entityId: client.referralEntityId || null,
-            nameSnapshot: client.referrerName || 'غير محدد',
-            isConversion: true
+        // Check if client has multiple or single referrers
+        const clientReferrers = client.referrers && client.referrers.length > 0
+            ? client.referrers
+            : [{
+                id: `client-${client.id}`,
+                referrerType: client.referrerType || 'Unknown',
+                sourceChannel: client.sourceChannel || 'Unknown',
+                referralEntityId: client.referralEntityId || null,
+                referrerName: client.referrerName || 'غير محدد',
+                referralDate: client.referralDate || client.createdAt
+            }];
+
+        clientReferrers.forEach((r: any, idx: number) => {
+            points.push({
+                id: r.id || `client-${client.id}-${idx}`,
+                date: r.referralDate || client.createdAt,
+                type: r.referrerType || 'Unknown',
+                channel: r.sourceChannel || 'Unknown',
+                entityId: r.referralEntityId || null,
+                nameSnapshot: r.referrerName || 'غير محدد',
+                isConversion: true // Mark client referrers as true to highlight
+            });
         });
 
         // Sort chronologically ascending
@@ -292,8 +321,8 @@ function NetworkTab({ client, metrics, allClients, candidates }: any) {
                                     }`} />
 
                                 <div className={`bg-white rounded-2xl p-4 border shadow-sm transition-all ${tp.isConversion
-                                        ? 'border-emerald-200 bg-emerald-50/30 hover:shadow-md'
-                                        : 'border-slate-100 hover:border-sky-200 hover:shadow-md'
+                                    ? 'border-emerald-200 bg-emerald-50/30 hover:shadow-md'
+                                    : 'border-slate-100 hover:border-sky-200 hover:shadow-md'
                                     }`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="flex items-center gap-2">

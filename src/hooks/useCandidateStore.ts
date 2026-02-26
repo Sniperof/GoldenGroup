@@ -12,8 +12,10 @@ interface CandidateState {
 
     // Candidate Actions
     addCandidate: (candidate: Omit<Candidate, 'id' | 'createdAt' | 'duplicateFlag' | 'duplicateType' | 'duplicateReferenceId' | 'status' | 'referralConfirmationStatus' | 'convertedToLeadId' | 'referralSheetId'> & { referralSheetId: number | null }) => void;
-    qualifyCandidate: (candidateId: number) => void;
+    qualifyCandidate: (candidateId: number, clientData?: Client) => void;
+    linkCandidateToClient: (candidateId: number, clientId: number) => void;
     markJunk: (candidateId: number) => void;
+    markForFollowUp: (candidateId: number) => void;
 
     // Stats Helpers
     updateSheetStats: (sheetId: number) => void;
@@ -22,12 +24,12 @@ interface CandidateState {
 const mockSheets: ReferralSheet[] = [
     {
         id: 1,
-        referralType: 'Personal',
-        referralEntityId: null,
-        referralNameSnapshot: 'حملة المنصور الميدانية',
-        referralAddressText: 'بغداد، الكرخ، حي المنصور',
-        referralOriginChannel: 'Campaign',
-        referralNotes: 'حملة ترويجية في المول',
+        referralType: 'Client',
+        referralEntityId: 101, // Ahmed
+        referralNameSnapshot: 'أحمد السوري',
+        referralAddressText: 'دمشق، المزة',
+        referralOriginChannel: 'Acquaintance',
+        referralNotes: 'أحمد صديق قديم من دمشق',
         referralDate: new Date().toISOString(),
         ownerUserId: 1,
         status: 'New',
@@ -44,22 +46,47 @@ const mockSheets: ReferralSheet[] = [
 const mockCandidates: Candidate[] = [
     {
         id: 1,
-        firstName: 'علي',
-        lastName: 'محمد',
-        nickname: 'ابو حسين',
-        mobile: '07712345678',
-        addressText: 'بغداد، الكرخ، حي المنصور',
+        firstName: 'خالد',
+        lastName: 'الحمصي',
+        nickname: 'أبو وليد',
+        mobile: '0933999887',
+        addressText: 'دمشق، المزة فيلات',
         ownerUserId: 1,
-        status: 'New',
-        referralSheetId: 1,
+        status: 'Suggested',
+        referralSheetId: 1, // Ahmed's sheet
         referralDate: new Date().toISOString(),
-        referralReason: 'تسويق عام',
-        referralType: 'Personal',
-        referralOriginChannel: 'Campaign',
-        referralNameSnapshot: 'حملة المنصور الميدانية',
-        referralEntityId: null,
+        referralReason: 'أحمد رشحه بالورقة',
+        referralType: 'Client',
+        referralOriginChannel: 'Acquaintance',
+        referralNameSnapshot: 'أحمد السوري',
+        referralEntityId: 101,
         referralConfirmationStatus: 'Pending',
-        candidateNotes: 'يفضل الاتصال بعد العصر',
+        candidateNotes: 'تواصل معه بخصوص الفلتر',
+        duplicateFlag: false,
+        duplicateType: null,
+        duplicateReferenceId: null,
+        convertedToLeadId: null,
+        createdAt: new Date().toISOString(),
+        createdBy: 1
+    },
+    {
+        id: 2,
+        firstName: 'ليلى',
+        lastName: 'حسان',
+        nickname: '',
+        mobile: '0933555443',
+        addressText: 'دمشق، أبو رمانة',
+        ownerUserId: 1,
+        status: 'Suggested',
+        referralSheetId: null, // Direct Entry
+        referralDate: new Date().toISOString(),
+        referralReason: 'تزكية مباشرة من فاطمة',
+        referralType: 'Client',
+        referralOriginChannel: 'Visit',
+        referralNameSnapshot: 'فاطمة الزهراء',
+        referralEntityId: 102, // Fatima
+        referralConfirmationStatus: 'Pending',
+        candidateNotes: 'تزكية مباشرة',
         duplicateFlag: false,
         duplicateType: null,
         duplicateReferenceId: null,
@@ -180,7 +207,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
 
             const newCandidate: Candidate = {
                 ...candidateData,
-                status: 'Prospect',
+                status: 'Suggested',
                 referralConfirmationStatus: 'Pending',
                 duplicateFlag: isDupe,
                 duplicateType: dupeType,
@@ -199,52 +226,61 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
         }
     },
 
-    qualifyCandidate: (candidateId) => {
+    qualifyCandidate: (candidateId, clientData) => {
         set((state) => {
             const candidate = state.candidates.find(c => c.id === candidateId);
             if (!candidate) return state;
 
-            if (!candidate.referralDate || !candidate.referralType) {
-                throw new Error('خطأ خطير: لا يمكن تحويل مرشح يفتقر إلى بيانات وتاريخ الاستقطاب الأساسية.');
-            }
-
             const clients = StorageManager.load<Client[]>('clients', []);
 
-            if (clients.some(c => c.mobile === candidate.mobile)) {
-                throw new Error('الرقم موجود بالفعل في قائمة العملاء. يرجى المراجعة.');
+            // If clientData is provided, it means it's already "new" and possibly edited.
+            // But we need to ensure the candidate is linked to it.
+            let savedClient: Client;
+            if (clientData) {
+                // We use the ID if provided, or generate a final one just in case
+                const newId = clientData.id || (clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1);
+                savedClient = { ...clientData, id: newId };
+                // Filter out the client from list if it was somehow added, though in our flow it shouldn't be yet
+                const otherClients = clients.filter(c => c.id !== newId && c.mobile !== savedClient.mobile);
+                StorageManager.save('clients', [...otherClients, savedClient]);
+            } else {
+                // Auto-generate based on candidate
+                if (!candidate.referralDate || !candidate.referralType) {
+                    throw new Error('خطأ خطير: لا يمكن تحويل مرشح يفتقر إلى بيانات وتاريخ الاستقطاب الأساسية.');
+                }
+
+                if (clients.some(c => c.mobile === candidate.mobile)) {
+                    throw new Error('الرقم موجود بالفعل في قائمة العملاء. يرجى المراجعة.');
+                }
+
+                savedClient = {
+                    id: clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1,
+                    name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || 'بدون اسم',
+                    mobile: candidate.mobile,
+                    governorate: '',
+                    district: '',
+                    neighborhood: candidate.addressText,
+                    detailedAddress: candidate.addressText,
+                    sourceChannel: candidate.referralOriginChannel,
+                    referrerType: candidate.referralType,
+                    referrerName: candidate.referralNameSnapshot,
+                    referralEntityId: candidate.referralEntityId,
+                    referralDate: candidate.referralDate,
+                    referralReason: candidate.referralReason,
+                    referralSheetId: candidate.referralSheetId,
+                    referralAddressText: candidate.addressText,
+                    createdAt: new Date().toISOString(),
+                    isCandidate: false,
+                    candidateStatus: 'Suggested'
+                };
+                StorageManager.save('clients', [...clients, savedClient]);
             }
-
-            const newClient: Client = {
-                id: clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1,
-                name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || 'بدون اسم',
-                mobile: candidate.mobile,
-                governorate: '',
-                district: '',
-                neighborhood: candidate.addressText,
-                detailedAddress: candidate.addressText,
-
-                // Full Lineage Transfer Guarantee
-                sourceChannel: candidate.referralOriginChannel,
-                referrerType: candidate.referralType,
-                referrerName: candidate.referralNameSnapshot,
-                referralEntityId: candidate.referralEntityId,
-                referralDate: candidate.referralDate,
-                referralReason: candidate.referralReason,
-                referralSheetId: candidate.referralSheetId, // Updated
-                referralAddressText: candidate.addressText,
-
-                createdAt: new Date().toISOString(),
-                isCandidate: false,
-                candidateStatus: 'New'
-            };
-
-            StorageManager.save('clients', [...clients, newClient]);
 
             const updatedCandidates = state.candidates.map(c =>
                 c.id === candidateId ? {
                     ...c,
                     status: 'Qualified' as const,
-                    convertedToLeadId: newClient.id
+                    convertedToLeadId: savedClient.id
                 } : c
             );
 
@@ -258,9 +294,81 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
         }
     },
 
+    linkCandidateToClient: (candidateId, clientId) => {
+        set((state) => {
+            const candidate = state.candidates.find(c => c.id === candidateId);
+
+            if (candidate) {
+                // Fetch and update the linked client in StorageManager
+                const clients = StorageManager.load<Client[]>('clients', []);
+                const clientIndex = clients.findIndex(c => c.id === clientId);
+
+                if (clientIndex !== -1) {
+                    const client = clients[clientIndex];
+                    const existingReferrers = client.referrers || [];
+
+                    // Create new referrer record from candidate data
+                    const newReferrer = {
+                        id: Date.now().toString(),
+                        referrerType: candidate.referralType,
+                        referralEntityId: candidate.referralEntityId,
+                        referrerName: candidate.referralNameSnapshot,
+                        sourceChannel: candidate.referralOriginChannel,
+                        referralDate: candidate.referralDate,
+                        referralReason: candidate.referralReason,
+                        referralSheetId: candidate.referralSheetId
+                    };
+
+                    // Push to referrers array and set primary legacy fields if null
+                    client.referrers = [...existingReferrers, newReferrer];
+
+                    if (!client.referrerName) {
+                        client.referrerName = newReferrer.referrerName;
+                        client.referrerType = newReferrer.referrerType;
+                        client.sourceChannel = newReferrer.sourceChannel;
+                        client.referralEntityId = newReferrer.referralEntityId;
+                        client.referralDate = newReferrer.referralDate;
+                        client.referralReason = newReferrer.referralReason;
+                        client.referralSheetId = newReferrer.referralSheetId;
+                    }
+
+                    clients[clientIndex] = client;
+                    StorageManager.save('clients', clients);
+                }
+            }
+
+            const updatedCandidates = state.candidates.map(c =>
+                c.id === candidateId ? {
+                    ...c,
+                    status: 'Qualified' as const,
+                    convertedToLeadId: clientId,
+                    duplicateFlag: true
+                } : c
+            );
+            return { candidates: updatedCandidates };
+        });
+
+        const candidate = get().candidates.find(c => c.id === candidateId);
+        if (candidate?.referralSheetId) {
+            get().updateSheetStats(candidate.referralSheetId);
+        }
+    },
+
     markJunk: (candidateId) => {
         set((state) => ({
             candidates: state.candidates.map(c => c.id === candidateId ? { ...c, status: 'Junk' } : c)
+        }));
+
+        // Update stats
+        const candidate = get().candidates.find(c => c.id === candidateId);
+        if (candidate?.referralSheetId) {
+            get().updateSheetStats(candidate.referralSheetId);
+        }
+    },
+
+    markForFollowUp: (candidateId) => {
+        set((state) => ({
+            candidates: state.candidates.map(c => c.id === candidateId ? { ...c, status: 'FollowUp' } : c)
         }));
 
         // Update stats

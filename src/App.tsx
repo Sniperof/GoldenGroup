@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { seedSystem } from './lib/seed';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MainLayout from './layout/MainLayout';
 import Dashboard from './pages/Dashboard';
@@ -25,6 +27,10 @@ import TeamTasksDetail from './pages/planning/TeamTasksDetail';
 import SystemSettings from './pages/SystemSettings';
 
 export default function App() {
+    useEffect(() => {
+        seedSystem();
+    }, []);
+
     return (
         <BrowserRouter>
             <ErrorBoundary>

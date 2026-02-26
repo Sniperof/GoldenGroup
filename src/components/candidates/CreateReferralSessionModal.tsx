@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { X, Save, PlusCircle, Building2, User, PhoneCall, Handshake, Search } from 'lucide-react';
-import { ReferralType, ReferralOriginChannel } from '../../lib/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, PlusCircle, Building2, User, PhoneCall, Handshake, Search, CheckCircle, AlertCircle } from 'lucide-react';
+import { ReferralType, ReferralOriginChannel, Client } from '../../lib/types';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
-import { defaultGeoUnits } from '../../lib/defaultData';
+import { StorageManager } from '../../lib/storage';
 
 interface Props {
     isOpen: boolean;
@@ -29,31 +28,109 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
-    const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
-    const [nameSnapshot, setNameSnapshot] = useState('');
-    const [addressSelection, setAddressSelection] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
+    const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Acquaintance');
+    const [nameSnapshot, setNameSnapshot] = useState('أحمد (مشرف)');
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
+
+    const [employeeIdInput, setEmployeeIdInput] = useState('');
+    const [employeeFound, setEmployeeFound] = useState<{ name: string, id: number } | null>(null);
+    const [employeeSearchError, setEmployeeSearchError] = useState('');
+
+    const [clientSearch, setClientSearch] = useState('');
+    const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+
+    const clientSearchRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        // Handle clicking outside of client suggestions
+        function handleClickOutside(event: MouseEvent) {
+            if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
+                setClientSuggestions([]);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        // Reset changing fields when mode changes
+        setNameSnapshot('');
+        setOriginChannel('Visit');
+        setEmployeeIdInput('');
+        setEmployeeFound(null);
+        setEmployeeSearchError('');
+        setClientSearch('');
+        setClientSuggestions([]);
+        setSelectedClientId(null);
+        setError('');
+
+        if (referralType === 'Personal') {
+            setOriginChannel('Acquaintance');
+            setNameSnapshot('أحمد (مشرف)'); // Currently assuming supervisor Ahmad is logged in
+        } else if (referralType === 'Unknown') {
+            setNameSnapshot('مجهول');
+        }
+    }, [referralType]);
+
+    const handleEmployeeBlur = () => {
+        if (!employeeIdInput.trim()) {
+            setEmployeeFound(null);
+            setEmployeeSearchError('');
+            return;
+        }
+        const employees = StorageManager.load<any[]>('employees', []);
+        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+        if (emp) {
+            setEmployeeFound({ name: emp.name, id: emp.id });
+            setNameSnapshot(emp.name);
+            setEmployeeSearchError('');
+        } else {
+            setEmployeeFound(null);
+            setNameSnapshot('');
+            setEmployeeSearchError('لم يتم العثور على الموظف');
+        }
+    };
+
+    const handleClientSearch = (text: string) => {
+        setClientSearch(text);
+        if (text.trim().length < 2) {
+            setClientSuggestions([]);
+            return;
+        }
+        const clients = StorageManager.load<Client[]>('clients', []);
+        const matches = clients.filter(c => c.name.includes(text) || c.mobile.includes(text)).slice(0, 5);
+        setClientSuggestions(matches);
+    };
+
+    const handleSelectClient = (client: Client) => {
+        setClientSearch(client.name);
+        setNameSnapshot(client.name);
+        setSelectedClientId(client.id);
+        setClientSuggestions([]);
+    };
 
     const handleSave = () => {
         if (!nameSnapshot.trim() || !referralDate) {
             setError('الرجاء تعبئة جميع الحقول الإلزامية (اسم الوسيط، وتاريخ الورقة).');
             return;
         }
-
-        // Get readable address from selection
-        const unitId = addressSelection.neighborhoodId || addressSelection.subId || addressSelection.regionId || addressSelection.govId;
-        const matchingUnit = defaultGeoUnits.find(u => u.id === Number(unitId));
-        const addressText = matchingUnit ? matchingUnit.name : 'غير محدد';
+        let entityId: number | null = null;
+        if (referralType === 'Employee' && employeeFound) {
+            entityId = employeeFound.id;
+        } else if (referralType === 'Client' && selectedClientId) {
+            entityId = selectedClientId;
+        }
 
         try {
             const newId = addReferralSheet({
                 referralType,
                 referralOriginChannel: originChannel,
                 referralNameSnapshot: nameSnapshot,
-                referralAddressText: addressText,
-                referralEntityId: null,
+                referralAddressText: 'غير محدد',
+                referralEntityId: entityId,
                 referralDate: new Date(referralDate).toISOString(),
                 referralNotes: notes,
                 ownerUserId: 1, // Auto-assigned to current supervisor (Mocked)
@@ -71,9 +148,14 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
     const resetState = () => {
         setReferralType('Personal');
-        setOriginChannel('Visit');
-        setNameSnapshot('');
-        setAddressSelection({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
+        setOriginChannel('Acquaintance');
+        setNameSnapshot('أحمد (مشرف)');
+        setEmployeeIdInput('');
+        setEmployeeFound(null);
+        setEmployeeSearchError('');
+        setClientSearch('');
+        setClientSuggestions([]);
+        setSelectedClientId(null);
         setReferralDate(new Date().toISOString().split('T')[0]);
         setNotes('');
         setError('');
@@ -115,7 +197,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             <select
                                 value={referralType}
                                 onChange={(e) => setReferralType(e.target.value as ReferralType)}
-                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
+                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm font-bold"
                             >
                                 {referralTypes.map(rt => <option key={rt.value} value={rt.value}>{rt.label}</option>)}
                             </select>
@@ -125,23 +207,81 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             <select
                                 value={originChannel}
                                 onChange={(e) => setOriginChannel(e.target.value as ReferralOriginChannel)}
-                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
+                                disabled={referralType === 'Personal' || referralType === 'Unknown'}
+                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm disabled:bg-slate-50 disabled:text-slate-500"
                             >
                                 {channels.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط / المصدر (Mediator Name) <span className="text-red-500">*</span></label>
-                        <input
-                            type="text"
-                            value={nameSnapshot}
-                            onChange={(e) => setNameSnapshot(e.target.value)}
-                            placeholder="مثال: أبو محمد الناطور، أو اسم العميل..."
-                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
-                        />
-                    </div>
+                    {/* DYNAMIC MEDIATOR RENDER */}
+                    {referralType === 'Employee' && (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">رقم الموظف (Employee ID) <span className="text-red-500">*</span></label>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="text"
+                                    value={employeeIdInput}
+                                    onChange={(e) => setEmployeeIdInput(e.target.value)}
+                                    onBlur={handleEmployeeBlur}
+                                    placeholder="أدخل رقم الموظف..."
+                                    className="w-1/2 p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
+                                />
+                                {employeeFound && (
+                                    <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 flex-1">
+                                        <CheckCircle className="w-5 h-5" />
+                                        {employeeFound.name}
+                                    </div>
+                                )}
+                                {employeeSearchError && (
+                                    <div className="flex items-center gap-2 text-red-600 font-bold bg-red-50 px-3 py-2 rounded-lg border border-red-100 flex-1">
+                                        <AlertCircle className="w-5 h-5" />
+                                        {employeeSearchError}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {referralType === 'Client' && (
+                        <div ref={clientSearchRef} className="relative">
+                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم العميل (Client Name) <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                value={clientSearch}
+                                onChange={(e) => handleClientSearch(e.target.value)}
+                                placeholder="ابحث عن العميل بالاسم أو رقم الهاتف..."
+                                className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
+                            />
+                            {clientSuggestions.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-10 overflow-hidden">
+                                    {clientSuggestions.map(client => (
+                                        <button
+                                            key={client.id}
+                                            onClick={() => handleSelectClient(client)}
+                                            className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
+                                        >
+                                            <span className="font-bold text-slate-700">{client.name}</span>
+                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">{client.mobile}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {(referralType === 'Personal' || referralType === 'Unknown') && (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط / المصدر (Mediator Name) <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                value={nameSnapshot}
+                                disabled
+                                className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 font-bold cursor-not-allowed"
+                            />
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">تاريخ الورقة (Sheet Date) <span className="text-red-500">*</span></label>
@@ -150,16 +290,6 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             value={referralDate}
                             onChange={(e) => setReferralDate(e.target.value)}
                             className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
-                        />
-                    </div>
-
-                    <div>
-                        <GeoSmartSearch
-                            label="النطاق الجغرافي / منطقة العمل"
-                            geoUnits={defaultGeoUnits}
-                            value={addressSelection}
-                            onChange={setAddressSelection}
-                            placeholder="ابحث عن المنطقة المستهدفة..."
                         />
                     </div>
 

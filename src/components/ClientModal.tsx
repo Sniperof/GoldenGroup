@@ -152,16 +152,33 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
         if (!initialData || !initialData.id) return [];
         const cid = initialData.id;
 
-        const clientRefs = allClients
-            .filter(c => c.referralEntityId === cid && c.referrerType === 'Client')
-            .map(c => ({
-                id: c.id,
-                name: c.name,
-                status: c.isCandidate ? 'Candidate' : (c.candidateStatus || 'Client'),
-                method: c.referralSheetId ? `ورقة #${c.referralSheetId}` : 'مباشر',
-                date: c.referralDate || c.createdAt,
-                type: 'client' as const
-            }));
+        const clientRefs: any[] = [];
+        allClients.forEach(c => {
+            const referrersToCheck = c.referrers && c.referrers.length > 0
+                ? c.referrers
+                : [{
+                    referralEntityId: c.referralEntityId,
+                    referrerType: c.referrerType,
+                    referralSheetId: c.referralSheetId,
+                    referralDate: c.referralDate
+                }];
+
+            referrersToCheck.forEach(r => {
+                if (r.referralEntityId === cid && r.referrerType === 'Client') {
+                    // avoid duplicates if somehow legacy and referrers array have the same entry
+                    if (!clientRefs.some(ref => ref.id === c.id && ref.date === (r.referralDate || c.createdAt))) {
+                        clientRefs.push({
+                            id: c.id,
+                            name: c.name,
+                            status: c.isCandidate ? 'Candidate' : (c.candidateStatus || 'Client'),
+                            method: r.referralSheetId ? `ورقة #${r.referralSheetId}` : 'مباشر',
+                            date: r.referralDate || c.createdAt,
+                            type: 'client' as const
+                        });
+                    }
+                }
+            });
+        });
 
         const candRefs = candidates
             .filter(c => c.referralEntityId === cid && c.referralType === 'Client')
@@ -464,25 +481,44 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                 <div className="space-y-6">
                                     {/* The Origin Card */}
                                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
                                             <Share2 className="w-4 h-4 text-sky-600" />
                                             المصدر - من أين أتى؟
                                         </h3>
-                                        {formData.referrerName ? (
-                                            <div className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-xs text-slate-500 mb-0.5">{formData.sourceChannel}</p>
-                                                    <p className="text-sm font-bold text-slate-800">{formData.referrerName}</p>
+                                        <div className="space-y-2">
+                                            {initialData?.referrers && initialData.referrers.length > 0 ? (
+                                                initialData.referrers.map((ref, idx) => (
+                                                    <div key={ref.id || idx} className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between shadow-sm">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-0.5">
+                                                                <span className="text-xs text-slate-500">{ref.sourceChannel}</span>
+                                                                <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{ref.referralDate?.split('T')[0] || ''}</span>
+                                                            </div>
+                                                            <p className="text-sm font-bold text-slate-800">{ref.referrerName}</p>
+                                                        </div>
+                                                        {ref.referrerType === 'Client' && ref.referralEntityId && (
+                                                            <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${ref.referralEntityId}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
+                                                                عرض البروفايل
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            ) : formData.referrerName ? (
+                                                <div className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between shadow-sm">
+                                                    <div>
+                                                        <p className="text-xs text-slate-500 mb-0.5">{formData.sourceChannel}</p>
+                                                        <p className="text-sm font-bold text-slate-800">{formData.referrerName}</p>
+                                                    </div>
+                                                    {formData.referrerType === 'Client' && broughtBy && (
+                                                        <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${broughtBy.name}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
+                                                            عرض البروفايل
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {formData.referrerType === 'Client' && broughtBy && (
-                                                    <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${broughtBy.name}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
-                                                        عرض البروفايل
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-slate-500 text-center py-2">لا يوجد مُعرّف (غير محدد)</p>
-                                        )}
+                                            ) : (
+                                                <p className="text-sm text-slate-500 text-center py-2">لا يوجد مُعرّف (حالة مباشرة)</p>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* The Referrals Table */}
