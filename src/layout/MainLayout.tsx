@@ -15,7 +15,7 @@ const navItems = [
     { path: '/devices', label: 'دليل الأجهزة', icon: Gem },
     { path: '/routes', label: 'إدارة المسارات', icon: Route },
     { path: '/clients', label: 'سجل العملاء', icon: BookUser },
-    { path: '/candidates', label: 'المرشحون', icon: UserPlus },
+    { path: '/candidates', label: 'الأسماء المقترحة', icon: UserPlus },
     { path: '/employees', label: 'إدارة الفرق', icon: Users },
     { path: '/telemarketer', label: 'المسوّق الهاتفي', icon: Headset },
     { path: '/settings', label: 'إعدادات النظام', icon: Settings },

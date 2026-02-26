@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List } from 'lucide-react';
+import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List, ShieldCheck } from 'lucide-react';
 import AddCandidateModal from '../../components/candidates/AddCandidateModal';
 import CreateReferralSheetModal from '../../components/candidates/CreateReferralSessionModal';
 import ImportCSVModal from '../../components/candidates/ImportCSVModal';
 import ReferralSheetDetailsModal from '../../components/candidates/SessionDetailsModal';
+import QualificationModal from '../../components/candidates/QualificationModal';
+import ClientModal from '../../components/ClientModal';
+import { Client, Candidate } from '../../lib/types';
+import { StorageManager } from '../../lib/storage';
+import { defaultGeoUnits } from '../../lib/defaultData';
 
 export default function CandidatesEntry() {
     // UI State
@@ -20,7 +25,15 @@ export default function CandidatesEntry() {
     const candidates = useCandidateStore(state => state.candidates);
     const referralSheets = useCandidateStore(state => state.referralSheets);
     const qualifyCandidate = useCandidateStore(state => state.qualifyCandidate);
+    const linkCandidateToClient = useCandidateStore(state => state.linkCandidateToClient);
     const markJunk = useCandidateStore(state => state.markJunk);
+    const markForFollowUp = useCandidateStore(state => state.markForFollowUp);
+
+    // New Qualification & Client Modals
+    const [isQualifyModalOpen, setIsQualifyModalOpen] = useState(false);
+    const [activeCandidateForQualify, setActiveCandidateForQualify] = useState<Candidate | null>(null);
+    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [clientInitialData, setClientInitialData] = useState<Client | null>(null);
 
     // Derived State
     const filteredCandidates = candidates.filter(c => {
@@ -28,11 +41,44 @@ export default function CandidatesEntry() {
         return fullStr.includes(searchQuery.toLowerCase());
     });
 
-    const handleQualify = (id: number) => {
-        const candidate = candidates.find(c => c.id === id);
-        if (!candidate) return;
-        if (confirm(`هل أنت متأكد من تحويل ${candidate.firstName || candidate.nickname} إلى عميل (Lead)؟`)) {
-            try { qualifyCandidate(id); } catch (err: any) { setErrorModal(err.message); }
+    const handleOpenQualify = (candidate: Candidate) => {
+        setActiveCandidateForQualify(candidate);
+        setIsQualifyModalOpen(true);
+    };
+
+    const handleQualificationConfirmed = (candidate: Candidate) => {
+        // Prepare pre-filled Client data
+        const prefilledClient: Partial<Client> = {
+            name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || '',
+            mobile: candidate.mobile,
+            sourceChannel: candidate.referralOriginChannel,
+            referrerType: candidate.referralType,
+            referrerName: candidate.referralNameSnapshot,
+            referralEntityId: candidate.referralEntityId,
+            referralDate: candidate.referralDate,
+            referralReason: candidate.referralReason,
+            referralSheetId: candidate.referralSheetId,
+            referralAddressText: candidate.addressText,
+            isCandidate: false,
+            candidateStatus: 'Lead'
+        };
+
+        setClientInitialData(prefilledClient as Client);
+        setIsQualifyModalOpen(false);
+        setIsClientModalOpen(true);
+    };
+
+    const handleSaveClient = (clientData: Client) => {
+        if (!activeCandidateForQualify) return;
+
+        // Perform the standard qualify action which saves to clients and updates candidate status
+        try {
+            qualifyCandidate(activeCandidateForQualify.id, clientData);
+            setIsClientModalOpen(false);
+            setClientInitialData(null);
+            setActiveCandidateForQualify(null);
+        } catch (err: any) {
+            setErrorModal(err.message);
         }
     };
 
@@ -54,8 +100,8 @@ export default function CandidatesEntry() {
             <div className="flex flex-col gap-6">
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800">إدارة المرشحين (Prospects)</h1>
-                        <p className="text-sm text-slate-500 mt-1">منطقة الفلترة وتجهيز البيانات للتليماركتينغ</p>
+                        <h1 className="text-2xl font-bold text-slate-800">إدارة الأسماء المقترحة (Suggested Names)</h1>
+                        <p className="text-sm text-slate-500 mt-1">فلترة، تدقيق، وتوجيه الأسماء الجديدة</p>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setIsCreateSheetOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold shadow-sm transition-all text-sm">
@@ -104,8 +150,8 @@ export default function CandidatesEntry() {
                         <table className="w-full text-sm text-right">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-wider">
-                                    <th className="px-5 py-4">المرشح</th>
-                                    <th className="px-5 py-4">بيانات الاستقطاب</th>
+                                    <th className="px-5 py-4">الاسم المقترح</th>
+                                    <th className="px-5 py-4"> نوع الترشيح</th>
                                     <th className="px-5 py-4">الحالة</th>
                                     <th className="px-5 py-4 text-center">الإجراءات</th>
                                 </tr>
@@ -121,7 +167,7 @@ export default function CandidatesEntry() {
                                                 <td className="px-5 py-4">
                                                     <div className="font-bold text-slate-800">{c.firstName} {c.lastName} {c.nickname ? `(${c.nickname})` : ''}</div>
                                                     <div className="text-xs font-mono text-slate-500" dir="ltr">{c.mobile}</div>
-                                                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3"/> {c.addressText}</div>
+                                                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> {c.addressText}</div>
                                                 </td>
                                                 <td className="px-5 py-4">
                                                     {sheet ? (
@@ -136,17 +182,20 @@ export default function CandidatesEntry() {
                                                     <div className="text-[10px] text-slate-400 mt-1">{c.referralOriginChannel} | {c.referralDate.split('T')[0]}</div>
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${c.status === 'New' ? 'bg-sky-50 text-sky-700 border-sky-200' : c.status === 'Qualified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                                        {c.status === 'New' ? 'جديد' : c.status === 'Qualified' ? 'تم التحويل' : 'مرفوض'}
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${c.status === 'Suggested' ? 'bg-sky-50 text-sky-700 border-sky-200' : c.status === 'Qualified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                                        {c.status === 'Suggested' ? 'مقترح' : c.status === 'FollowUp' ? 'متابعة' : c.status === 'Qualified' ? (c.duplicateFlag ? 'تم الربط' : 'تم التحويل') : 'مرفوض'}
                                                     </span>
-                                                    {c.duplicateFlag && <div className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> مكرر</div>}
+                                                    {c.duplicateFlag && <div className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${c.status === 'Qualified' ? 'text-emerald-600' : 'text-amber-500'}`}><AlertCircle className="w-3 h-3" /> {c.status === 'Qualified' ? 'عميل حالي' : 'احتمال تكرار'}</div>}
                                                 </td>
                                                 <td className="px-5 py-4 text-center">
-                                                    {c.status === 'New' && (
-                                                        <div className="flex justify-center gap-2">
-                                                            <button onClick={() => handleQualify(c.id)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded border border-emerald-200" title="تأهيل"><ArrowRight className="w-4 h-4" /></button>
-                                                            <button onClick={() => { if(confirm('استبعاد؟')) markJunk(c.id) }} className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200" title="رفض"><XCircle className="w-4 h-4" /></button>
-                                                        </div>
+                                                    {(c.status === 'Suggested' || c.status === 'FollowUp') && (
+                                                        <button
+                                                            onClick={() => handleOpenQualify(c)}
+                                                            className="flex flex-col flex-1 mx-auto items-center justify-center gap-1.5 w-10 h-10 bg-sky-50 text-sky-600 hover:bg-sky-500 hover:text-white rounded-xl border border-sky-100 hover:border-sky-500 shadow-sm transition-all group"
+                                                            title="تأهيل والتحقق الذكي"
+                                                        >
+                                                            <ShieldCheck className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                        </button>
                                                     )}
                                                 </td>
                                             </tr>
@@ -213,6 +262,28 @@ export default function CandidatesEntry() {
             <CreateReferralSheetModal isOpen={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} onSheetCreated={() => setActiveTab('sheets')} />
             <ImportCSVModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} />
             <ReferralSheetDetailsModal sheetId={sheetDetailsId} isOpen={sheetDetailsId !== null} onClose={() => setSheetDetailsId(null)} />
+
+            <QualificationModal
+                isOpen={isQualifyModalOpen}
+                onClose={() => setIsQualifyModalOpen(false)}
+                candidate={activeCandidateForQualify}
+                onQualified={handleQualificationConfirmed}
+                onJunk={(id) => { markJunk(id); setIsQualifyModalOpen(false); }}
+                onFollowUp={(id) => { markForFollowUp(id); setIsQualifyModalOpen(false); }}
+                onLink={(candidateId, client) => {
+                    linkCandidateToClient(candidateId, client.id);
+                    setIsQualifyModalOpen(false);
+                    setActiveCandidateForQualify(null);
+                }}
+            />
+
+            <ClientModal
+                isOpen={isClientModalOpen}
+                onClose={() => setIsClientModalOpen(false)}
+                onSave={handleSaveClient}
+                initialData={clientInitialData}
+                geoUnits={defaultGeoUnits}
+            />
         </div>
     );
 }

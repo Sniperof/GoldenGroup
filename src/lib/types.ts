@@ -52,7 +52,7 @@ export interface ReferralSheet {
     createdBy: number;
 }
 
-export type CandidateStatus = 'Prospect' | 'New' | 'Contacted' | 'Qualified' | 'Junk';
+export type CandidateStatus = 'Prospect' | 'Suggested' | 'FollowUp' | 'Contacted' | 'Qualified' | 'Junk';
 export type ReferralConfirmationStatus = 'Pending' | 'Confirmed' | 'Rejected';
 export type DuplicateType = 'Candidate' | 'Client' | 'Both';
 
@@ -112,6 +112,17 @@ export interface ContactEntry {
     status: ContactStatus;
 }
 
+export interface ClientReferrer {
+    id: string;
+    referrerType: string;
+    referralEntityId: number | null;
+    referrerName: string;
+    sourceChannel: string;
+    referralDate: string;
+    referralReason: string;
+    referralSheetId?: number | null;
+}
+
 export interface Client {
     id: number;
     name: string;
@@ -133,6 +144,8 @@ export interface Client {
     referralReason?: string;
     referralSheetId?: number | null; // Renamed
     referralAddressText?: string;
+
+    referrers?: ClientReferrer[]; // To hold multiple brokers/referrers for this client
 
     createdAt: string;
     isCandidate?: boolean;
