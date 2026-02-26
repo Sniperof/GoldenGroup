@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, ChevronRight, Calendar, Users, User, Route as RouteIcon,
-    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye
+    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye, PhoneCall
 } from 'lucide-react';
 import { StorageManager } from '../../lib/storage';
 import { defaultGeoUnits, defaultEmployees, levelNames } from '../../lib/defaultData';
-import type { Route, GeoUnit, DaySchedule, RouteAssignmentData } from '../../lib/types';
+import type { Route, GeoUnit, DaySchedule, RouteAssignmentData, Contract, Visit } from '../../lib/types';
+import { useCandidateStore } from '../../hooks/useCandidateStore';
+import { useClientStore } from '../../hooks/useClientStore';
+import { useTelemarketingStore } from '../../hooks/useTelemarketingStore';
+import TeamDetailsModal from '../../components/planning/TeamDetailsModal';
 
 const levelColors: Record<number, { bg: string; text: string }> = {
     1: { bg: 'bg-purple-50', text: 'text-purple-700' },
@@ -37,7 +41,24 @@ export default function PlanOverview() {
     const savedRoutes = useMemo<Route[]>(() => StorageManager.load('routes', []), []);
     const schedules = useMemo<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}), []);
     const routeAssignments = useMemo<Record<string, RouteAssignmentData>>(() => StorageManager.load('routeAssignments', {}), []);
-    const clients = useMemo<any[]>(() => StorageManager.load('clients', []), []);
+
+    const candidates = useCandidateStore(state => state.candidates);
+    const { clients, loadClients, getLeads } = useClientStore();
+    const generateTaskList = useTelemarketingStore(state => state.generateTaskList);
+
+    const [contracts] = useState<Contract[]>(() => StorageManager.load('contracts', []));
+    const [visits] = useState<Visit[]>(() => StorageManager.load('visits', []));
+
+    // Only load clients on mount if needed, but since it's zustand we can just ensure it logic
+    const activeLeads = useMemo(() => getLeads(contracts, visits), [getLeads, contracts, visits, clients]);
+
+    const [selectedModalTeam, setSelectedModalTeam] = useState<{
+        key: string;
+        label: string;
+        candidates: any[];
+        leads: any[];
+    } | null>(null);
+
     const employees = defaultEmployees;
 
     const currentSchedule: DaySchedule = schedules[date] || { teams: [], solos: [] };
@@ -122,7 +143,7 @@ export default function PlanOverview() {
         return results;
     };
 
-    const countLoad = (assignment: RouteAssignmentData) => {
+    const getMarketingLoad = (assignment: RouteAssignmentData) => {
         const zoneIds = new Set<number>();
         assignment.routes.forEach(comp => {
             const route = savedRoutes.find(r => r.id === comp.routeId);
@@ -131,7 +152,46 @@ export default function PlanOverview() {
             stations.slice(comp.startIdx, comp.endIdx + 1).forEach(s => zoneIds.add(s.id));
         });
         assignment.extraZones.forEach(id => zoneIds.add(id));
-        return clients.filter((c: any) => zoneIds.has(parseInt(c.neighborhood))).length;
+
+        const matchedCandidates = candidates.filter(c =>
+            c.status === 'FollowUp' && c.geoUnitId && zoneIds.has(c.geoUnitId)
+        );
+        const matchedLeads = activeLeads.filter(c =>
+            c.neighborhood && zoneIds.has(parseInt(c.neighborhood))
+        );
+
+        return {
+            total: matchedCandidates.length + matchedLeads.length,
+            candidates: matchedCandidates,
+            leads: matchedLeads
+        };
+    };
+
+    const handleGenerateList = (teamKey: string, candList: any[], leadList: any[]) => {
+        if (!confirm(`هل أنت متأكد من توليد قائمة اتصال بـ ${candList.length + leadList.length} عميل لهذا الفريق؟`)) return;
+
+        const items = [
+            ...candList.map(c => ({
+                entityType: 'candidate' as const,
+                entityId: c.id,
+                name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.nickname || 'بدون اسم',
+                mobile: c.mobile,
+                addressText: c.addressText,
+                geoUnitId: c.geoUnitId
+            })),
+            ...leadList.map(l => ({
+                entityType: 'client' as const,
+                entityId: l.id,
+                name: l.name,
+                mobile: l.mobile,
+                addressText: getUnitName(parseInt(l.neighborhood)) || l.neighborhood,
+                geoUnitId: parseInt(l.neighborhood) || null
+            }))
+        ];
+
+        generateTaskList(teamKey, date, items);
+        alert('تم توليد قائمة التسويق الهاتفي بنجاح!');
+        setSelectedModalTeam(null);
     };
 
     const totalTeams = teamCards.length;
@@ -225,7 +285,7 @@ export default function PlanOverview() {
                     {teamCards.map((card, cardIdx) => {
                         const hasAssignment = card.assignment && card.assignment.routes.length > 0;
                         const routeDetails = hasAssignment ? getAssignmentDetails(card.assignment!) : [];
-                        const loadCount = hasAssignment ? countLoad(card.assignment!) : 0;
+                        const loadData = hasAssignment ? getMarketingLoad(card.assignment!) : { total: 0, candidates: [], leads: [] };
                         const extraZoneCount = card.assignment?.extraZones?.length || 0;
 
                         return (
@@ -234,7 +294,15 @@ export default function PlanOverview() {
                                 initial={{ opacity: 0, y: 15 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: cardIdx * 0.05 }}
-                                className={`bg-white rounded-xl shadow-sm overflow-hidden border ${hasAssignment
+                                onClick={() => {
+                                    if (hasAssignment) setSelectedModalTeam({
+                                        key: card.key,
+                                        label: card.label,
+                                        candidates: loadData.candidates,
+                                        leads: loadData.leads
+                                    });
+                                }}
+                                className={`bg-white rounded-xl shadow-sm overflow-hidden border cursor-pointer hover:border-gray-300 transition-colors ${hasAssignment
                                     ? 'border-gray-200'
                                     : 'border-amber-300'
                                     }`}
@@ -258,8 +326,10 @@ export default function PlanOverview() {
                                         <div className="flex items-center gap-2">
                                             <div className="flex items-center gap-1.5 text-xs">
                                                 <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
-                                                <span className="text-emerald-600 font-bold">{loadCount} مهمة</span>
+                                                <span className="text-emerald-600 font-bold">{loadData.total} مهمة</span>
+                                                <span className="text-slate-400">({loadData.candidates.length} متابعة + {loadData.leads.length} محتمل)</span>
                                             </div>
+                                            {/* Button moved to modal */}
                                             <button
                                                 onClick={() => navigate(`/planning/team-tasks/${card.key}`)}
                                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-bold transition-colors"
@@ -366,6 +436,16 @@ export default function PlanOverview() {
                     })}
                 </div>
             )}
+
+            <TeamDetailsModal
+                isOpen={!!selectedModalTeam}
+                onClose={() => setSelectedModalTeam(null)}
+                teamKey={selectedModalTeam?.key || ''}
+                teamLabel={selectedModalTeam?.label || ''}
+                candidates={selectedModalTeam?.candidates || []}
+                leads={selectedModalTeam?.leads || []}
+                onGenerate={handleGenerateList}
+            />
         </div>
     );
 }

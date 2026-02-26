@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { UserPlus, Calendar, PlusCircle, X, CheckCircle, AlertCircle, Save } from 'lucide-react';
-import { CandidateStatus, ReferralType, ReferralOriginChannel, Client } from '../../lib/types';
+import { CandidateStatus, ReferralType, ReferralOriginChannel, Client, ContactEntry } from '../../lib/types';
 import CreateReferralSheetModal from './CreateReferralSessionModal';
 import { StorageManager } from '../../lib/storage';
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
@@ -17,7 +17,7 @@ const initialCandidateState = {
     firstName: '',
     nickname: '',
     lastName: '',
-    mobile: '',
+    contacts: [{ id: crypto.randomUUID(), type: 'mobile' as const, number: '', label: 'شخصي', hasWhatsApp: true, isPrimary: true, status: 'active' as const }],
     locationSelection: { govId: '', regionId: '', subId: '', neighborhoodId: '' } as GeoSelection,
     candidateNotes: ''
 };
@@ -141,8 +141,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
             setError('يجب إدخال الاسم الأول أو اللقب للاسم المقترح على الأقل.');
             return false;
         }
-        if (!candidateData.mobile.trim()) {
-            setError('رقم هاتف الاسم المقترح مطلوب.');
+        if (candidateData.contacts.length === 0 || !candidateData.contacts.some(c => c.number.trim() && c.isPrimary)) {
+            setError('يجب إدخال رقم هاتف واحد أساسي على الأقل.');
             return false;
         }
         setError('');
@@ -165,8 +165,10 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     firstName: candidateData.firstName || null,
                     nickname: candidateData.nickname || null,
                     lastName: candidateData.lastName,
-                    mobile: candidateData.mobile,
+                    mobile: candidateData.contacts.find(c => c.isPrimary)?.number || candidateData.contacts[0]?.number || '',
+                    contacts: candidateData.contacts.filter(c => c.number.trim()),
                     addressText: candidateAddressText,
+                    geoUnitId: Number(candidateUnitId) || null,
 
                     referralSheetId: sheet.id, // Updated
                     referralDate: sheet.referralDate,
@@ -196,7 +198,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                 const firstName = candidateData.firstName || null;
                 const nickname = candidateData.nickname || null;
                 const lastName = candidateData.lastName;
-                const mobile = candidateData.mobile;
+                const mobile = candidateData.contacts.find(c => c.isPrimary)?.number || candidateData.contacts[0]?.number || '';
+                const contacts = candidateData.contacts.filter(c => c.number.trim());
                 const addressText = candidateAddressText;
 
                 const newCandidate = {
@@ -204,7 +207,9 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     lastName,
                     nickname,
                     mobile,
+                    contacts,
                     addressText,
+                    geoUnitId: Number(candidateUnitId) || null,
                     referralSheetId: !isDirectMode ? selectedSheetId : null,
                     referralType: isDirectMode ? referralType : 'Unknown' as ReferralType,
                     referralOriginChannel: isDirectMode ? originChannel : 'App' as ReferralOriginChannel,
@@ -454,16 +459,90 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 text-red-500">رقم الهاتف *</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="tel"
-                                        value={candidateData.mobile}
-                                        onChange={e => { setCandidateData({ ...candidateData, mobile: e.target.value }); setError(''); }}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
-                                        dir="ltr"
-                                    />
+                            <div className="md:col-span-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-xs font-semibold text-slate-500">أرقام التواصل <span className="text-red-500">*</span></label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCandidateData({
+                                            ...candidateData,
+                                            contacts: [...candidateData.contacts, { id: crypto.randomUUID(), type: 'mobile', number: '', label: '', hasWhatsApp: false, isPrimary: candidateData.contacts.length === 0, status: 'active' }]
+                                        })}
+                                        className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                                    >
+                                        <PlusCircle className="w-3.5 h-3.5" /> إضافة رقم
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    {candidateData.contacts.map((contact, index) => (
+                                        <div key={contact.id} className="flex flex-wrap md:flex-nowrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                            <input
+                                                type="text"
+                                                placeholder="الرقم (مثال: 09...)"
+                                                value={contact.number}
+                                                onChange={e => {
+                                                    const newContacts = [...candidateData.contacts];
+                                                    newContacts[index] = { ...contact, number: e.target.value };
+                                                    setCandidateData({ ...candidateData, contacts: newContacts });
+                                                    setError('');
+                                                }}
+                                                className="flex-1 min-w-[140px] p-2 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                                dir="ltr"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="التسمية (مثال: الزوجة)"
+                                                value={contact.label}
+                                                onChange={e => {
+                                                    const newContacts = [...candidateData.contacts];
+                                                    newContacts[index] = { ...contact, label: e.target.value };
+                                                    setCandidateData({ ...candidateData, contacts: newContacts });
+                                                }}
+                                                className="w-32 p-2 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                            />
+                                            <div className="flex items-center gap-3 px-2">
+                                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={contact.hasWhatsApp}
+                                                        onChange={e => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, hasWhatsApp: e.target.checked };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-gray-300"
+                                                    />
+                                                    <span className="text-xs text-slate-600">واتساب</span>
+                                                </label>
+                                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        name="primaryContact"
+                                                        checked={contact.isPrimary}
+                                                        onChange={() => {
+                                                            const newContacts = candidateData.contacts.map((c, i) => ({ ...c, isPrimary: i === index }));
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className="w-4 h-4 text-sky-600 focus:ring-sky-500 border-gray-300"
+                                                    />
+                                                    <span className="text-xs text-slate-600">أساسي</span>
+                                                </label>
+                                            </div>
+                                            {candidateData.contacts.length > 1 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const newContacts = candidateData.contacts.filter((_, i) => i !== index);
+                                                        // Ensure at least one is primary
+                                                        if (contact.isPrimary && newContacts.length > 0) newContacts[0].isPrimary = true;
+                                                        setCandidateData({ ...candidateData, contacts: newContacts });
+                                                    }}
+                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 

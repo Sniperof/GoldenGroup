@@ -50,6 +50,10 @@ const mockCandidates: Candidate[] = [
         lastName: 'الحمصي',
         nickname: 'أبو وليد',
         mobile: '0933999887',
+        contacts: [
+            { id: '1', type: 'mobile', number: '0933999887', label: 'الموبايل الشخصي', hasWhatsApp: true, isPrimary: true, status: 'active' },
+            { id: '2', type: 'mobile', number: '0944111222', label: 'الزوجة', hasWhatsApp: false, isPrimary: false, status: 'active' }
+        ],
         addressText: 'دمشق، المزة فيلات',
         ownerUserId: 1,
         status: 'Suggested',
@@ -61,6 +65,7 @@ const mockCandidates: Candidate[] = [
         referralNameSnapshot: 'أحمد السوري',
         referralEntityId: 101,
         referralConfirmationStatus: 'Pending',
+        geoUnitId: 6,
         candidateNotes: 'تواصل معه بخصوص الفلتر',
         duplicateFlag: false,
         duplicateType: null,
@@ -75,6 +80,9 @@ const mockCandidates: Candidate[] = [
         lastName: 'حسان',
         nickname: '',
         mobile: '0933555443',
+        contacts: [
+            { id: '3', type: 'mobile', number: '0933555443', label: 'الرقم الأساسي', hasWhatsApp: true, isPrimary: true, status: 'active' }
+        ],
         addressText: 'دمشق، أبو رمانة',
         ownerUserId: 1,
         status: 'Suggested',
@@ -86,6 +94,7 @@ const mockCandidates: Candidate[] = [
         referralNameSnapshot: 'فاطمة الزهراء',
         referralEntityId: 102, // Fatima
         referralConfirmationStatus: 'Pending',
+        geoUnitId: 7,
         candidateNotes: 'تزكية مباشرة',
         duplicateFlag: false,
         duplicateType: null,
