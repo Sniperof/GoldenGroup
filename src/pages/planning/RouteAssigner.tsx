@@ -223,7 +223,7 @@ export default function RouteAssigner() {
                                             <span>نهاية: <strong className="text-slate-900">{stations[comp.endIdx]?.name || '--'}</strong></span>
                                         </div>
                                         <div className="route-range-track">
-                                            <div className="route-range-fill" style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }} />
+                                            <div className="route-range-fill" style={{ right: `${startPct}%`, width: `${endPct - startPct}%` }} />
                                             <input type="range" className="route-slider" min={0} max={maxIdx} value={comp.startIdx} onChange={e => onSliderChange(idx, 'start', parseInt(e.target.value))} />
                                             <input type="range" className="route-slider" min={0} max={maxIdx} value={comp.endIdx} onChange={e => onSliderChange(idx, 'end', parseInt(e.target.value))} />
                                         </div>
@@ -291,7 +291,7 @@ export default function RouteAssigner() {
                         {loadCount !== null && (
                             <div className="p-3 border-t border-gray-200 bg-gray-50">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-slate-500 text-sm">عدد العملاء المتوقع:</span>
+                                    <span className="text-slate-500 text-sm">عدد الزبائن المتوقع:</span>
                                     <span className="text-2xl font-bold text-emerald-600">{loadCount}</span>
                                 </div>
                             </div>

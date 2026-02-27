@@ -23,7 +23,7 @@ export default function Dues() {
 
     // Column Definitions
     const columns: ColumnDef<typeof dues[0]>[] = [
-        { key: 'customerName', label: 'العميل', sortable: true, render: (d) => <span className="text-sm font-bold text-slate-800">{d.customerName}</span> },
+        { key: 'customerName', label: 'الزبون', sortable: true, render: (d) => <span className="text-sm font-bold text-slate-800">{d.customerName}</span> },
         { key: 'mobile', label: 'الموبايل', render: (d) => <span className="text-sm font-mono text-slate-500 dir-ltr">{d.mobile}</span> },
         {
             key: 'type', label: 'النوع', sortable: true,

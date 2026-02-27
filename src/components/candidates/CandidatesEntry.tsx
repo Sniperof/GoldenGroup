@@ -20,7 +20,7 @@ export default function CandidatesEntry() {
         const matchesSearch =
             (c.firstName?.includes(searchTerm) || false) ||
             (c.nickname?.includes(searchTerm) || false) ||
-            c.mobile.includes(searchTerm) ||
+            (c.mobile?.includes(searchTerm) || false) ||
             c.referralNameSnapshot.includes(searchTerm);
 
         const matchesStatus = filterStatus === 'All' ? true : c.status === filterStatus;

@@ -53,10 +53,10 @@ export default function MarketingOperationsContent() {
     ];
 
     const leadColumns: ColumnDef<Client>[] = [
-        { key: 'name', label: 'العميل', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
+        { key: 'name', label: 'الزبون', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
         { key: 'mobile', label: 'رقم الهاتف', sortable: true, render: (c) => <span className="font-mono text-slate-600 tracking-wide" dir="ltr">{getPrimaryContact(c).number}</span> },
         { key: 'neighborhood', label: 'الحي', sortable: true, render: (c) => <span className="text-sm text-slate-600">{getNeighborhoodName(c.neighborhood)}</span> },
-        { key: 'status', label: 'الحالة', render: () => <span className="px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-bold border border-sky-200">عميل محتمل (Lead)</span> },
+        { key: 'status', label: 'الحالة', render: () => <span className="px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 text-xs font-bold border border-sky-200">مرشح (Lead)</span> },
     ];
 
     return (
@@ -85,7 +85,7 @@ export default function MarketingOperationsContent() {
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-semibold text-slate-500 mb-1">العملاء المحتملين (Leads)</p>
+                        <p className="text-sm font-semibold text-slate-500 mb-1">الزبائن المحتملين (Leads)</p>
                         <p className="text-3xl font-bold text-sky-600">{totalLeads}</p>
                     </div>
                     <div className="w-12 h-12 bg-sky-50 rounded-xl flex items-center justify-center">
@@ -124,16 +124,16 @@ export default function MarketingOperationsContent() {
                 {/* Table B: Leads */}
                 <div>
                     <SmartTable<Client>
-                        title="العملاء المحتملين (Table B)"
+                        title="الزبائن المحتملين (Table B)"
                         icon={Users}
                         data={activeLeads}
                         columns={leadColumns}
                         filters={[]}
                         searchKeys={['name', 'mobile']}
-                        searchPlaceholder="بحث في العملاء المحتملين..."
+                        searchPlaceholder="بحث في الزبائن المحتملين..."
                         getId={(c) => c.id}
                         emptyIcon={Users}
-                        emptyMessage="لا يوجد عملاء محتملين حالياً"
+                        emptyMessage="لا يوجد زبائن محتملين حالياً"
                     />
                 </div>
             </div>

@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Users, Phone, MapPin, Share2, Save, Plus, Trash2, MessageCircle, MapPinned } from 'lucide-react';
-import type { Client, GeoUnit, ContactEntry, ContactType, ContactStatus } from '../lib/types';
+import { X, User, Users, Phone, MapPin, Share2, Save, Plus, Trash2, MessageCircle, MapPinned, CheckCircle, AlertCircle } from 'lucide-react';
+import type { Client, GeoUnit, ContactEntry, ContactType, ContactStatus, ReferralType, ReferralOriginChannel, ClientRating } from '../lib/types';
+import { useRef } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import MapPicker from './MapPicker';
 import GeoSmartSearch from './GeoSmartSearch';
 import type { GeoSelection } from './GeoSmartSearch';
@@ -16,14 +19,14 @@ interface ClientModalProps {
     geoUnits: GeoUnit[];
 }
 
-type Tab = 'identity' | 'contact' | 'location' | 'referral' | 'network';
+type Tab = 'identity' | 'contact' | 'location' | 'referral' | 'network' | 'additional';
 
 const tabsDef: { id: Tab; label: string; icon: any }[] = [
     { id: 'identity', label: 'الهوية', icon: User },
     { id: 'contact', label: 'التواصل', icon: Phone },
-    { id: 'location', label: 'الموقع', icon: MapPin },
+    { id: 'location', label: 'العنوان', icon: MapPin },
     { id: 'referral', label: 'الوسيط', icon: Share2 },
-    { id: 'network', label: 'الترشيحات والشبكة', icon: Users },
+    { id: 'additional', label: 'معلومات إضافية', icon: Plus },
 ];
 
 const contactTypeConfig: Record<ContactType, { label: string; emoji: string }> = {
@@ -55,7 +58,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
 
     // Identity fields
     const [firstName, setFirstName] = useState('');
-    const [kunya, setKunya] = useState('');
+    const [nickname, setNickname] = useState('');
     const [lastName, setLastName] = useState('');
     const [fatherName, setFatherName] = useState('');
 
@@ -68,19 +71,93 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
     // Map
     const [mapPosition, setMapPosition] = useState<[number, number] | null>(null);
 
+    // Mediator states
+    const [referralType, setReferralType] = useState<ReferralType>('Personal');
+    const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
+    const [referralNameSnapshot, setReferralNameSnapshot] = useState('');
+    const [employeeIdInput, setEmployeeIdInput] = useState('');
+    const [employeeFound, setEmployeeFound] = useState<{ name: string, id: number } | null>(null);
+    const [employeeSearchError, setEmployeeSearchError] = useState('');
+    const [clientSearch, setClientSearch] = useState('');
+    const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+    const [occupation, setOccupation] = useState('');
+    const [notes, setNotes] = useState('');
+    const [rating, setRating] = useState<ClientRating>('Undefined');
+    const clientSearchRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
+                setClientSuggestions([]);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (referralType === 'Personal') {
+            setOriginChannel('Acquaintance');
+            setReferralNameSnapshot('المدير/المشرف المباشر');
+        } else if (referralType === 'Unknown') {
+            setReferralNameSnapshot('مجهول');
+        } else if (referralType === 'Employee' && employeeFound) {
+            setReferralNameSnapshot(employeeFound.name);
+        } else if (referralType === 'Client' && selectedClientId) {
+            // Already handled in select client
+        }
+    }, [referralType, employeeFound, selectedClientId]);
+
+    const handleEmployeeBlur = () => {
+        if (!employeeIdInput.trim()) {
+            setEmployeeFound(null);
+            setEmployeeSearchError('');
+            return;
+        }
+        const employees = StorageManager.load<any[]>('employees', []);
+        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+        if (emp) {
+            setEmployeeFound({ name: emp.name, id: emp.id });
+            setReferralNameSnapshot(emp.name);
+            setEmployeeSearchError('');
+        } else {
+            setEmployeeFound(null);
+            setReferralNameSnapshot('');
+            setEmployeeSearchError('لم يتم العثور على الموظف');
+        }
+    };
+
+    const handleClientSearch = (text: string) => {
+        setClientSearch(text);
+        if (text.trim().length < 2) {
+            setClientSuggestions([]);
+            return;
+        }
+        const matches = allClients.filter(c =>
+            c.name.includes(text) ||
+            (c.contacts?.some(con => con.number.includes(text)) || false)
+        ).slice(0, 5);
+        setClientSuggestions(matches);
+    };
+
+    const handleSelectClient = (client: Client) => {
+        setClientSearch(client.name);
+        setReferralNameSnapshot(client.name);
+        setSelectedClientId(client.id);
+        setClientSuggestions([]);
+    };
+
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
                 setFormData(initialData);
-                const nameParts = initialData.name.split(' ');
-                setFirstName(nameParts[0] || '');
-                setKunya(nameParts[1] || '');
-                setLastName(nameParts[2] || '');
-                setFatherName(nameParts[3] || '');
+                setFirstName(initialData.firstName || '');
+                setNickname(initialData.nickname || '');
+                setLastName(initialData.lastName || '');
+                setFatherName(initialData.fatherName || '');
                 if (initialData.contacts && initialData.contacts.length > 0) {
                     setContacts(initialData.contacts);
-                } else if (initialData.mobile) {
-                    setContacts([{ id: makeId(), type: 'mobile', number: initialData.mobile, label: 'شخصي', hasWhatsApp: false, isPrimary: true, status: 'active' }]);
                 } else {
                     setContacts([emptyContact(true)]);
                 }
@@ -89,11 +166,26 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                 } else {
                     setMapPosition(null);
                 }
+                setReferralType((initialData.referrerType as ReferralType) || 'Personal');
+                setOriginChannel((initialData.sourceChannel as ReferralOriginChannel) || 'Visit');
+                setReferralNameSnapshot(initialData.referrerName || '');
+                setOccupation(initialData.occupation || '');
+                setNotes(initialData.notes || '');
+                setRating(initialData.rating || 'Undefined');
             } else {
                 setFormData({ sourceChannel: 'App', referrerType: 'Other', governorate: '1' });
-                setFirstName(''); setKunya(''); setLastName(''); setFatherName('');
+                setFirstName(''); setNickname(''); setLastName(''); setFatherName('');
                 setContacts([emptyContact(true)]);
                 setMapPosition(null);
+                setReferralType('Personal');
+                setOriginChannel('Visit');
+                setReferralNameSnapshot('');
+                setOccupation('');
+                setNotes('');
+                setRating('Undefined');
+                setEmployeeIdInput('');
+                setClientSearch('');
+                setSelectedClientId(null);
             }
             setActiveTab('identity');
             setGeoSelection({
@@ -201,21 +293,37 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
 
     // -- Save --
     const handleSave = () => {
-        const fullName = [firstName, kunya, lastName, fatherName].filter(Boolean).join(' ').trim();
+        if (!firstName.trim() && !nickname.trim()) {
+            alert('يرجى ملء الاسم الأول أو اللقب على الأقل');
+            return;
+        }
+
+        const fullName = [firstName.trim(), fatherName.trim(), lastName.trim(), nickname.trim() ? '(' + nickname.trim() + ')' : ''].filter(Boolean).join(' ').trim();
         const primaryContact = contacts.find(c => c.isPrimary);
         const primaryNumber = primaryContact?.number || contacts[0]?.number || '';
 
-        if (!fullName || !primaryNumber) {
-            alert('يرجى ملء الاسم ورقم هاتف رئيسي واحد على الأقل');
+        if (!primaryNumber) {
+            alert('يرجى ملء رقم هاتف رئيسي واحد على الأقل');
             return;
         }
 
         onSave({
             ...formData,
+            firstName: firstName.trim(),
+            fatherName: fatherName.trim(),
+            lastName: lastName.trim(),
+            nickname: nickname.trim() || undefined,
             name: fullName,
             mobile: primaryNumber,
             contacts: contacts.filter(c => c.number.trim()),
             gpsCoordinates: mapPosition ? { lat: mapPosition[0], lng: mapPosition[1] } : undefined,
+            referrerType: referralType,
+            sourceChannel: originChannel,
+            referrerName: referralNameSnapshot,
+            referralEntityId: selectedClientId || employeeFound?.id || undefined,
+            occupation: occupation.trim() || undefined,
+            notes: notes.trim() || undefined,
+            rating: rating,
         } as Client);
     };
 
@@ -236,7 +344,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                         {/* Header */}
                         <div className="bg-white border-b border-gray-100 p-5 flex items-center justify-between shrink-0">
                             <h2 className="text-xl font-bold text-slate-800">
-                                {initialData ? 'تعديل بيانات العميل' : 'إضافة زبون جديد'}
+                                {initialData ? 'تعديل بيانات الزبون' : 'إضافة اسم مرشح جديد'}
                             </h2>
                             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-6 h-6" />
@@ -272,16 +380,16 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                             <input value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: أحمد" />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-slate-500">الكنية</label>
-                                            <input value={kunya} onChange={e => setKunya(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: أبو محمد" />
+                                            <label className="text-xs font-semibold text-slate-500">اسم الأب</label>
+                                            <input value={fatherName} onChange={e => setFatherName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: خالد" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-slate-500">الكنية (العائلة)</label>
+                                            <input value={lastName} onChange={e => setLastName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: زيتون" />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-semibold text-slate-500">اللقب</label>
-                                            <input value={lastName} onChange={e => setLastName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: العلي" />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-slate-500">اسم الأب</label>
-                                            <input value={fatherName} onChange={e => setFatherName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: خالد" />
+                                            <input value={nickname} onChange={e => setNickname(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none" placeholder="مثال: أبو أيوب" />
                                         </div>
                                     </div>
                                 </div>
@@ -443,128 +551,151 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                             {/* ============ REFERRAL TAB ============ */}
                             {activeTab === 'referral' && (
                                 <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-slate-500">المصدر</label>
-                                        <select value={formData.sourceChannel || 'App'} onChange={e => updateForm('sourceChannel', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none">
-                                            <option value="App">تطبيق الموبايل</option>
-                                            <option value="Marketing Visit">زيارة تسويقية</option>
-                                            <option value="Call Center">مركز الاتصال</option>
-                                            <option value="Social Media">وسائل التواصل</option>
-                                            <option value="Referral">تزكية من عميل آخر</option>
-                                            <option value="Walk-in">زيارة مباشرة</option>
-                                        </select>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">نوع الوسيط *</label>
+                                            <select
+                                                value={referralType}
+                                                onChange={(e) => setReferralType(e.target.value as ReferralType)}
+                                                className="w-full p-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:border-sky-500 focus:outline-none"
+                                            >
+                                                <option value="Personal">شخصي (أنا)</option>
+                                                <option value="Employee"> موظف</option>
+                                                <option value="Client">زبون حالي </option>
+                                                <option value="Unknown">مجهول</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">طريقة التواصل *</label>
+                                            <select
+                                                value={originChannel}
+                                                onChange={(e) => setOriginChannel(e.target.value as ReferralOriginChannel)}
+                                                disabled={referralType === 'Personal' || referralType === 'Unknown'}
+                                                className="w-full p-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:border-sky-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                                            >
+                                                <option value="Acquaintance">معرفة شخصية</option>
+                                                <option value="Visit">زيارة تسويقية</option>
+                                                <option value="PhoneCall">مكالمة هاتفية</option>
+                                                <option value="SocialMedia">سوشال ميديا</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-slate-500">النوع</label>
-                                        <select value={formData.referrerType || 'Other'} onChange={e => updateForm('referrerType', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none">
-                                            <option value="Other">أخرى</option>
-                                            <option value="Employee">موظف</option>
-                                            <option value="Client">عميل حالي</option>
-                                            <option value="Partner">شريك</option>
-                                            <option value="Agency">وكالة تسويق</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-slate-500">اسم الوسيط</label>
-                                        <input
-                                            value={formData.referrerName || ''}
-                                            onChange={e => updateForm('referrerName', e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
-                                            placeholder="اختياري"
-                                        />
-                                    </div>
-                                </div>
-                            )}
 
-                            {/* ============ NETWORK TAB ============ */}
-                            {activeTab === 'network' && (
-                                <div className="space-y-6">
-                                    {/* The Origin Card */}
-                                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-                                            <Share2 className="w-4 h-4 text-sky-600" />
-                                            المصدر - من أين أتى؟
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {initialData?.referrers && initialData.referrers.length > 0 ? (
-                                                initialData.referrers.map((ref, idx) => (
-                                                    <div key={ref.id || idx} className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between shadow-sm">
-                                                        <div>
-                                                            <div className="flex items-center gap-2 mb-0.5">
-                                                                <span className="text-xs text-slate-500">{ref.sourceChannel}</span>
-                                                                <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{ref.referralDate?.split('T')[0] || ''}</span>
-                                                            </div>
-                                                            <p className="text-sm font-bold text-slate-800">{ref.referrerName}</p>
-                                                        </div>
-                                                        {ref.referrerType === 'Client' && ref.referralEntityId && (
-                                                            <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${ref.referralEntityId}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
-                                                                عرض البروفايل
-                                                            </button>
-                                                        )}
+                                    {referralType === 'Employee' && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">الرقم الوظيفي *</label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={employeeIdInput}
+                                                    onChange={(e) => setEmployeeIdInput(e.target.value)}
+                                                    onBlur={handleEmployeeBlur}
+                                                    placeholder="أدخل رقم الموظف..."
+                                                    className="w-1/2 p-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:border-sky-500 focus:outline-none"
+                                                />
+                                                {employeeFound && (
+                                                    <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 flex-1 text-sm">
+                                                        <CheckCircle className="w-5 h-5" />
+                                                        {employeeFound.name}
                                                     </div>
-                                                ))
-                                            ) : formData.referrerName ? (
-                                                <div className="bg-white rounded-lg p-3 border border-gray-100 flex items-center justify-between shadow-sm">
-                                                    <div>
-                                                        <p className="text-xs text-slate-500 mb-0.5">{formData.sourceChannel}</p>
-                                                        <p className="text-sm font-bold text-slate-800">{formData.referrerName}</p>
+                                                )}
+                                                {employeeSearchError && (
+                                                    <div className="flex items-center gap-2 text-red-600 font-bold bg-red-50 px-3 py-2 rounded-lg border border-red-100 flex-1 text-sm">
+                                                        <AlertCircle className="w-5 h-5" />
+                                                        {employeeSearchError}
                                                     </div>
-                                                    {formData.referrerType === 'Client' && broughtBy && (
-                                                        <button type="button" onClick={() => alert(`الانتقال لبروفايل العميل: ${broughtBy.name}`)} className="px-3 py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
-                                                            عرض البروفايل
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {referralType === 'Client' && (
+                                        <div ref={clientSearchRef} className="relative">
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">اسم الزبون *</label>
+                                            <input
+                                                type="text"
+                                                value={clientSearch}
+                                                onChange={(e) => handleClientSearch(e.target.value)}
+                                                placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
+                                                className="w-full p-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:border-sky-500 focus:outline-none"
+                                            />
+                                            {clientSuggestions.length > 0 && (
+                                                <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-10 overflow-hidden">
+                                                    {clientSuggestions.map(client => (
+                                                        <button
+                                                            key={client.id}
+                                                            onClick={() => handleSelectClient(client)}
+                                                            className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">
+                                                                {client.contacts.find(con => con.isPrimary)?.number || client.contacts[0]?.number || '--'}
+                                                            </span>
                                                         </button>
-                                                    )}
+                                                    ))}
                                                 </div>
-                                            ) : (
-                                                <p className="text-sm text-slate-500 text-center py-2">لا يوجد مُعرّف (حالة مباشرة)</p>
                                             )}
                                         </div>
-                                    </div>
+                                    )}
 
-                                    {/* The Referrals Table */}
-                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-                                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between shadow-sm z-10">
-                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                                <Users className="w-4 h-4 text-emerald-600" />
-                                                الإنتاج - شبكة الترشيحات ({referralsList.length})
-                                            </h3>
+                                    {(referralType === 'Personal' || referralType === 'Unknown') && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">الوسيط / المصدر *</label>
+                                            <input
+                                                type="text"
+                                                value={referralNameSnapshot}
+                                                disabled
+                                                className="w-full p-2.5 rounded-xl border border-gray-200 bg-slate-50 text-slate-500 font-bold cursor-not-allowed text-sm focus:border-sky-500 focus:outline-none"
+                                            />
                                         </div>
-                                        {referralsList.length === 0 ? (
-                                            <p className="text-sm text-slate-500 text-center py-6">لم يقم بترشيح أحد بعد</p>
-                                        ) : (
-                                            <div className="overflow-x-auto max-h-[200px] overflow-y-auto custom-scroll">
-                                                <table className="w-full text-right text-sm">
-                                                    <thead className="bg-gray-50/50 sticky top-0 backdrop-blur-sm shadow-[0_1px_0_theme(colors.gray.200)]">
-                                                        <tr className="text-xs text-slate-500">
-                                                            <th className="px-4 py-2 font-medium">الاسم</th>
-                                                            <th className="px-4 py-2 font-medium">الحالة</th>
-                                                            <th className="px-4 py-2 font-medium">الطريقة</th>
-                                                            <th className="px-4 py-2 font-medium">التاريخ</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-100">
-                                                        {referralsList.map((ref, idx) => (
-                                                            <tr key={`${ref.type}-${ref.id}`} className="hover:bg-gray-50/50 transition-colors">
-                                                                <td className="px-4 py-2.5 font-semibold text-slate-700">{ref.name}</td>
-                                                                <td className="px-4 py-2.5">
-                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ref.status === 'New' || ref.status === 'Candidate' ? 'bg-sky-50 text-sky-700 border border-sky-100' :
-                                                                        ref.status === 'Qualified' || ref.status === 'Client' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                                                            'bg-gray-100 text-gray-700 border border-gray-200'
-                                                                        }`}>
-                                                                        {ref.status}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-2.5 text-xs text-slate-500">{ref.method}</td>
-                                                                <td className="px-4 py-2.5 text-xs text-slate-500 font-mono tracking-wide">{ref.date?.split('T')[0] || '--'}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
+                                    )}
+                                </div>
+                            )}
+                            {/* ============ ADDITIONAL TAB ============ */}
+                            {activeTab === 'additional' && (
+                                <div className="space-y-6">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">تقييم الزبون</label>
+                                        <select
+                                            value={rating}
+                                            onChange={e => setRating(e.target.value as ClientRating)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none bg-white"
+                                        >
+                                            <option value="Undefined">غير محدد</option>
+                                            <option value="Committed">ملتزم</option>
+                                            <option value="NotCommitted">غير ملتزم</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-semibold text-slate-500">المهنة</label>
+                                        <input
+                                            value={occupation}
+                                            onChange={e => setOccupation(e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
+                                            placeholder="مثال: مهندس، تاجر، موظف حكومي..."
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">ملاحظات إضافية (محرر نصي)</label>
+                                        <div className="quill-wrapper rounded-xl overflow-hidden border border-gray-200">
+                                            <ReactQuill
+                                                theme="snow"
+                                                value={notes}
+                                                onChange={setNotes}
+                                                placeholder="اكتب ملاحظات مفصلة عن الزبون هنا..."
+                                                className="h-48"
+                                            />
+                                        </div>
+                                        <style>{`
+                                            .quill-wrapper .ql-toolbar { border:none; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+                                            .quill-wrapper .ql-container { border:none; font-family: inherit; font-size: 0.875rem; }
+                                            .quill-wrapper .ql-editor { min-height: 150px; text-align: right; direction: rtl; }
+                                            .quill-wrapper .ql-editor.ql-blank::before { left: auto; right: 15px; text-align: right; font-style: normal; font-family: inherit; }
+                                        `}</style>
                                     </div>
                                 </div>
                             )}
+
                         </div>
 
                         {/* Footer */}
@@ -574,7 +705,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                             </button>
                             <button onClick={handleSave} className="px-5 py-2 rounded-lg text-white bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-500/20 font-bold transition-all flex items-center gap-2">
                                 <Save className="w-4 h-4" />
-                                <span>{initialData ? 'حفظ التعديلات' : 'حفظ العميل'}</span>
+                                <span>{initialData ? 'حفظ التعديلات' : 'حفظ الزبون'}</span>
                             </button>
                         </div>
                     </motion.div>

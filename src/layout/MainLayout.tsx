@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import FloatingActionButton from '../components/FloatingActionButton';
+import NewEmergencyTicketModal from '../components/NewEmergencyTicketModal';
 import {
     LayoutDashboard, Route, Users, BookUser, Globe,
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
@@ -14,7 +16,7 @@ const navItems = [
     { path: '/geo', label: 'الهيكل الجغرافي', icon: Globe },
     { path: '/devices', label: 'دليل الأجهزة', icon: Gem },
     { path: '/routes', label: 'إدارة المسارات', icon: Route },
-    { path: '/clients', label: 'سجل العملاء', icon: BookUser },
+    { path: '/clients', label: 'سجلات الزبائن', icon: BookUser },
     { path: '/candidates', label: 'الأسماء المقترحة', icon: UserPlus },
     { path: '/employees', label: 'إدارة الفرق', icon: Users },
     { path: '/telemarketer', label: 'المسوّق الهاتفي', icon: Headset },
@@ -34,7 +36,9 @@ const operationsChildren = [
     { path: '/tasks/periodic', label: 'صيانة دورية', icon: RefreshCw },
     { path: '/tasks/returns', label: 'إرجاع', icon: RotateCcw },
     { path: '/tasks/followup', label: 'متابعة', icon: PhoneCall },
+    { path: '/operations/marketing', label: 'عمليات التسويق', icon: Target },
 ];
+
 
 const contractsChildren = [
     { path: '/contracts', label: 'سجل العقود', icon: FileText },
@@ -54,6 +58,7 @@ export default function MainLayout() {
 
     const toggleSidebar = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+    const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -301,6 +306,15 @@ export default function MainLayout() {
             <main className="flex-1 overflow-hidden bg-slate-50 mt-16 lg:mt-0">
                 <Outlet />
             </main>
+
+            {/* Global FAB */}
+            <FloatingActionButton onEmergencyClick={() => setShowEmergencyModal(true)} />
+
+            {/* Emergency Ticket Modal */}
+            <NewEmergencyTicketModal
+                isOpen={showEmergencyModal}
+                onClose={() => setShowEmergencyModal(false)}
+            />
         </div>
     );
 }

@@ -13,7 +13,7 @@ export default function Dashboard() {
     const [routes] = useState<RouteType[]>(() => StorageManager.load('routes', []));
 
     const stats = [
-        { label: 'العملاء', value: clients?.length || 0, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
+        { label: 'الزبائن', value: clients?.length || 0, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
         { label: 'الموظفون النشطون', value: defaultEmployees?.filter(e => e.status === 'active').length || 0, icon: UserCheck, color: 'from-emerald-500 to-teal-600', delta: '+3' },
         { label: 'المسارات', value: routes?.length || 0, icon: Route, color: 'from-amber-500 to-orange-600', delta: `${routes?.length || 0}` },
         { label: 'الأحياء المغطاة', value: (routes || []).reduce((s, r) => s + (r?.points?.length || 0), 0), icon: MapPin, color: 'from-rose-500 to-pink-600', delta: 'محطة' },
@@ -49,7 +49,7 @@ export default function Dashboard() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden h-full">
                     <div className="p-4 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
                         <Clock className="w-4 h-4 text-sky-500" />
-                        <h3 className="text-slate-700 font-bold text-sm">آخر العملاء المسجلين</h3>
+                        <h3 className="text-slate-700 font-bold text-sm">آخر الزبائن المسجلين</h3>
                     </div>
                     <div className="p-4">
                         {recentClients.length === 0 ? (
@@ -95,7 +95,7 @@ export default function Dashboard() {
                             <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{(routes || []).length}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                            <span className="text-sm text-slate-600 font-medium">العملاء الجدد</span>
+                            <span className="text-sm text-slate-600 font-medium">الزبائن الجدد</span>
                             <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{(clients || []).filter(c => c.isCandidate).length}</span>
                         </div>
                     </div>

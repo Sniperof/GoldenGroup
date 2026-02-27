@@ -41,7 +41,7 @@ export default function Emergency() {
             )
         },
         {
-            key: 'customerName', label: 'العميل والجهاز', sortable: true,
+            key: 'customerName', label: 'الزبون والجهاز', sortable: true,
             render: (r) => (
                 <div className="flex flex-col">
                     <span className="text-sm font-bold text-slate-800">{r.customerName}</span>
@@ -113,7 +113,7 @@ export default function Emergency() {
                 columns={columns}
                 filters={filters}
                 searchKeys={['customerName', 'deviceModelName', 'id']}
-                searchPlaceholder="بحث برقم الطلب، العميل، أو الجهاز..."
+                searchPlaceholder="بحث برقم الطلب، الزبون، أو الجهاز..."
                 getId={(r) => r.id}
                 onRowClick={(r) => { setSelectedRequest(r); setActiveTab('details'); }}
                 emptyIcon={AlertTriangle}
@@ -349,7 +349,7 @@ export default function Emergency() {
                                                         <span className="text-sm font-bold text-slate-700">مكالمة صادرة - متابعة</span>
                                                         <span className="text-[10px] text-slate-400">منذ ساعتين</span>
                                                     </div>
-                                                    <p className="text-xs text-slate-500 mt-1">تم الاتصال بالعميل للتأكد من وصول الفني. العميل أكد الوصول والبدء بالعمل.</p>
+                                                    <p className="text-xs text-slate-500 mt-1">تم الاتصال بالزبون للتأكد من وصول الفني. الزبون أكد الوصول والبدء بالعمل.</p>
                                                     <div className="flex items-center gap-2 mt-2">
                                                         <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">مدة المكالمة: 02:15</span>
                                                         <span className="text-[10px] text-slate-400">سها جميل</span>

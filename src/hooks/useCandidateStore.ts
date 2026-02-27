@@ -259,7 +259,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                 }
 
                 if (clients.some(c => c.mobile === candidate.mobile)) {
-                    throw new Error('الرقم موجود بالفعل في قائمة العملاء. يرجى المراجعة.');
+                    throw new Error('الرقم موجود بالفعل في قائمة الزبائن. يرجى المراجعة.');
                 }
 
                 savedClient = {

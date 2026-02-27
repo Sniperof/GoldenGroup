@@ -183,7 +183,7 @@ export default function Customer360Modal({ isOpen, onClose, customerName, onTask
                         <div className="bg-gradient-to-l from-sky-600 to-sky-700 text-white p-5 shrink-0">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
-                                    <p className="text-sky-200 text-xs font-medium mb-1">ملف العميل الشامل</p>
+                                    <p className="text-sky-200 text-xs font-medium mb-1">ملف الزبون الشامل</p>
                                     <h2 className="text-xl font-bold">{customerName}</h2>
                                 </div>
                                 <button onClick={onClose} className="text-white/60 hover:text-white transition-colors mt-0.5">
@@ -276,7 +276,7 @@ export default function Customer360Modal({ isOpen, onClose, customerName, onTask
                                         <div className="text-center py-10 text-slate-400">
                                             <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-300" />
                                             <p className="font-medium">لا توجد مهام نشطة</p>
-                                            <p className="text-xs">جميع مهام هذا العميل مكتملة</p>
+                                            <p className="text-xs">جميع مهام هذا الزبون مكتملة</p>
                                         </div>
                                     )}
                                 </div>

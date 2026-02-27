@@ -1,3 +1,5 @@
+
+
 export interface GeoUnit {
     id: number;
     name: string;
@@ -20,6 +22,7 @@ export interface Route {
 
 export type ReferralType = 'Personal' | 'Client' | 'Employee' | 'Unknown';
 export type ReferralOriginChannel = 'App' | 'Visit' | 'Campaign' | 'Acquaintance';
+export type ClientRating = 'Committed' | 'NotCommitted' | 'Undefined';
 
 // --- Referral Sheet (Previously Session) ---
 export interface ReferralSheetStats {
@@ -63,6 +66,7 @@ export interface Candidate {
     lastName?: string;
     nickname: string | null;
     mobile: string;
+    occupation?: string;
     contacts?: ContactEntry[];
     addressText: string;
     geoUnitId: number | null;
@@ -126,10 +130,15 @@ export interface ClientReferrer {
 }
 
 export interface Client {
+
     id: number;
-    name: string;
+    firstName: string;
+    fatherName: string;
+    lastName: string;
+    nickname?: string;
+    name: string; // Computed or legacy? keeping for now
     mobile: string;
-    contacts?: ContactEntry[];
+    contacts: ContactEntry[];
     governorate: string;
     district: string;
     neighborhood: string;
@@ -137,6 +146,8 @@ export interface Client {
     gpsCoordinates?: { lat: number; lng: number };
     occupation?: string;
     waterSource?: string;
+    notes?: string;
+    rating?: ClientRating;
 
     // Lineage fields
     sourceChannel?: string;
@@ -208,10 +219,10 @@ export interface DeviceModel {
     id: number;
     name: string;
     brand: string;
-    category: 'Residential' | 'Industrial' | 'Commercial';
-    maintenanceInterval: '3 Months' | '6 Months' | '1 Year';
+    category: 'منزلي' | 'صناعي';
+    maintenanceInterval: ' 3 أشهر' | '6 أشهر' | '1 سنة';
     basePrice: number;
-    supportedVisitTypes: ('Installation' | 'Maintenance' | 'Delivery')[];
+    supportedVisitTypes: ('تركيب' | 'صيانة' | 'توصيل')[];
 }
 
 export type ContractStatus = 'draft' | 'active' | 'completed' | 'cancelled';
@@ -355,3 +366,25 @@ export interface Appointment {
 }
 
 export const WORKING_HOURS = { start: 9, end: 17, slotMinutes: 60 };
+
+// --- Emergency Triage & Dispatch ---
+export type EmergencyTicketStatus = 'New' | 'Assigned' | 'In Progress' | 'Completed' | 'Cancelled';
+export type EmergencyTicketPriority = 'Critical' | 'High' | 'Normal';
+
+export interface EmergencyTicket {
+    id: number;
+    clientId: number;
+    clientName: string;
+    clientAddress: string;
+    clientRating: ClientRating;
+    contractId: number | null;
+    deviceModelName: string | null;
+    problemDescription: string;
+    callNotes?: string;
+    attachments: string[];
+    callReceiver: string;
+    priority: EmergencyTicketPriority;
+    status: EmergencyTicketStatus;
+    assignedTechnicianId: number | null;
+    createdAt: string;
+}

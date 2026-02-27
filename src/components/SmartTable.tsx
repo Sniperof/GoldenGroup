@@ -44,6 +44,7 @@ export interface SmartTableProps<T> {
     emptyIcon?: LucideIcon;
     emptyMessage?: string;
     getId: (item: T) => string | number;
+    hideFilterBar?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -92,6 +93,7 @@ export default function SmartTable<T>({
     emptyMessage = 'لا توجد بيانات',
     getId,
     rowClassName,
+    hideFilterBar = false,
 }: SmartTableProps<T> & { rowClassName?: (item: T) => string }) {
 
     /* ---------- state ---------- */
@@ -191,7 +193,7 @@ export default function SmartTable<T>({
     /*  Render                                                           */
     /* ---------------------------------------------------------------- */
     return (
-        <div className="h-full overflow-y-auto p-4 md:p-8 custom-scroll">
+        <div className="p-4 md:p-8 custom-scroll">
             {/* ==================== HEADER ==================== */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
                 <div className="flex items-center gap-3">
@@ -229,34 +231,36 @@ export default function SmartTable<T>({
             </div>
 
             {/* ==================== FILTER BAR ==================== */}
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 mb-5 flex items-center gap-3 flex-wrap">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder={searchPlaceholder}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-lg pr-10 pl-4 py-2 text-sm text-slate-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none transition-colors"
-                    />
-                </div>
+            {!hideFilterBar && (
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 mb-5 flex items-center gap-3 flex-wrap">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder={searchPlaceholder}
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-lg pr-10 pl-4 py-2 text-sm text-slate-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none transition-colors"
+                        />
+                    </div>
 
-                {/* Dropdowns */}
-                {filters.map(f => (
-                    <select
-                        key={f.key}
-                        value={filterValues[f.key]}
-                        onChange={e => setFilterValues(prev => ({ ...prev, [f.key]: e.target.value }))}
-                        className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none transition-colors min-w-[140px]"
-                    >
-                        <option value="all">{f.label}</option>
-                        {f.options.map(o => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                    </select>
-                ))}
-            </div>
+                    {/* Dropdowns */}
+                    {filters.map(f => (
+                        <select
+                            key={f.key}
+                            value={filterValues[f.key]}
+                            onChange={e => setFilterValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none transition-colors min-w-[140px]"
+                        >
+                            <option value="all">{f.label}</option>
+                            {f.options.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    ))}
+                </div>
+            )}
 
             {/* ==================== BULK ACTIONS BAR ==================== */}
             {bulkActions && selected.size > 0 && (

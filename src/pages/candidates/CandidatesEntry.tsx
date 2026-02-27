@@ -185,7 +185,7 @@ export default function CandidatesEntry() {
                                                     <span className={`px-2 py-1 rounded text-[10px] font-bold border ${c.status === 'Suggested' ? 'bg-sky-50 text-sky-700 border-sky-200' : c.status === 'Qualified' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                                         {c.status === 'Suggested' ? 'مقترح' : c.status === 'FollowUp' ? 'متابعة' : c.status === 'Qualified' ? (c.duplicateFlag ? 'تم الربط' : 'تم التحويل') : 'مرفوض'}
                                                     </span>
-                                                    {c.duplicateFlag && <div className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${c.status === 'Qualified' ? 'text-emerald-600' : 'text-amber-500'}`}><AlertCircle className="w-3 h-3" /> {c.status === 'Qualified' ? 'عميل حالي' : 'احتمال تكرار'}</div>}
+                                                    {c.duplicateFlag && <div className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${c.status === 'Qualified' ? 'text-emerald-600' : 'text-amber-500'}`}><AlertCircle className="w-3 h-3" /> {c.status === 'Qualified' ? 'زبون حالي' : 'احتمال تكرار'}</div>}
                                                 </td>
                                                 <td className="px-5 py-4 text-center">
                                                     {(c.status === 'Suggested' || c.status === 'FollowUp') && (

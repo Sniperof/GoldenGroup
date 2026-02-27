@@ -46,7 +46,7 @@ export default function ContractList() {
             render: (c) => <span className="text-sm font-mono font-semibold text-sky-600">{c.contractNumber}</span>,
         },
         {
-            key: 'customerName', label: 'العميل', sortable: true,
+            key: 'customerName', label: 'الزبون', sortable: true,
             render: (c) => <span className="text-sm font-semibold text-slate-800">{c.customerName}</span>,
         },
         {
