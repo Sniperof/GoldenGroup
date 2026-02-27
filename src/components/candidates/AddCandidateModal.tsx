@@ -12,12 +12,18 @@ interface AddCandidateModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
+function simpleUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
 
 const initialCandidateState = {
     firstName: '',
     nickname: '',
     lastName: '',
-    contacts: [{ id: crypto.randomUUID(), type: 'mobile' as const, number: '', label: 'شخصي', hasWhatsApp: true, isPrimary: true, status: 'active' as const }],
+    contacts: [{ id: simpleUUID(), type: 'mobile' as const, number: '', label: 'شخصي', hasWhatsApp: true, isPrimary: true, status: 'active' as const }],
     locationSelection: { govId: '', regionId: '', subId: '', neighborhoodId: '' } as GeoSelection,
     candidateNotes: ''
 };
