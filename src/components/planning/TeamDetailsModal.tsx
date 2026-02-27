@@ -29,7 +29,7 @@ export default function TeamDetailsModal({
 
     // Quick helper for geo names. In a real app we might pass this as a prop or hook
     const geoUnits = StorageManager.load('geoUnits', []);
-    const getGeoName = (id: number | null) => geoUnits.find((u: any) => u.id === id)?.name || 'غير محدد';
+    const getGeoName = (id: number | null) => geoUnits.find((u: GeoUnit) => u.id === id) || 'غير محدد';
 
     const handleGenerateClick = () => {
         onGenerate(teamKey, candidates, leads);
