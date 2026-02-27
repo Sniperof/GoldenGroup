@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import { StorageManager } from '../lib/storage';
 import { TaskList, TaskListItem, Appointment, CallLog, CallOutcome } from '../lib/types';
-import { v4 as uuidv4 } from 'uuid';
+
+function simpleUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
 
 interface TelemarketingStore {
     taskLists: TaskList[];
@@ -33,12 +39,12 @@ export const useTelemarketingStore = create<TelemarketingStore>((set, get) => ({
 
             const itemsWithIdAndStatus = newItems.map(item => ({
                 ...item,
-                id: uuidv4(),
+                id: simpleUUID(),
                 status: 'pending' as const
             }));
 
             const newList: TaskList = {
-                id: uuidv4(),
+                id: simpleUUID(),
                 teamKey,
                 date,
                 items: itemsWithIdAndStatus,
@@ -55,7 +61,7 @@ export const useTelemarketingStore = create<TelemarketingStore>((set, get) => ({
         set((state) => {
             const newLog: CallLog = {
                 ...logInput,
-                id: uuidv4(),
+                id: simpleUUID(),
                 timestamp: new Date().toISOString()
             };
             const updatedLogs = [...state.callLogs, newLog];
@@ -79,7 +85,7 @@ export const useTelemarketingStore = create<TelemarketingStore>((set, get) => ({
 
             const newAppointment: Appointment = {
                 ...appointmentInput,
-                id: uuidv4(),
+                id: simpleUUID(),
                 createdAt: new Date().toISOString()
             };
 
