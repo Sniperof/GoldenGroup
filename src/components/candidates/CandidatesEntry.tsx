@@ -144,7 +144,7 @@ export default function CandidatesEntry() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
-                                                    {candidate.status === 'New' && (
+                                                    {candidate.status === 'Suggested' && (
                                                         <>
                                                             <button
                                                                 onClick={() => qualifyCandidate(candidate.id)}
