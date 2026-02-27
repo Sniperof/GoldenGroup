@@ -14,7 +14,7 @@ import TeamScheduler from './pages/planning/TeamScheduler';
 import RouteAssigner from './pages/planning/RouteAssigner';
 import PlanOverview from './pages/planning/PlanOverview';
 import TodaysTasks from './pages/tasks/TodaysTasks';
-import Emergency from './pages/tasks/Emergency';
+import EmergencyTasks from './pages/tasks/EmergencyTasks';
 import Dues from './pages/tasks/Dues';
 import Periodic from './pages/tasks/Periodic';
 import Returns from './pages/tasks/Returns';
@@ -24,7 +24,9 @@ import ContractList from './pages/contracts/ContractList';
 import ContractForm from './pages/contracts/ContractForm';
 import TelemarketerWorkspace from './pages/TelemarketerWorkspace';
 import TeamTasksDetail from './pages/planning/TeamTasksDetail';
+import MarketingOperations from './pages/tasks/MarketingOperations';
 import SystemSettings from './pages/SystemSettings';
+
 
 export default function App() {
     useEffect(() => {
@@ -49,12 +51,14 @@ export default function App() {
                         <Route path="/planning/overview" element={<PlanOverview />} />
                         <Route path="/planning/team-tasks/:teamKey" element={<TeamTasksDetail />} />
                         <Route path="/tasks/today" element={<TodaysTasks />} />
-                        <Route path="/tasks/emergency" element={<Emergency />} />
+                        <Route path="/tasks/emergency" element={<EmergencyTasks />} />
                         <Route path="/tasks/dues" element={<Dues />} />
                         <Route path="/tasks/periodic" element={<Periodic />} />
                         <Route path="/tasks/returns" element={<Returns />} />
                         <Route path="/tasks/followup" element={<FollowUp />} />
+                        <Route path="/operations/marketing" element={<MarketingOperations />} />
                         <Route path="/contracts" element={<ContractList />} />
+
                         <Route path="/telemarketer" element={<TelemarketerWorkspace />} />
                         <Route path="/settings" element={<SystemSettings />} />
                     </Route>

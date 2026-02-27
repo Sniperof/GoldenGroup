@@ -17,13 +17,13 @@ export const defaultGeoUnits: GeoUnit[] = [
 
 export const defaultEmployees: Employee[] = [
     { id: 1, name: 'ليلى أحمد', role: 'supervisor', mobile: '0933123456', status: 'active', avatar: 'https://ui-avatars.com/api/?name=ليلى+أحمد&background=6366f1&color=fff' },
-    { id: 2, name: 'عمر حسن', role: 'supervisor', mobile: '0933987654', status: 'active', avatar: 'https://ui-avatars.com/api/?name=عمر+حسن&background=6366f1&color=fff' },
+    { id: 2, name: ' سامية زيتون ', role: 'supervisor', mobile: '0933987654', status: 'active', avatar: 'https://ui-avatars.com/api/?name=عمر+حسن&background=6366f1&color=fff' },
     { id: 3, name: 'سارة محمود', role: 'supervisor', mobile: '0933555123', status: 'leave', avatar: 'https://ui-avatars.com/api/?name=سارة+محمود&background=6366f1&color=fff' },
     { id: 4, name: 'أحمد علي', role: 'technician', mobile: '0933111223', status: 'active', avatar: 'https://ui-avatars.com/api/?name=أحمد+علي&background=10b981&color=fff' },
     { id: 5, name: 'محمد جاسم', role: 'technician', mobile: '0933333445', status: 'active', avatar: 'https://ui-avatars.com/api/?name=محمد+جاسم&background=10b981&color=fff' },
-    { id: 6, name: 'فاطمة نور', role: 'technician', mobile: '0933666778', status: 'active', avatar: 'https://ui-avatars.com/api/?name=فاطمة+نور&background=10b981&color=fff' },
+    { id: 6, name: 'سعيد نور', role: 'technician', mobile: '0933666778', status: 'active', avatar: 'https://ui-avatars.com/api/?name=فاطمة+نور&background=10b981&color=fff' },
     { id: 7, name: 'حسين كريم', role: 'technician', mobile: '0933888990', status: 'inactive', avatar: 'https://ui-avatars.com/api/?name=حسين+كريم&background=10b981&color=fff' },
-    { id: 8, name: 'زينب عبد الله', role: 'technician', mobile: '0933222334', status: 'active', avatar: 'https://ui-avatars.com/api/?name=زينب+عبدالله&background=10b981&color=fff' },
+    { id: 8, name: 'زين عبد الله', role: 'technician', mobile: '0933222334', status: 'active', avatar: 'https://ui-avatars.com/api/?name=زينب+عبدالله&background=10b981&color=fff' },
     { id: 9, name: 'سها جميل', role: 'telemarketer', mobile: '0933344455', status: 'active', avatar: 'https://ui-avatars.com/api/?name=سها+جميل&background=f43f5e&color=fff' },
     { id: 10, name: 'نادية كمال', role: 'telemarketer', mobile: '0933777889', status: 'active', avatar: 'https://ui-avatars.com/api/?name=نادية+كمال&background=f43f5e&color=fff' },
 ];
@@ -37,7 +37,7 @@ export const levelNames: Record<number, string> = {
 
 export const defaultTasks: Task[] = [
     // Emergency
-    { id: 1, type: 'emergency', customerName: 'خالد السامرائي', context: 'مكيف سبليت 2 طن', location: 'المزة فيلات', dueDate: '2026-02-18', status: 'pending', priority: 'high' },
+    { id: 1, type: 'emergency', customerName: 'خالد الحسين', context: 'مكيف سبليت 2 طن', location: 'المزة فيلات', dueDate: '2026-02-18', status: 'pending', priority: 'high' },
     { id: 2, type: 'emergency', customerName: 'نور الدين', context: 'ثلاجة سامسونج', location: 'أبو رمانة', dueDate: '2026-02-18', status: 'in-progress', priority: 'high' },
     { id: 3, type: 'emergency', customerName: 'سلمى حسين', context: 'غسالة LG', location: 'كفرسوسة', dueDate: '2026-02-19', status: 'pending', priority: 'high' },
 
@@ -67,9 +67,9 @@ export const defaultTasks: Task[] = [
 export const defaultMaintenanceRequests: MaintenanceRequest[] = [
     {
         id: 101, requestDate: '2026-02-18T09:30:00',
-        customerId: 1, customerName: 'خالد السامرائي', location: 'المزة فيلات',
-        contractId: 2401, deviceModelName: 'مكيف سبليت 2 طن (Samsung)',
-        priority: 'Critical', problemDescription: 'الجهاز لا يعمل والجو حار جداً',
+        customerId: 1, customerName: 'خالد الحسين', location: 'المزة فيلات',
+        contractId: 2401, deviceModelName: 'تشالنجر زرعة',
+        priority: 'Critical', problemDescription: 'الجهاز لا يعمل',
         telemarketerId: 9, technicianId: 4,
         resolutionStatus: 'Pending', visitType: 'Emergency',
         technicalReport: {
@@ -83,15 +83,15 @@ export const defaultMaintenanceRequests: MaintenanceRequest[] = [
     {
         id: 102, requestDate: '2026-02-18T10:15:00',
         customerId: 2, customerName: 'نور الدين', location: 'أبو رمانة',
-        contractId: 2398, deviceModelName: 'ثلاجة 20 قدم (LG)',
-        priority: 'High', problemDescription: 'تسريب مياه من الخلف',
+        contractId: 2398, deviceModelName: 'غولدن غروب مع اشعة',
+        priority: 'High', problemDescription: 'تسريب مياه  ',
         telemarketerId: 10, technicianId: 5,
         resolutionStatus: 'Pending', visitType: 'Emergency'
     },
     {
         id: 103, requestDate: '2026-02-17T14:00:00',
         customerId: 3, customerName: 'سلمى حسين', location: 'كفرسوسة',
-        contractId: 2387, deviceModelName: 'غسالة 7 كغم (Beko)',
+        contractId: 2387, deviceModelName: 'محطة RO (600 غالون)',
         priority: 'Normal', problemDescription: 'صوت غريب أثناء التشغيل',
         telemarketerId: 9,
         resolutionStatus: 'Pending', visitType: 'Emergency'
@@ -99,7 +99,7 @@ export const defaultMaintenanceRequests: MaintenanceRequest[] = [
     {
         id: 104, requestDate: '2026-02-16T11:30:00',
         customerId: 5, customerName: 'ريم عباس', location: 'الروضة',
-        contractId: 2405, deviceModelName: 'مكيف شباك (General)',
+        contractId: 2405, deviceModelName: 'جهاز RO 2500',
         priority: 'Critical', problemDescription: 'توقف مفاجئ عن العمل',
         telemarketerId: 10, technicianId: 4,
         resolutionStatus: 'Completed', visitType: 'Emergency',
@@ -117,30 +117,30 @@ export const defaultMaintenanceRequests: MaintenanceRequest[] = [
 export const defaultDeviceModels: DeviceModel[] = [
     {
         id: 1,
-        name: 'Golden 7 Stages',
-        brand: 'Golden',
-        category: 'Residential',
-        maintenanceInterval: '6 Months',
+        name: '	تشالنجر زرعة',
+        brand: 'غولدن غروب',
+        category: 'صناعي',
+        maintenanceInterval: '6 أشهر',
         basePrice: 250000,
-        supportedVisitTypes: ['Installation', 'Maintenance', 'Delivery']
+        supportedVisitTypes: ['تركيب', 'صيانة', 'توصيل']
     },
     {
         id: 2,
-        name: 'Industrial RO System 5000GPD',
+        name: '	جهاز RO 2500',
         brand: 'PureTech',
-        category: 'Industrial',
-        maintenanceInterval: '3 Months',
+        category: 'صناعي',
+        maintenanceInterval: '6 أشهر',
         basePrice: 4500000,
-        supportedVisitTypes: ['Installation', 'Maintenance']
+        supportedVisitTypes: ['تركيب', 'صيانة']
     },
     {
         id: 3,
-        name: 'Office Dispenser Pro',
-        brand: 'AquaCool',
-        category: 'Commercial',
-        maintenanceInterval: '6 Months',
+        name: '	غولدن غروب مع اشعة',
+        brand: 'غولدن غروب',
+        category: 'صناعي',
+        maintenanceInterval: '6 أشهر',
         basePrice: 650000,
-        supportedVisitTypes: ['Installation', 'Maintenance', 'Delivery']
+        supportedVisitTypes: ['تركيب', 'صيانة', 'توصيل']
     }
 ];
 

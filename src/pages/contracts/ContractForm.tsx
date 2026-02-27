@@ -47,7 +47,7 @@ const saleTypes: { value: SaleType; label: string; icon: any; desc: string; colo
     { value: 'marketing', label: 'تسويق', icon: Globe, desc: 'من زيارة ميدانية', color: 'text-emerald-600', activeBg: 'bg-emerald-50', activeBorder: 'border-emerald-300' },
     { value: 'tradein', label: 'استبدال', icon: ArrowRightLeft, desc: 'تبديل جهاز قديم', color: 'text-purple-600', activeBg: 'bg-purple-50', activeBorder: 'border-purple-300' },
     { value: 'app', label: 'تطبيق', icon: Smartphone, desc: 'طلب من التطبيق', color: 'text-blue-600', activeBg: 'bg-blue-50', activeBorder: 'border-blue-300' },
-    { value: 'referral', label: 'تزكية', icon: User, desc: 'إحالة من عميل', color: 'text-amber-600', activeBg: 'bg-amber-50', activeBorder: 'border-amber-300' },
+    { value: 'referral', label: 'تزكية', icon: User, desc: 'إحالة من زبون', color: 'text-amber-600', activeBg: 'bg-amber-50', activeBorder: 'border-amber-300' },
 ];
 
 /* Mock source visits for "Marketing" type */
@@ -301,7 +301,7 @@ export default function ContractForm() {
                 {/* 1. CUSTOMER & LEGAL INFO                               */}
                 {/* ═══════════════════════════════════════════════════════ */}
                 <Section
-                    title="بيانات العميل والهوية"
+                    title="بيانات الزبون والهوية"
                     icon={ShieldCheck}
                     status={selectedCustomer ? (legalMissing && !legalResolved ? 'warning' : 'valid') : undefined}
                     badge={selectedCustomer && legalMissing && !legalResolved ? (
@@ -311,7 +311,7 @@ export default function ContractForm() {
                     ) : undefined}
                 >
                     {/* Customer Search */}
-                    <Field label="اختر العميل" required>
+                    <Field label="اختر الزبون" required>
                         <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowCustomerDropdown(false); }}>
                             <div className="relative">
                                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
@@ -532,7 +532,7 @@ export default function ContractForm() {
                                         <User className="w-4 h-4 text-amber-600" />
                                         <span className="text-xs font-bold text-amber-700">بيانات الإحالة</span>
                                     </div>
-                                    <Field label="اسم المُحيل (العميل / الوسيط)" required>
+                                    <Field label="اسم المُحيل (الزبون / الوسيط)" required>
                                         <div className="relative">
                                             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-300 pointer-events-none" />
                                             <input type="text" value={referrerName} onChange={e => setReferrerName(e.target.value)}

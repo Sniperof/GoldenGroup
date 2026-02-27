@@ -25,6 +25,7 @@ const initialCandidateState = {
     lastName: '',
     contacts: [{ id: simpleUUID(), type: 'mobile' as const, number: '', label: 'شخصي', hasWhatsApp: true, isPrimary: true, status: 'active' as const }],
     locationSelection: { govId: '', regionId: '', subId: '', neighborhoodId: '' } as GeoSelection,
+    occupation: '',
     candidateNotes: ''
 };
 
@@ -44,7 +45,6 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
     // Section A: Mode A (Direct Referral)
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
-    const [referralReason, setReferralReason] = useState('');
 
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
@@ -119,7 +119,10 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
             return;
         }
         const clients = StorageManager.load<Client[]>('clients', []);
-        const matches = clients.filter(c => c.name.includes(text) || c.mobile.includes(text)).slice(0, 5);
+        const matches = clients.filter(c =>
+            c.name.includes(text) ||
+            c.contacts.some(con => con.number.includes(text))
+        ).slice(0, 5);
         setClientSuggestions(matches);
     };
 
@@ -139,7 +142,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
             setError('يجب اختيار ورقة ترشيح في وضع (ورقة الترشيح).');
             return false;
         }
-        if (isDirectMode && (!referralDate || !referralReason || !referralNameSnapshot)) {
+        if (isDirectMode && (!referralDate || !referralNameSnapshot)) {
             setError('الرجاء تعبئة جميع الحقول الإلزامية الخاصة بالاستقطاب المباشر.');
             return false;
         }
@@ -184,6 +187,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     referralNameSnapshot: sheet.referralNameSnapshot,
                     referralEntityId: sheet.referralEntityId,
 
+                    occupation: candidateData.occupation,
                     candidateNotes: candidateData.candidateNotes,
                     ownerUserId: 1,
                     createdBy: 1
@@ -222,7 +226,8 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                     referralNameSnapshot: isDirectMode ? referralNameSnapshot : 'مستورد من ورقة',
                     referralEntityId: isDirectMode ? entityId : null,
                     referralDate: isDirectMode ? new Date(referralDate).toISOString() : new Date().toISOString(),
-                    referralReason: isDirectMode ? referralReason : 'ورقة ترشيح',
+                    referralReason: isDirectMode ? '' : 'ورقة ترشيح',
+                    occupation: candidateData.occupation,
                     candidateNotes: candidateData.candidateNotes,
                     ownerUserId: 1,
                     createdBy: 1
@@ -247,7 +252,6 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         setCandidateData(initialCandidateState);
         setReferralNameSnapshot('أحمد (مشرف)');
         setReferralDate(new Date().toISOString().split('T')[0]);
-        setReferralReason('');
         setError('');
         setEmployeeIdInput('');
         setEmployeeFound(null);
@@ -349,7 +353,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع الوسيط *</label>
                                             <select value={referralType} onChange={e => setReferralType(e.target.value as ReferralType)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
                                                 <option value="Personal">شخصي</option>
-                                                <option value="Client">عميل</option>
+                                                <option value="Client">زبون</option>
                                                 <option value="Employee">موظف</option>
                                                 <option value="Unknown">مجهول</option>
                                             </select>
@@ -401,12 +405,12 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
                                     {referralType === 'Client' && (
                                         <div ref={clientSearchRef} className="relative">
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">اسم العميل *</label>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">اسم الزبون *</label>
                                             <input
                                                 type="text"
                                                 value={clientSearch}
                                                 onChange={(e) => handleClientSearch(e.target.value)}
-                                                placeholder="ابحث عن العميل بالاسم أو رقم الهاتف..."
+                                                placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
                                                 className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm"
                                             />
                                             {clientSuggestions.length > 0 && (
@@ -418,7 +422,9 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                                             className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
                                                         >
                                                             <span className="font-bold text-slate-700 text-sm">{client.name}</span>
-                                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">{client.mobile}</span>
+                                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">
+                                                                {client.contacts?.find(con => con.isPrimary)?.number || client.contacts?.[0]?.number || '--'}
+                                                            </span>
                                                         </button>
                                                     ))}
                                                 </div>
@@ -437,10 +443,6 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                             />
                                         </div>
                                     )}
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">سبب الاستقطاب *</label>
-                                        <input type="text" value={referralReason} onChange={e => setReferralReason(e.target.value)} placeholder="مثلاً: حملة فيسبوك، ترشيح صديق..." className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
-                                    </div>
                                     {/* Geo Removed */}
                                 </div>
                             )}
@@ -554,6 +556,19 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
 
                             <div>
                                 <GeoSmartSearch label="موقع سكن الاسم المقترح" geoUnits={defaultGeoUnits} value={candidateData.locationSelection} onChange={loc => setCandidateData({ ...candidateData, locationSelection: loc })} />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">المهنة</label>
+                                    <input
+                                        type="text"
+                                        placeholder="مثال: موظف، عمل حر، طبيب..."
+                                        value={candidateData.occupation}
+                                        onChange={e => setCandidateData({ ...candidateData, occupation: e.target.value })}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                    />
+                                </div>
                             </div>
 
                             <div>

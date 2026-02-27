@@ -12,7 +12,7 @@ interface Props {
 
 const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
     { value: 'Personal', label: 'شخصي', icon: User },
-    { value: 'Client', label: 'عميل', icon: Handshake },
+    { value: 'Client', label: 'زبون', icon: Handshake },
     { value: 'Employee', label: 'موظف', icon: Building2 },
     { value: 'Unknown', label: 'مجهول', icon: Search }
 ];
@@ -246,12 +246,12 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
                     {referralType === 'Client' && (
                         <div ref={clientSearchRef} className="relative">
-                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم العميل (Client Name) <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الزبون (Client Name) <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={clientSearch}
                                 onChange={(e) => handleClientSearch(e.target.value)}
-                                placeholder="ابحث عن العميل بالاسم أو رقم الهاتف..."
+                                placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
                                 className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
                             />
                             {clientSuggestions.length > 0 && (

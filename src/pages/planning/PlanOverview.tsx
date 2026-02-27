@@ -168,7 +168,7 @@ export default function PlanOverview() {
     };
 
     const handleGenerateList = (teamKey: string, candList: any[], leadList: any[]) => {
-        if (!confirm(`هل أنت متأكد من توليد قائمة اتصال بـ ${candList.length + leadList.length} عميل لهذا الفريق؟`)) return;
+        if (!confirm(`هل أنت متأكد من توليد قائمة اتصال بـ ${candList.length + leadList.length} زبون لهذا الفريق؟`)) return;
 
         const items = [
             ...candList.map(c => ({

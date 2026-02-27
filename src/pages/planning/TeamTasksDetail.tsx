@@ -63,7 +63,7 @@ const mockTeamTasks: TeamTask[] = [
     { id: 5, customerName: 'ريم عباس', mobile: '07703334455', taskType: 'periodic', taskDescription: 'صيانة دورية - فحص شامل', source: 'route', sourceLabel: 'مسار: المنصور', visitTime: '14:00', teleStatus: 'booked', priority: 'low' },
     { id: 6, customerName: 'فادي الموصلي', mobile: '07706667788', taskType: 'emergency', taskDescription: 'تسريب مياه من الجهاز', source: 'direct', sourceLabel: 'تعيين مباشر', visitTime: null, teleStatus: 'pending', priority: 'high' },
     { id: 7, customerName: 'ياسمين كريم', mobile: '07708889900', taskType: 'returns', taskDescription: 'إرجاع الجهاز - انتهاء العقد', source: 'route', sourceLabel: 'مسار: الكاظمية', visitTime: '16:00', teleStatus: 'booked', priority: 'low' },
-    { id: 8, customerName: 'حسين كريم', mobile: '07702223344', taskType: 'followup', taskDescription: 'متابعة رضا العميل', source: 'direct', sourceLabel: 'تعيين مباشر', visitTime: null, teleStatus: 'refused', priority: 'medium' },
+    { id: 8, customerName: 'حسين كريم', mobile: '07702223344', taskType: 'followup', taskDescription: 'متابعة رضا الزبون', source: 'direct', sourceLabel: 'تعيين مباشر', visitTime: null, teleStatus: 'refused', priority: 'medium' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -173,7 +173,7 @@ export default function TeamTasksDetail() {
                 <table className="w-full">
                     <thead className="bg-slate-50 sticky top-0 z-10">
                         <tr className="border-b border-gray-200">
-                            <th className="text-right px-5 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">العميل</th>
+                            <th className="text-right px-5 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">الزبون</th>
                             <th className="text-right px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">نوع المهمة</th>
                             <th className="text-right px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">المصدر</th>
                             <th className="text-center px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide">وقت الزيارة</th>

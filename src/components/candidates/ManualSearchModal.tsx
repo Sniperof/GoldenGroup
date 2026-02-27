@@ -76,7 +76,7 @@ export default function ManualSearchModal({
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">التحقق الذكي (Smart Match)</h2>
-                            <p className="text-sm text-slate-500">البحث عن عملاء مطابقين في قاعدة البيانات</p>
+                            <p className="text-sm text-slate-500">البحث عن زبائن مطابقين في قاعدة البيانات</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
@@ -155,7 +155,7 @@ export default function ManualSearchModal({
                                     <Search className="w-8 h-8 text-slate-300" />
                                 </div>
                                 <h4 className="text-slate-800 font-bold mb-1">لا توجد نتائج مطابقة</h4>
-                                <p className="text-slate-500 text-sm">لم نتمكن من العثور على أي عميل يطابق هذه البيانات</p>
+                                <p className="text-slate-500 text-sm">لم نتمكن من العثور على أي زبون يطابق هذه البيانات</p>
                             </div>
                         )}
                     </div>

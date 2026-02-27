@@ -20,7 +20,7 @@ export default function FollowUp() {
     const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
 
     const columns: ColumnDef<Task>[] = [
-        { key: 'customerName', label: 'العميل', sortable: true, render: (t) => <span className="text-sm font-semibold text-slate-800">{t.customerName}</span> },
+        { key: 'customerName', label: 'الزبون', sortable: true, render: (t) => <span className="text-sm font-semibold text-slate-800">{t.customerName}</span> },
         { key: 'context', label: 'التفاصيل', render: (t) => <span className="text-sm text-slate-600">{t.context}</span> },
         { key: 'location', label: 'الموقع', sortable: true, render: (t) => { const lp = getLocationBadgeProps(t.location, defaultGeoUnits); return <LocationBadge {...lp} />; } },
         { key: 'dueDate', label: 'التاريخ', sortable: true, render: (t) => <span className="text-sm text-slate-500">{formatDate(t.dueDate)}</span> },
@@ -46,7 +46,7 @@ export default function FollowUp() {
                 columns={columns}
                 filters={filters}
                 searchKeys={['customerName', 'context', 'location']}
-                searchPlaceholder="بحث عن عميل..."
+                searchPlaceholder="بحث عن زبون..."
                 getId={(t) => t.id}
                 onRowClick={(t) => setSelectedCustomer(t.customerName)}
                 actions={(t) => t.status === 'pending' ? (

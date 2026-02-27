@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb } from 'lucide-react';
+import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb, Pencil, MapPin } from 'lucide-react';
 import { StorageManager } from '../lib/storage';
 import { defaultGeoUnits } from '../lib/defaultData';
 import type { Client, GeoUnit, Visit, Contract } from '../lib/types';
@@ -23,6 +23,14 @@ export default function Clients() {
     const [activeCandidateForSearch, setActiveCandidateForSearch] = useState<any>(null);
     const qualifyCandidate = useCandidateStore((state: any) => state.qualifyCandidate);
 
+    const navigate = useNavigate();
+
+    // ─── Filters & Search State ───
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterClass, setFilterClass] = useState('all');
+    const [filterArea, setFilterArea] = useState('all');
+    const [filterMediator, setFilterMediator] = useState('all');
+
     // ─── Lifecycle Logic ───
     const getLifecycleStage = useCallback((client: Client) => {
         if (contracts.some(c => c.customerId === client.id)) return 'OP';
@@ -31,13 +39,72 @@ export default function Clients() {
     }, [contracts, visits]);
 
     // ─── Computed Lists ───
+    const mainList = useMemo(() => {
+        let list = clients
+            .filter(c => !c.isCandidate)
+            .map(c => ({
+                ...c,
+                lifecycleStage: getLifecycleStage(c)
+            }));
+
+        // Search name, phone, id, mediator
+        if (searchTerm) {
+            const q = searchTerm.toLowerCase();
+            list = list.filter(c => {
+                const fullName = `${c.firstName} ${c.fatherName} ${c.lastName} ${c.nickname || ''}`.toLowerCase();
+                const hasPhone = c.contacts?.some(con => con.number.includes(q)) || false;
+                return fullName.includes(q) ||
+                    hasPhone ||
+                    c.id.toString().includes(q) ||
+                    (c.referrerName || '').toLowerCase().includes(q);
+            });
+        }
+
+        // Filters
+        if (filterClass !== 'all') list = list.filter(c => c.lifecycleStage === filterClass);
+        if (filterMediator !== 'all') list = list.filter(c => c.referrerType === filterMediator);
+        if (filterArea !== 'all') list = list.filter(c => {
+            const nId = parseInt(c.neighborhood);
+            const n = geoUnits.find(g => g.id === nId);
+            const gov = geoUnits.find(g => g.id === n?.parentId);
+            const district = geoUnits.find(g => g.id === gov?.parentId); // Adjusting for hierarchy
+            return n?.parentId === parseInt(filterArea) || gov?.id === parseInt(filterArea);
+        });
+
+        return list;
+    }, [clients, getLifecycleStage, searchTerm, filterClass, filterMediator, filterArea, geoUnits]);
+
     const candidateList = useMemo(() => clients.filter(c => c.isCandidate), [clients]);
-    const mainList = useMemo(() => clients.filter(c => !c.isCandidate).map(c => ({ ...c, lifecycleStage: getLifecycleStage(c) })), [clients, getLifecycleStage]);
+
+    // ─── KPI Calculations ───
+    const kpis = useMemo(() => {
+        const total = mainList.length;
+
+        // Top Area
+        const areaCounts: Record<string, number> = {};
+        mainList.forEach(c => {
+            const nId = parseInt(c.neighborhood);
+            const n = geoUnits.find(g => g.id === nId);
+            const subArea = geoUnits.find(g => g.id === n?.parentId); // District/SubArea
+            if (subArea) areaCounts[subArea.name] = (areaCounts[subArea.name] || 0) + 1;
+        });
+        const topArea = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '--';
+
+        // Conversion Rates
+        const leadsCount = mainList.filter(c => c.lifecycleStage === 'Lead').length;
+        const fopsCount = mainList.filter(c => c.lifecycleStage === 'FOP').length;
+        const opsCount = mainList.filter(c => c.lifecycleStage === 'OP').length;
+
+        const leadToFop = (leadsCount + fopsCount) > 0 ? ((fopsCount / (leadsCount + fopsCount)) * 100).toFixed(1) : '0';
+        const fopToOp = (fopsCount + opsCount) > 0 ? ((opsCount / (fopsCount + opsCount)) * 100).toFixed(1) : '0';
+
+        return { total, topArea, leadToFop, fopToOp };
+    }, [mainList, geoUnits]);
 
     const save = useCallback((c: Client[]) => { setClients(c); StorageManager.save('clients', c); }, []);
 
     const deleteClient = (id: number) => {
-        if (!confirm('حذف هذا العميل؟')) return;
+        if (!confirm('حذف هذا الزبون؟')) return;
         save(clients.filter(c => c.id !== id));
     };
 
@@ -50,7 +117,7 @@ export default function Clients() {
                 id: Math.max(0, ...clients.map(c => c.id)) + 1,
                 createdAt: new Date().toISOString(),
                 status: 'Suggested',
-                isCandidate: activeTab === 'candidates' // Auto-flag based on active tab
+                isCandidate: false // Force false now that tabs are gone
             } as Client;
             save([...clients, newClient]);
         }
@@ -59,178 +126,200 @@ export default function Clients() {
     };
 
     const openEditModal = (client: Client) => { setEditingClient(client); setIsModalOpen(true); };
-    const getNeighborhoodName = (id: string) => geoUnits.find(u => u.id === parseInt(id))?.name || '--';
+
+    const getNeighborhoodHierarchy = (id: string) => {
+        const nId = parseInt(id);
+        const neighborhood = geoUnits.find(gu => gu.id === nId);
+        if (!neighborhood) return '--';
+        const subArea = geoUnits.find(gu => gu.id === neighborhood.parentId);
+        if (subArea) return `${subArea.name} > ${neighborhood.name}`;
+        return neighborhood.name;
+    };
 
     // ─── Columns ───
     const clientColumns: ColumnDef<Client & { lifecycleStage: string }>[] = [
+        { key: 'id', label: 'ID', sortable: true, render: (c) => <span className="text-sm text-slate-500 font-mono">#{c.id}</span> },
         {
-            key: 'name', label: 'العميل', sortable: true,
+            key: 'name', label: 'الاسم الكامل', sortable: true,
             render: (c) => (
                 <div className="flex items-center gap-3">
-                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=0ea5e9&color=fff&size=32`} alt="" className="w-9 h-9 rounded-full border border-gray-100 object-cover" />
+                    <div className="w-9 h-9 rounded-full bg-sky-50 flex items-center justify-center text-sky-600 font-bold text-xs border border-sky-100">
+                        {c.firstName?.[0] || 'Z'}{c.lastName?.[0] || ''}
+                    </div>
                     <div>
-                        <span className="block text-slate-800 font-semibold text-sm">{c.name}</span>
-                        <span className="block text-[10px] text-slate-400">{c.createdAt?.slice(0, 10)}</span>
+                        <span className="block text-slate-800 font-semibold text-sm">{c.firstName} {c.fatherName} {c.lastName}</span>
+                        {c.nickname && <span className="block text-[10px] text-slate-400">({c.nickname})</span>}
                     </div>
                 </div>
             ),
         },
-        { key: 'mobile', label: 'الهاتف', sortable: true, render: (c) => <span className="text-sm text-slate-600 font-mono tracking-wide">{c.mobile}</span> },
-        { key: 'neighborhood', label: 'الحي', sortable: true, render: (c) => <span className="text-sm text-slate-600">{getNeighborhoodName(c.neighborhood)}</span> },
         {
-            key: 'status', label: 'تصنيف العملاء', sortable: true,
+            key: 'contacts', label: 'رقم الموبايل الرئيسي', sortable: true, render: (c) => {
+                const primary = c.contacts?.find(con => con.isPrimary)?.number || c.contacts?.[0]?.number || '--';
+                return <span className="text-sm text-slate-600 font-mono tracking-wide">{primary}</span>;
+            }
+        },
+        { key: 'neighborhood', label: 'العنوان', sortable: true, render: (c) => <span className="text-sm text-slate-600 font-medium">{getNeighborhoodHierarchy(c.neighborhood)}</span> },
+        { key: 'occupation', label: 'المهنة', sortable: true, render: (c) => <span className="text-sm text-slate-600">{c.occupation || '--'}</span> },
+        {
+            key: 'status', label: 'التصنيف', sortable: true,
             render: (c) => {
                 const stage = c.lifecycleStage;
-                if (stage === 'OP') return <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 shadow-sm flex items-center gap-1 w-fit"><CheckCircle2 className="w-3 h-3" /> عميل فعلي (OP)</span>;
+                if (stage === 'OP') return <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 shadow-sm flex items-center gap-1 w-fit"><CheckCircle2 className="w-3 h-3" /> زبون فعلي (OP)</span>;
                 if (stage === 'FOP') return <span className="px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold border border-orange-200 shadow-sm flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> مستهدف (FOP)</span>;
-                return <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200 flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> محتمل (Lead)</span>;
+                return <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-bold border border-gray-200 flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> مرشح (Lead)</span>;
             },
             getValue: (c) => c.lifecycleStage
         },
-    ];
-
-    const candidateColumns: ColumnDef<Client>[] = [
-        { key: 'name', label: 'الاسم المقترح', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
-        { key: 'mobile', label: 'رقم الهاتف', sortable: true, render: (c) => <span className="font-mono text-slate-600">{c.mobile}</span> },
-        { key: 'sourceChannel', label: 'المصدر', sortable: true, render: (c) => <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">{c.sourceChannel || 'N/A'}</span> },
-        { key: 'createdAt', label: 'تاريخ الإضافة', sortable: true, render: (c) => <span className="text-sm text-slate-500">{c.createdAt?.slice(0, 10)}</span> },
-    ];
-
-    // ─── Filters ───
-    const clientFilters: FilterDef[] = [
         {
-            key: 'lifecycleStage',
-            label: 'مرحلة العميل',
-            options: [
-                { value: 'Lead', label: 'Lead (محتمل)' },
-                { value: 'FOP', label: 'FOP (مستهدف)' },
-                { value: 'OP', label: 'OP (فعلي)' }
-            ]
+            key: 'rating', label: 'الالتزام', sortable: true,
+            render: (c) => {
+                const r = c.rating || 'Undefined';
+                if (r === 'Committed') return <span className="px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-[11px] font-black border border-green-200">ملتزم</span>;
+                if (r === 'NotCommitted') return <span className="px-2.5 py-1 rounded-lg bg-red-50 text-red-700 text-[11px] font-black border border-red-200">غير ملتزم</span>;
+                return <span className="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-400 text-[11px] font-black border border-slate-200">غير محدد</span>;
+            }
         },
+        {
+            key: 'referrerType', label: 'نوع الوسيط', sortable: true,
+            render: (c) => {
+                const types: Record<string, string> = {
+                    'Personal': 'شخصي',
+                    'Employee': 'موظف',
+                    'Client': 'زبون حالي',
+                    'Unknown': 'مجهول',
+                    'Other': 'أخرى',
+                };
+                return <span className="text-xs text-slate-600 bg-gray-50 px-2 py-1 rounded border border-gray-200">{types[c.referrerType || ''] || c.referrerType || '--'}</span>;
+            }
+        },
+        { key: 'referrerName', label: 'اسم الوسيط', sortable: true, render: (c) => <span className="text-sm font-medium text-slate-700">{c.referrerName || '--'}</span> },
     ];
-
-    const navigate = useNavigate();
 
     return (
-        <div className="space-y-6">
-            {/* Header Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl w-full sm:w-fit overflow-x-auto whitespace-nowrap scrollbar-hide">
+        <div className="flex flex-col h-full p-8 space-y-6 overflow-hidden">
+            {/* 1. Page Title */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-black text-slate-800">سجلات الزبائن</h1>
+                    <p className="text-sm text-slate-500 font-medium">إدارة وتحليل بيانات الزبائن والشبكة</p>
+                </div>
                 <button
-                    onClick={() => setActiveTab('clients')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    onClick={() => { setEditingClient(null); setIsModalOpen(true); }}
+                    className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-sky-500/20 transition-all active:scale-95"
                 >
-                    سجل العملاء
-                </button>
-                <button
-                    onClick={() => setActiveTab('candidates')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'candidates' ? 'bg-white text-sky-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    الأسماء المقترحة
+                    <UserPlus className="w-4 h-4" />
+                    <span>إضافة اسم مرشح</span>
                 </button>
             </div>
 
-            {activeTab === 'clients' ? (
-                <SmartTable<Client & { lifecycleStage: string }>
-                    title="سجل العملاء (Clients Pipeline)"
-                    icon={Users}
-                    data={mainList}
-                    columns={clientColumns}
-                    filters={clientFilters}
-                    searchKeys={['name', 'mobile']}
-                    searchPlaceholder="بحث عن عميل..."
-                    getId={(c) => c.id}
-                    onRowClick={(c) => navigate(`/clients/${c.id}`)}
-                    bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} عملاء؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
-                    ]}
-                    actions={(c) => (
-                        <div className="flex items-center gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100">
-                                <UserPlus className="w-4 h-4" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); deleteClient(c.id); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
+            {/* 2. KPI Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                    { label: 'إجمالي السجلات المصفاة', value: kpis.total, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
+                    { label: 'المنطقة الأكثر استهدافاً', value: kpis.topArea, icon: MapPin, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: 'معدل التحويل (FOP → OP)', value: `${kpis.fopToOp}%`, icon: CheckCircle2, color: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'معدل التحويل (Lead → FOP)', value: `${kpis.leadToFop}%`, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                ].map((kpi, idx) => (
+                    <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className={`p-2 rounded-xl ${kpi.bg} ${kpi.color} group-hover:scale-110 transition-transform`}>
+                                <kpi.icon className="w-5 h-5" />
+                            </div>
+                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Live KPI</span>
                         </div>
-                    )}
-                    headerActions={
-                        <button onClick={() => { setEditingClient(null); setIsModalOpen(true); }} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
-                            <UserPlus className="w-4 h-4" />
-                            <span>إضافة عميل</span>
-                        </button>
-                    }
-                    emptyIcon={Users}
-                    emptyMessage="لا يوجد عملاء حالياً"
-                />
-            ) : (
-                <SmartTable<Client>
-                    title="الأسماء المقترحة (Suggested Names)"
-                    icon={Users}
-                    data={candidateList}
-                    columns={candidateColumns}
-                    filters={[]}
-                    searchKeys={['name', 'mobile']}
-                    searchPlaceholder="بحث في الأسماء المقترحة..."
-                    getId={(c) => c.id}
-                    onRowClick={openEditModal}
-                    bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} اسم مقترح؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
-                    ]}
-                    actions={(c) => (
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveCandidateForSearch(c);
-                                    setIsSearchModalOpen(true);
-                                }}
-                                title="تحقق يدوي"
-                                className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all border border-indigo-100"
-                            >
-                                <Search className="w-3.5 h-3.5" />
-                            </button>
+                        <p className="text-xs font-bold text-slate-400 mb-1">{kpi.label}</p>
+                        <p className={`text-xl font-black ${kpi.color}`}>{kpi.value}</p>
+                    </div>
+                ))}
+            </div>
 
-                            {(c as any).duplicateFlag && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveCandidateForSearch(c);
-                                        setIsSearchModalOpen(true);
-                                    }}
-                                    title="مراجعة الاقتراحات"
-                                    className="p-1.5 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all border border-amber-100 animate-pulse"
-                                >
-                                    <Lightbulb className="w-3.5 h-3.5" />
+            {/* 3. Unified Search & Filter Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row items-center gap-4">
+                    {/* Smart Search */}
+                    <div className="relative flex-1 w-full">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="بحث ذكي (الاسم، الهاتف، المعرف، الوسيط)..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-4 py-3 text-sm focus:border-sky-500 focus:outline-none transition-all focus:bg-white"
+                        />
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                        <select
+                            value={filterClass} onChange={(e) => setFilterClass(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                        >
+                            <option value="all">كل التصنيفات</option>
+                            <option value="Lead">Lead - مرشح</option>
+                            <option value="FOP">FOP - مستهدف</option>
+                            <option value="OP">OP - فعلي</option>
+                        </select>
+
+                        <select
+                            value={filterMediator} onChange={(e) => setFilterMediator(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                        >
+                            <option value="all">كل أنواع الوسيط</option>
+                            <option value="Personal">شخصي</option>
+                            <option value="Employee">موظف</option>
+                            <option value="Client">زبون حالي</option>
+                        </select>
+
+                        <select
+                            value={filterArea} onChange={(e) => setFilterArea(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                        >
+                            <option value="all">كل المحافظات</option>
+                            {geoUnits.filter(g => g.level === 1).map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                        </select>
+
+                        <button
+                            onClick={() => { setSearchTerm(''); setFilterClass('all'); setFilterMediator('all'); setFilterArea('all'); }}
+                            className="text-xs font-bold text-slate-400 hover:text-sky-600 px-3 transition-colors"
+                        >
+                            تفريغ الفلاتر
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 4. Main Data Table */}
+            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden min-h-0">
+                <div className="flex-1 overflow-y-auto custom-scroll">
+                    <SmartTable<Client & { lifecycleStage: string }>
+                        title="جدول بيانات الزبائن"
+                        icon={Users}
+                        hideFilterBar={true}
+                        data={mainList}
+                        columns={clientColumns}
+                        getId={(c) => c.id}
+                        onRowClick={(c) => navigate(`/clients/${c.id}`)}
+                        bulkActions={[
+                            { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} سجلاً؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                        ]}
+                        actions={(c) => (
+                            <div className="flex items-center gap-1">
+                                <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100" title="تعديل بيانات الزبون">
+                                    <Pencil className="w-4 h-4" />
                                 </button>
-                            )}
-
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm('هل أنت متأكد من تحويل هذا الاسم المقترح إلى عميل محتمل؟')) {
-                                        qualifyCandidate(c.id);
-                                    }
-                                }}
-                                className="flex items-center gap-1 p-1.5 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all text-xs font-bold border border-emerald-100"
-                            >
-                                <CheckCircle2 className="w-3 h-3" /> تحويل لعميل محتمل
-                            </button>
-
-                            <button onClick={() => deleteClient(c.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    )}
-                    headerActions={
-                        <button onClick={() => { setEditingClient(null); setIsModalOpen(true); }} className="flex items-center gap-2 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
-                            <UserPlus className="w-4 h-4" />
-                            <span>إضافة اسم مقترح</span>
-                        </button>
-                    }
-                    emptyIcon={Users}
-                    emptyMessage="لا يوجد أسماء مقترحة"
-                />
-            )}
+                                <button onClick={(e) => { e.stopPropagation(); alert(`Opening map for coordinates: ${c.gpsCoordinates?.lat}, ${c.gpsCoordinates?.lng}`); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-emerald-500 transition-all border border-transparent hover:border-gray-100" title="فتح الموقع على الخريطة">
+                                    <MapPin className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                        emptyIcon={Users}
+                        emptyMessage="لا يوجد سجلات زبائن حالياً"
+                    />
+                </div>
+            </div>
 
             <ClientModal
                 isOpen={isModalOpen}
@@ -239,51 +328,6 @@ export default function Clients() {
                 initialData={editingClient}
                 geoUnits={geoUnits}
             />
-
-            {activeCandidateForSearch && (
-                <ManualSearchModal
-                    isOpen={isSearchModalOpen}
-                    onClose={() => setIsSearchModalOpen(false)}
-                    candidate={activeCandidateForSearch}
-                    clients={clients}
-                    onLink={(client) => {
-                        const allClients = StorageManager.load<Client[]>('clients', []);
-                        const updatedClients = allClients.map(c => {
-                            if (c.id === client.id) {
-                                const currentContacts = c.contacts || [];
-                                const mobileExists = currentContacts.some(contact => contact.number === activeCandidateForSearch.mobile);
-
-                                if (!mobileExists) {
-                                    const newContact: any = {
-                                        id: Date.now().toString(),
-                                        type: 'mobile',
-                                        number: activeCandidateForSearch.mobile,
-                                        label: 'Additional',
-                                        hasWhatsApp: false,
-                                        isPrimary: false,
-                                        status: 'active'
-                                    };
-                                    return { ...c, contacts: [...currentContacts, newContact] };
-                                }
-                            }
-                            return c;
-                        });
-                        StorageManager.save('clients', updatedClients);
-
-                        // Also mark the candidate as junk or qualified? 
-                        // In v2, usually a link means we don't need the prospect anymore.
-                        // I'll mark it as Junk or just Qualified to hide it from the candidate list.
-                        // For now, I'll just close and let the user delete if they want, or I'll implement a 'Link & Archive' logic.
-                        // The store doesn't have a 'Link' action yet. I'll just alert for now.
-                        setIsSearchModalOpen(false);
-                        alert('تم ربط الاسم المقترح بالعميل وتحديث بيانات التواصل بنجاح.');
-                    }}
-                    onNoMatch={() => {
-                        setIsSearchModalOpen(false);
-                        alert('جاري المتابعة لخطوة تأكيد الثقة...');
-                    }}
-                />
-            )}
         </div>
     );
 }

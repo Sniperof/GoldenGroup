@@ -265,7 +265,7 @@ export default function TelemarketerWorkspace() {
                                             <p className={`text-sm font-bold truncate ${isProcessed ? 'text-slate-500' : 'text-slate-800'}`}>{task.name}</p>
                                             <div className="flex items-center gap-1.5 mt-1">
                                                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${task.entityType === 'candidate' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
-                                                    {task.entityType === 'candidate' ? 'اسم مقترح' : 'عميل محتمل'}
+                                                    {task.entityType === 'candidate' ? 'اسم مقترح' : 'زبون محتمل'}
                                                 </span>
                                                 <span className="text-[10px] text-slate-400 flex items-center gap-0.5 truncate">
                                                     <MapPin className="w-2.5 h-2.5" />{task.addressText}
@@ -292,7 +292,7 @@ export default function TelemarketerWorkspace() {
                                     <div className="flex items-center justify-between mb-1">
                                         <h2 className="text-2xl font-black text-slate-800">{selectedTask.name}</h2>
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${selectedTask.entityType === 'candidate' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
-                                            {selectedTask.entityType === 'candidate' ? 'Candidate (محتمل غير مؤكد)' : 'Lead (عميل مسجل)'}
+                                            {selectedTask.entityType === 'candidate' ? 'Candidate (محتمل غير مؤكد)' : 'Lead (زبون مسجل)'}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-3 mt-2">
@@ -324,10 +324,10 @@ export default function TelemarketerWorkspace() {
                             {selectedTask.entityType === 'client' && (
                                 <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                                     <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                        <Clock className="w-4 h-4 text-sky-500" /> سجّل العميل
+                                        <Clock className="w-4 h-4 text-sky-500" /> سجّل الزبون
                                     </h3>
                                     {entityHistory.length === 0 ? (
-                                        <p className="text-xs text-slate-400 py-3 text-center bg-gray-50 rounded-lg">لا يوجد سجل سابق لهذا العميل</p>
+                                        <p className="text-xs text-slate-400 py-3 text-center bg-gray-50 rounded-lg">لا يوجد سجل سابق لهذا الزبون</p>
                                     ) : (
                                         <div className="relative pr-4">
                                             <div className="absolute right-1.5 top-2 bottom-2 w-px bg-gray-200" />
@@ -354,7 +354,7 @@ export default function TelemarketerWorkspace() {
                         <div className="h-full flex items-center justify-center">
                             <div className="text-center text-slate-400">
                                 <Headset className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                <p className="text-sm">قم بتحديد عميل من القائمة لبدء الاتصال</p>
+                                <p className="text-sm">قم بتحديد زبون من القائمة لبدء الاتصال</p>
                             </div>
                         </div>
                     )}

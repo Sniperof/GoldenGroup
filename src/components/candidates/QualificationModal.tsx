@@ -91,7 +91,7 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                     <div>
                                         <h4 className="text-sm font-bold text-amber-900 mb-1">نتائج التحقق من التكرار</h4>
                                         <p className="text-xs text-amber-700 leading-relaxed">
-                                            النظام يقوم بالبحث عن أي عملاء حاليين يمتلكون نفس رقم الهاتف ({candidate.mobile}).
+                                            النظام يقوم بالبحث عن أي زبائن حاليين يمتلكون نفس رقم الهاتف ({candidate.mobile}).
                                         </p>
                                     </div>
                                 </div>
@@ -129,12 +129,12 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                     ) : (
                                         <div className="space-y-2">
                                             {searchResults.map(d => {
-                                                const clientType = d.isCandidate ? (d.candidateStatus || 'محتمل') : 'عميل متعاقد';
+                                                const clientType = d.isCandidate ? (d.candidateStatus || 'محتمل') : 'زبون متعاقد';
                                                 return (
                                                     <button
                                                         key={d.id}
                                                         onClick={() => {
-                                                            if (window.confirm(`تأكيد وتطابق الاسم المقترح مع هذا السجل؟\n\nالعميل المطابق: ${d.name}\nنوع العميل: ${clientType}`)) {
+                                                            if (window.confirm(`تأكيد وتطابق الاسم المقترح مع هذا السجل؟\n\nالزبون المطابق: ${d.name}\nنوع الزبون: ${clientType}`)) {
                                                                 if (candidate) onLink(candidate.id, d);
                                                             }
                                                         }}
@@ -197,8 +197,8 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                             <CheckCircle2 className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-bold text-emerald-900">تحويل لعميل محتمل</div>
-                                            <div className="text-xs text-emerald-700 mt-0.5">فتح استمارة العميل مع نقل كافة البيانات</div>
+                                            <div className="text-sm font-bold text-emerald-900">تحويل لزبون محتمل</div>
+                                            <div className="text-xs text-emerald-700 mt-0.5">فتح استمارة الزبون مع نقل كافة البيانات</div>
                                         </div>
                                     </button>
 
