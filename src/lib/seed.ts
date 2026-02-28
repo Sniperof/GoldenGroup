@@ -1,47 +1,46 @@
 import { StorageManager } from './storage';
-import { Client } from './types';
+import {
+    defaultGeoUnits,
+    defaultEmployees,
+    defaultTasks,
+    defaultMaintenanceRequests,
+    defaultDeviceModels,
+    defaultSpareParts
+} from './defaultData';
+import { mockContracts } from './mockData';
 
+/**
+ * seedSystem checks if initial data has been populated in localStorage.
+ * If not, it loads the default data to ensure the app has content on first run.
+ */
 export function seedSystem() {
-    const existingClients = StorageManager.load<Client[]>('clients', []);
+    const PREFIX = 'goldenCRM_';
 
-    // Check if seeded already (using the specific IDs)
-    if (existingClients.some(c => c.id === 101 || c.id === 102)) {
-        return;
-    }
-
-    const mockClients: Client[] = [
-        {
-            id: 101,
-            name: 'أحمد السوري',
-            mobile: '0933111111',
-            governorate: '1', // Damascus
-            district: '10', // Markaz Dimashq
-            neighborhood: '20', // Mezzeh
-            createdAt: new Date().toISOString(),
-            isCandidate: false
-        },
-        {
-            id: 102,
-            name: 'فاطمة الزهراء',
-            mobile: '0933222222',
-            governorate: '1',
-            district: '10',
-            neighborhood: '22', // Abu Rummaneh
-            createdAt: new Date().toISOString(),
-            isCandidate: false
-        },
-        {
-            id: 103,
-            name: 'زيد الحلبي',
-            mobile: '0933333333',
-            governorate: '2', // Aleppo
-            district: '11', // Region? No, let's fix the IDs or just use names if it's string
-            neighborhood: '34',
-            createdAt: new Date().toISOString(),
-            isCandidate: false
+    const checkAndSeed = <T>(key: string, defaultData: T) => {
+        if (!localStorage.getItem(PREFIX + key)) {
+            StorageManager.save(key, defaultData);
         }
-    ];
+    };
 
-    StorageManager.save('clients', [...existingClients, ...mockClients]);
-    console.log('System Seeded with Mock Clients');
+    // Static/Core Data
+    checkAndSeed('geoUnits', defaultGeoUnits);
+    checkAndSeed('employees', defaultEmployees);
+    checkAndSeed('deviceModels', defaultDeviceModels);
+    checkAndSeed('spareParts', defaultSpareParts);
+
+    // Activity/Transaction Data
+    checkAndSeed('tasks', defaultTasks);
+    checkAndSeed('maintenanceRequests', defaultMaintenanceRequests);
+    checkAndSeed('contracts', mockContracts);
+
+    // Initialize Collections
+    checkAndSeed('clients', []);
+    checkAndSeed('candidates', []);
+    checkAndSeed('referralSheets', []);
+    checkAndSeed('emergencyTickets', []);
+    checkAndSeed('telemarketing_taskLists', []);
+    checkAndSeed('telemarketing_appointments', []);
+    checkAndSeed('telemarketing_callLogs', []);
+
+    console.log('System seed check complete.');
 }
