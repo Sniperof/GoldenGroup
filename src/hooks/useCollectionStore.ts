@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { StorageManager } from '../lib/storage';
 import { mockContracts } from '../lib/mockData';
 import { Due, Contract } from '../lib/types';
 
@@ -32,38 +33,34 @@ const flattenDues = (contracts: Contract[]) => {
 };
 
 export const useCollectionStore = create<CollectionState>((set, get) => ({
-    contracts: mockContracts,
-    dues: flattenDues(mockContracts),
+    contracts: StorageManager.load<Contract[]>('contracts', mockContracts),
+    dues: flattenDues(StorageManager.load<Contract[]>('contracts', mockContracts)),
 
     updateDue: (dueId, updates) => set((state) => {
-        const newDues = state.dues.map(d => d.id === dueId ? { ...d, ...updates } : d);
-        // Also update nested contracts - strictly creating a new object references to trigger reactivity if needed
         const newContracts = state.contracts.map(c => ({
             ...c,
             dues: c.dues.map(d => d.id === dueId ? { ...d, ...updates } : d)
         }));
-        return { dues: newDues, contracts: newContracts };
+        StorageManager.save('contracts', newContracts);
+        return {
+            contracts: newContracts,
+            dues: flattenDues(newContracts)
+        };
     }),
 
     assignAgent: (dueIds, agentId) => set((state) => {
-        const newDues = state.dues.map(d => dueIds.includes(d.id) ? { ...d, assignedTelemarketerId: agentId } : d);
         const newContracts = state.contracts.map(c => ({
             ...c,
             dues: c.dues.map(d => dueIds.includes(d.id) ? { ...d, assignedTelemarketerId: agentId } : d)
         }));
-        return { dues: newDues, contracts: newContracts };
+        StorageManager.save('contracts', newContracts);
+        return {
+            contracts: newContracts,
+            dues: flattenDues(newContracts)
+        };
     }),
 
     logCollection: (dueId, { remainingBalance, adjustedDate, status }) => set((state) => {
-        const newDues = state.dues.map(d => {
-            if (d.id !== dueId) return d;
-            return {
-                ...d,
-                remainingBalance: remainingBalance ?? d.remainingBalance,
-                adjustedDate: adjustedDate ?? d.adjustedDate,
-                status: status ?? d.status
-            };
-        });
         const newContracts = state.contracts.map(c => ({
             ...c,
             dues: c.dues.map(d => {
@@ -76,7 +73,11 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
                 };
             })
         }));
-        return { dues: newDues, contracts: newContracts };
+        StorageManager.save('contracts', newContracts);
+        return {
+            contracts: newContracts,
+            dues: flattenDues(newContracts)
+        };
     }),
 
     getKPIs: () => {

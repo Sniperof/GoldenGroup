@@ -106,8 +106,8 @@ const mockCandidates: Candidate[] = [
 ];
 
 export const useCandidateStore = create<CandidateState>((set, get) => ({
-    candidates: mockCandidates,
-    referralSheets: mockSheets,
+    candidates: StorageManager.load<Candidate[]>('candidates', mockCandidates),
+    referralSheets: StorageManager.load<ReferralSheet[]>('referralSheets', mockSheets),
 
     addReferralSheet: (sheetData) => {
         let newId = 1;
@@ -136,14 +136,18 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                     conversionPercentage: 0
                 }
             };
-            return { referralSheets: [...state.referralSheets, newSheet] };
+            const updatedSheets = [...state.referralSheets, newSheet];
+            StorageManager.save('referralSheets', updatedSheets);
+            return { referralSheets: updatedSheets };
         });
         return newId;
     },
 
-    closeReferralSheet: (sheetId) => set((state) => ({
-        referralSheets: state.referralSheets.map(s => s.id === sheetId ? { ...s, status: 'Completed' } : s)
-    })),
+    closeReferralSheet: (sheetId) => set((state) => {
+        const updatedSheets = state.referralSheets.map(s => s.id === sheetId ? { ...s, status: 'Completed' as const } : s);
+        StorageManager.save('referralSheets', updatedSheets);
+        return { referralSheets: updatedSheets };
+    }),
 
     updateSheetStats: (sheetId) => set((state) => {
         const sheetCandidates = state.candidates.filter(c => c.referralSheetId === sheetId);
@@ -159,8 +163,10 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
             conversionPercentage: Math.round((converted / total) * 100)
         };
 
+        const updatedSheets = state.referralSheets.map(s => s.id === sheetId ? { ...s, stats: newStats } : s);
+        StorageManager.save('referralSheets', updatedSheets);
         return {
-            referralSheets: state.referralSheets.map(s => s.id === sheetId ? { ...s, stats: newStats } : s)
+            referralSheets: updatedSheets
         };
     }),
 
@@ -226,7 +232,9 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                 createdAt: new Date().toISOString()
             };
 
-            return { candidates: [...state.candidates, newCandidate] };
+            const updatedCandidates = [...state.candidates, newCandidate];
+            StorageManager.save('candidates', updatedCandidates);
+            return { candidates: updatedCandidates };
         });
 
         // Auto update stats if sheet exists
@@ -264,8 +272,21 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
 
                 savedClient = {
                     id: clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1,
+                    firstName: candidate.firstName || '',
+                    fatherName: '',
+                    lastName: candidate.lastName || '',
+                    nickname: candidate.nickname || undefined,
                     name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || 'بدون اسم',
                     mobile: candidate.mobile,
+                    contacts: candidate.contacts || [{
+                        id: Date.now().toString(),
+                        type: 'mobile',
+                        number: candidate.mobile,
+                        label: 'الرقم الأساسي',
+                        hasWhatsApp: true,
+                        isPrimary: true,
+                        status: 'active'
+                    }],
                     governorate: '',
                     district: '',
                     neighborhood: candidate.addressText,
@@ -292,7 +313,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                     convertedToLeadId: savedClient.id
                 } : c
             );
-
+            StorageManager.save('candidates', updatedCandidates);
             return { candidates: updatedCandidates };
         });
 
@@ -354,6 +375,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                     duplicateFlag: true
                 } : c
             );
+            StorageManager.save('candidates', updatedCandidates);
             return { candidates: updatedCandidates };
         });
 
@@ -364,9 +386,11 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
     },
 
     markJunk: (candidateId) => {
-        set((state) => ({
-            candidates: state.candidates.map(c => c.id === candidateId ? { ...c, status: 'Junk' } : c)
-        }));
+        set((state) => {
+            const updatedCandidates = state.candidates.map(c => c.id === candidateId ? { ...c, status: 'Junk' as const } : c);
+            StorageManager.save('candidates', updatedCandidates);
+            return { candidates: updatedCandidates };
+        });
 
         // Update stats
         const candidate = get().candidates.find(c => c.id === candidateId);
@@ -376,9 +400,11 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
     },
 
     markForFollowUp: (candidateId) => {
-        set((state) => ({
-            candidates: state.candidates.map(c => c.id === candidateId ? { ...c, status: 'FollowUp' } : c)
-        }));
+        set((state) => {
+            const updatedCandidates = state.candidates.map(c => c.id === candidateId ? { ...c, status: 'FollowUp' as const } : c);
+            StorageManager.save('candidates', updatedCandidates);
+            return { candidates: updatedCandidates };
+        });
 
         // Update stats
         const candidate = get().candidates.find(c => c.id === candidateId);

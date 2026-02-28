@@ -49,7 +49,7 @@ const DeviceManagement = () => {
     const [devices, setDevices] = useState<DeviceModel[]>(defaultDeviceModels);
     const [isAddingDevice, setIsAddingDevice] = useState(false);
     const [newDevice, setNewDevice] = useState<Partial<DeviceModel>>({
-        name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [],
+        name: '', brand: '', category: 'صناعي', maintenanceInterval: '6 أشهر', basePrice: 0, supportedVisitTypes: [],
     });
 
     // ──── Spare Parts state ────
@@ -66,7 +66,7 @@ const DeviceManagement = () => {
         setNewDevice(prev => ({ ...prev, [name]: value }));
     };
 
-    const toggleVisitType = (type: 'Installation' | 'Maintenance' | 'Delivery') => {
+    const toggleVisitType = (type: 'تركيب' | 'صيانة' | 'توصيل') => {
         setNewDevice(prev => {
             const current = prev.supportedVisitTypes || [];
             return { ...prev, supportedVisitTypes: current.includes(type) ? current.filter(t => t !== type) : [...current, type] };
@@ -83,7 +83,7 @@ const DeviceManagement = () => {
             };
             setDevices([...devices, device]);
             setIsAddingDevice(false);
-            setNewDevice({ name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [] });
+            setNewDevice({ name: '', brand: '', category: 'منزلي', maintenanceInterval: '6 أشهر', basePrice: 0, supportedVisitTypes: [] });
         }
     };
 
@@ -319,7 +319,7 @@ const DeviceManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">الفئة</label>
                                         <div className="flex bg-gray-100 p-1 rounded-lg">
-                                            {(['Residential', 'Industrial', 'Commercial'] as const).map(cat => (
+                                            {(['منزلي', 'صناعي',] as const).map(cat => (
                                                 <button type="button" key={cat} onClick={() => setNewDevice(prev => ({ ...prev, category: cat }))}
                                                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${newDevice.category === cat ? 'bg-white shadow-sm text-sky-600' : 'text-gray-500 hover:text-gray-700'}`}>
                                                     <span>{categoryLabels[cat].icon}</span>{categoryLabels[cat].label}
@@ -340,9 +340,9 @@ const DeviceManagement = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">الخدمات المدعومة</label>
                                     <div className="flex gap-4">
                                         {[
-                                            { id: 'Installation' as const, icon: <Wrench size={16} />, label: 'تركيب' },
-                                            { id: 'Maintenance' as const, icon: <PenTool size={16} />, label: 'صيانة' },
-                                            { id: 'Delivery' as const, icon: <Truck size={16} />, label: 'توصيل' },
+                                            { id: 'تركيب' as const, icon: <Wrench size={16} />, label: 'تركيب' },
+                                            { id: 'صيانة' as const, icon: <PenTool size={16} />, label: 'صيانة' },
+                                            { id: 'توصيل' as const, icon: <Truck size={16} />, label: 'توصيل' },
                                         ].map(type => (
                                             <label key={type.id} className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-all ${newDevice.supportedVisitTypes?.includes(type.id) ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 hover:bg-gray-50'}`}>
                                                 <input type="checkbox" className="hidden" checked={newDevice.supportedVisitTypes?.includes(type.id)} onChange={() => toggleVisitType(type.id)} />
