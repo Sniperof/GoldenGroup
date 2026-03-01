@@ -9,8 +9,8 @@ import AssignAgentModal from '../../components/AssignAgentModal';
 import { Due } from '../../lib/types';
 
 // Helper for date formatting
-const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric', year: 'numeric' });
-const formatMoney = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
+const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-SY', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatMoney = (n: number) => n.toLocaleString('ar-SY') + ' ل.س';
 
 export default function Dues() {
     const { dues, getKPIs } = useCollectionStore();
@@ -139,7 +139,7 @@ export default function Dues() {
             </div>
 
             {/* Smart Table */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col">
                 <SmartTable
                     title="لوحة التحصيل"
                     icon={DollarSign}

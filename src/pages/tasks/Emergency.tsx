@@ -35,8 +35,8 @@ export default function Emergency() {
             key: 'requestDate', label: 'تاريخ الطلب', sortable: true,
             render: (r) => (
                 <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-slate-700">{new Date(r.requestDate).toLocaleDateString('ar-IQ')}</span>
-                    <span className="text-[10px] text-slate-400">{new Date(r.requestDate).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-sm font-semibold text-slate-700">{new Date(r.requestDate).toLocaleDateString('ar-SY')}</span>
+                    <span className="text-[10px] text-slate-400">{new Date(r.requestDate).toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
             )
         },
@@ -173,7 +173,7 @@ export default function Emergency() {
                                                 <span className="text-xs text-slate-400 block mb-1">تاريخ الطلب</span>
                                                 <div className="flex items-center gap-2 text-slate-700 font-medium text-sm">
                                                     <Calendar className="w-4 h-4 text-slate-400" />
-                                                    {new Date(selectedRequest.requestDate).toLocaleString('ar-IQ')}
+                                                    {new Date(selectedRequest.requestDate).toLocaleString('ar-SY')}
                                                 </div>
                                             </div>
                                             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">

@@ -41,7 +41,7 @@ export default function Employees() {
 
     return (
         <SmartTable<Employee>
-            title="إدارة الفرق"
+            title="سجلات الموظفين"
             icon={Users}
             data={employees}
             columns={columns}

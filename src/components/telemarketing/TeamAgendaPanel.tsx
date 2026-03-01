@@ -28,12 +28,12 @@ export default function TeamAgendaPanel({ appointments, date }: TeamAgendaPanelP
     };
 
     return (
-        <div className="w-72 bg-slate-50 border-l border-gray-200 flex flex-col shrink-0 h-full overflow-hidden shadow-sm z-20">
+        <div className="w-full bg-slate-50 border-gray-200 flex flex-col shrink-0 h-full overflow-hidden shadow-sm z-20">
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200 bg-white shrink-0">
                 <h2 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>أجندة مواعيد الفريق</span>
+                    <span> مواعيد الفريق</span>
                 </h2>
                 <p className="text-[10px] text-slate-500 mt-1 mr-5">جدول الزيارات لليوم: {date}</p>
             </div>

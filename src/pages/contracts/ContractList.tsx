@@ -30,8 +30,8 @@ const statusConfig: Record<string, { label: string; style: string }> = {
 
 const paymentLabels: Record<string, string> = { cash: 'نقدي', installment: 'أقساط' };
 
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric' });
-const formatPrice = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
+const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' });
+const formatPrice = (n: number) => n.toLocaleString('ar-SY') + ' ل.س';
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                           */
@@ -102,34 +102,36 @@ export default function ContractList() {
     ];
 
     return (
-        <SmartTable<Contract>
-            title="إدارة العقود"
-            icon={FileText}
-            data={sampleContracts}
-            columns={columns}
-            filters={filters}
-            searchKeys={['contractNumber', 'customerName', 'deviceModelName', 'serialNumber']}
-            searchPlaceholder="بحث عن عقد..."
-            getId={(c) => c.id}
-            headerActions={
-                <button
-                    onClick={() => navigate('/contracts/new')}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors shadow-sm"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>عقد جديد</span>
-                </button>
-            }
-            actions={(c) => (
-                <button
-                    onClick={() => alert(`عرض العقد: ${c.contractNumber}`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors"
-                >
-                    <Eye className="w-3.5 h-3.5" /><span>عرض</span>
-                </button>
-            )}
-            emptyIcon={FileText}
-            emptyMessage="لا توجد عقود"
-        />
+        <div className="p-8 h-full flex flex-col overflow-hidden">
+            <SmartTable<Contract>
+                title="إدارة العقود"
+                icon={FileText}
+                data={sampleContracts}
+                columns={columns}
+                filters={filters}
+                searchKeys={['contractNumber', 'customerName', 'deviceModelName', 'serialNumber']}
+                searchPlaceholder="بحث عن عقد..."
+                getId={(c) => c.id}
+                headerActions={
+                    <button
+                        onClick={() => navigate('/contracts/new')}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors shadow-sm"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>عقد جديد</span>
+                    </button>
+                }
+                actions={(c) => (
+                    <button
+                        onClick={() => alert(`عرض العقد: ${c.contractNumber}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors"
+                    >
+                        <Eye className="w-3.5 h-3.5" /><span>عرض</span>
+                    </button>
+                )}
+                emptyIcon={FileText}
+                emptyMessage="لا توجد عقود"
+            />
+        </div>
     );
 }

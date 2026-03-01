@@ -11,21 +11,21 @@ import type { ColumnDef, FilterDef } from '../components/SmartTable';
 /* ------------------------------------------------------------------ */
 
 const categoryLabels: Record<string, { label: string; icon: string; color: string }> = {
-    'Residential': { label: 'منزلي', icon: '🏠', color: 'bg-green-100 text-green-800' },
-    'Industrial': { label: 'صناعي', icon: '🏭', color: 'bg-orange-100 text-orange-800' },
-    'Commercial': { label: 'تجاري', icon: '🏢', color: 'bg-blue-100 text-blue-800' },
+    'منزلي': { label: 'منزلي', icon: '🏠', color: 'bg-green-100 text-green-800' },
+    'صناعي': { label: 'صناعي', icon: '🏭', color: 'bg-orange-100 text-orange-800' },
+    'تجاري': { label: 'تجاري', icon: '🏢', color: 'bg-blue-100 text-blue-800' },
 };
 
 const maintenanceLabels: Record<string, string> = {
-    '3 Months': '3 أشهر',
-    '6 Months': '6 أشهر',
-    '1 Year': 'سنة واحدة',
+    '3 أشهر': '3 أشهر',
+    '6 أشهر': '6 أشهر',
+    '1 سنة': 'سنة واحدة',
 };
 
 const serviceLabels: Record<string, { label: string; Icon: any }> = {
-    'Installation': { label: 'تركيب', Icon: Wrench },
-    'Maintenance': { label: 'صيانة', Icon: PenTool },
-    'Delivery': { label: 'توصيل', Icon: Truck },
+    'تركيب': { label: 'تركيب', Icon: Wrench },
+    'صيانة': { label: 'صيانة', Icon: PenTool },
+    'توصيل': { label: 'توصيل', Icon: Truck },
 };
 
 const partTypeConfig: Record<MaintenancePartType, { label: string; color: string; bg: string; border: string; hint: string }> = {
@@ -34,7 +34,7 @@ const partTypeConfig: Record<MaintenancePartType, { label: string; color: string
     Accessory: { label: 'ملحقات', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', hint: 'ملحق إضافي غير إلزامي' },
 };
 
-const formatPrice = (n: number) => new Intl.NumberFormat('ar-IQ', { style: 'currency', currency: 'IQD', maximumFractionDigits: 0 }).format(n);
+const formatPrice = (n: number) => new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP', maximumFractionDigits: 0 }).format(n);
 
 type ActiveTab = 'devices' | 'parts';
 
@@ -141,13 +141,13 @@ const DeviceManagement = () => {
         {
             key: 'category', label: 'الفئة', sortable: true,
             render: (d) => {
-                const cat = categoryLabels[d.category];
+                const cat = categoryLabels[d.category] || { label: d.category, icon: '📦', color: 'bg-gray-100 text-gray-800' };
                 return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium gap-1.5 ${cat.color}`}><span className="text-[10px]">{cat.icon}</span>{cat.label}</span>;
             },
         },
         {
             key: 'maintenanceInterval', label: 'دورة الصيانة', sortable: true,
-            render: (d) => <span className="text-sm text-slate-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-gray-400" />{maintenanceLabels[d.maintenanceInterval]}</span>,
+            render: (d) => <span className="text-sm text-slate-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-gray-400" />{maintenanceLabels[d.maintenanceInterval] || d.maintenanceInterval}</span>,
         },
         {
             key: 'basePrice', label: 'السعر الأساسي', sortable: true,
@@ -159,6 +159,7 @@ const DeviceManagement = () => {
                 <div className="flex gap-2">
                     {d.supportedVisitTypes.map(type => {
                         const S = serviceLabels[type];
+                        if (!S) return null;
                         return <div key={type} title={S.label} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-600 transition-all cursor-help"><S.Icon size={16} /></div>;
                     })}
                 </div>
@@ -210,8 +211,8 @@ const DeviceManagement = () => {
     ];
 
     const deviceFilters: FilterDef[] = [
-        { key: 'category', label: 'جميع الفئات', options: [{ value: 'Residential', label: 'منزلي' }, { value: 'Industrial', label: 'صناعي' }, { value: 'Commercial', label: 'تجاري' }] },
-        { key: 'maintenanceInterval', label: 'جميع الدورات', options: [{ value: '3 Months', label: '3 أشهر' }, { value: '6 Months', label: '6 أشهر' }, { value: '1 Year', label: 'سنة واحدة' }] },
+        { key: 'category', label: 'جميع الفئات', options: [{ value: 'منزلي', label: 'منزلي' }, { value: 'صناعي', label: 'صناعي' }, { value: 'تجاري', label: 'تجاري' }] },
+        { key: 'maintenanceInterval', label: 'جميع الدورات', options: [{ value: '3 أشهر', label: '3 أشهر' }, { value: '6 أشهر', label: '6 أشهر' }, { value: '1 سنة', label: 'سنة واحدة' }] },
     ];
 
     const partFilters: FilterDef[] = [
@@ -247,10 +248,10 @@ const DeviceManagement = () => {
                 </div>
 
                 {/* ============ TAB CONTENT ============ */}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
                     {activeTab === 'devices' && (
                         <SmartTable<DeviceModel>
-                            title="دليل الأجهزة"
+                            title="إدارة الأجهزة وقطع الغيار"
                             icon={Package}
                             data={devices}
                             columns={deviceColumns}
@@ -311,7 +312,7 @@ const DeviceManagement = () => {
                                         <input type="text" name="brand" required value={newDevice.brand} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" placeholder="مثال: Golden" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">السعر (د.ع)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">السعر (ل.س)</label>
                                         <input type="number" name="basePrice" required value={newDevice.basePrice} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" />
                                     </div>
                                 </div>
@@ -319,10 +320,10 @@ const DeviceManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">الفئة</label>
                                         <div className="flex bg-gray-100 p-1 rounded-lg">
-                                            {(['منزلي', 'صناعي',] as const).map(cat => (
+                                            {(['منزلي', 'صناعي', 'تجاري'] as const).map(cat => (
                                                 <button type="button" key={cat} onClick={() => setNewDevice(prev => ({ ...prev, category: cat }))}
                                                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${newDevice.category === cat ? 'bg-white shadow-sm text-sky-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                                                    <span>{categoryLabels[cat].icon}</span>{categoryLabels[cat].label}
+                                                    <span>{categoryLabels[cat]?.icon || '📦'}</span>{categoryLabels[cat]?.label || cat}
                                                 </button>
                                             ))}
                                         </div>
@@ -330,9 +331,9 @@ const DeviceManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">دورة الصيانة</label>
                                         <select name="maintenanceInterval" value={newDevice.maintenanceInterval} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none bg-white text-right text-sm">
-                                            <option value="3 Months">3 أشهر</option>
-                                            <option value="6 Months">6 أشهر</option>
-                                            <option value="1 Year">سنة واحدة</option>
+                                            <option value="3 أشهر">3 أشهر</option>
+                                            <option value="6 أشهر">6 أشهر</option>
+                                            <option value="1 سنة">سنة واحدة</option>
                                         </select>
                                     </div>
                                 </div>
@@ -395,7 +396,7 @@ const DeviceManagement = () => {
 
                                 {/* Price */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">السعر (د.ع)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">السعر ل.س</label>
                                     <input type="number" value={partForm.basePrice || ''} onChange={e => setPartForm(p => ({ ...p, basePrice: Number(e.target.value) }))}
                                         className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" />
                                 </div>
@@ -445,7 +446,7 @@ const DeviceManagement = () => {
                                                     <input type="checkbox" checked={isSelected} onChange={() => toggleDeviceCompat(dev.id)} className="accent-sky-600 w-4 h-4" />
                                                     <div className="flex-1 min-w-0">
                                                         <span className="text-sm font-medium text-slate-700 block">{dev.name}</span>
-                                                        <span className="text-[10px] text-gray-400">{dev.brand} · {categoryLabels[dev.category].label}</span>
+                                                        <span className="text-[10px] text-gray-400">{dev.brand} · {categoryLabels[dev.category]?.label || dev.category}</span>
                                                     </div>
                                                     <Gem className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-sky-500' : 'text-gray-300'}`} />
                                                 </label>

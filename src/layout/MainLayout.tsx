@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FloatingActionButton from '../components/FloatingActionButton';
 import NewEmergencyTicketModal from '../components/NewEmergencyTicketModal';
+import AddCandidateModal from '../components/candidates/AddCandidateModal';
 import {
     LayoutDashboard, Route, Users, BookUser, Globe,
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
@@ -12,21 +13,18 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-    { path: '/', label: 'لوحة القيادة', icon: LayoutDashboard },
-    { path: '/geo', label: 'الهيكل الجغرافي', icon: Globe },
-    { path: '/devices', label: 'دليل الأجهزة', icon: Gem },
-    { path: '/routes', label: 'إدارة المسارات', icon: Route },
-    { path: '/clients', label: 'سجلات الزبائن', icon: BookUser },
-    { path: '/candidates', label: 'الأسماء المقترحة', icon: UserPlus },
-    { path: '/employees', label: 'إدارة الفرق', icon: Users },
-    { path: '/telemarketer', label: 'المسوّق الهاتفي', icon: Headset },
-    { path: '/settings', label: 'إعدادات النظام', icon: Settings },
+    { path: '/', label: 'نظرة عامة', icon: LayoutDashboard },
 ];
 
-const planningChildren = [
-    { path: '/planning/overview', label: 'ملخص الخطة', icon: Eye },
-    { path: '/planning/schedule', label: 'جدولة الفرق', icon: UsersRound },
-    { path: '/planning/assign', label: 'تعيين المسارات', icon: MapPinned },
+const geoChildren = [
+    { path: '/geo', label: 'إدارة المستويات الإدارية', icon: Globe },
+    { path: '/routes', label: 'إدارة خطوط السير', icon: Route },
+];
+
+const recordsChildren = [
+    { path: '/clients', label: 'سجلات الزبائن', icon: BookUser },
+    { path: '/candidates', label: 'سجلات الأسماء المقترحة', icon: UserPlus },
+    { path: '/employees', label: 'سجلات الموظفين', icon: Users },
 ];
 
 const operationsChildren = [
@@ -39,10 +37,10 @@ const operationsChildren = [
     { path: '/operations/marketing', label: 'عمليات التسويق', icon: Target },
 ];
 
-
-const contractsChildren = [
-    { path: '/contracts', label: 'سجل العقود', icon: FileText },
-    { path: '/contracts/new', label: 'عقد جديد', icon: FilePlus2 },
+const planningChildren = [
+    { path: '/planning/overview', label: 'ملخص الخطة', icon: Eye },
+    { path: '/planning/schedule', label: 'جدولة الفرق', icon: UsersRound },
+    { path: '/planning/assign', label: 'تعيين المسارات', icon: MapPinned },
 ];
 
 export default function MainLayout() {
@@ -50,15 +48,22 @@ export default function MainLayout() {
     const isPlanningActive = location.pathname.startsWith('/planning');
     const isOperationsActive = location.pathname.startsWith('/tasks');
     const isContractsActive = location.pathname.startsWith('/contracts');
+    const isGeoActive = location.pathname === '/geo' || location.pathname === '/routes';
+    const isRecordsActive = ['/clients', '/candidates', '/employees'].some(p => location.pathname.startsWith(p));
+    const isAppointmentsActive = location.pathname.startsWith('/telemarketer');
+
     const [planningOpen, setPlanningOpen] = useState(isPlanningActive);
     const [operationsOpen, setOperationsOpen] = useState(isOperationsActive);
-    const [contractsOpen, setContractsOpen] = useState(isContractsActive);
+    const [geoOpen, setGeoOpen] = useState(isGeoActive);
+    const [recordsOpen, setRecordsOpen] = useState(isRecordsActive);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const toggleSidebar = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleCollapse = () => setIsCollapsed(!isCollapsed);
     const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+    const [showCandidateModal, setShowCandidateModal] = useState(false);
+    const [candidateInitialMode, setCandidateInitialMode] = useState(false);
 
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -141,7 +146,97 @@ export default function MainLayout() {
                         </NavLink>
                     ))}
 
-                    {/* Planning Parent */}
+                    {/* 1. Records Section */}
+                    <div className={isCollapsed ? 'lg:hidden' : 'block'}>
+                        <button
+                            onClick={() => setRecordsOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isRecordsActive
+                                ? 'bg-sky-50 text-sky-600 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                        >
+                            <BookUser className="w-5 h-5" />
+                            <span className="flex-1">إدارة السجلات</span>
+                            <motion.div animate={{ rotate: recordsOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {recordsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    {recordsChildren.map(child => (
+                                        <NavLink
+                                            key={child.path}
+                                            to={child.path}
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className={({ isActive }: { isActive: boolean }) =>
+                                                `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
+                                                    ? 'text-sky-600 bg-sky-50 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`
+                                            }
+                                        >
+                                            <child.icon className="w-4 h-4" />
+                                            <span>{child.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* 2. Appointments (Separate Section) */}
+                    <NavLink
+                        to="/telemarketer"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={({ isActive }: { isActive: boolean }) =>
+                            `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
+                        }
+                    >
+                        <Headset className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                        <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة المواعيد</span>
+                    </NavLink>
+
+                    {/* 3. Contracts (Single) */}
+                    <NavLink
+                        to="/contracts"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={({ isActive }: { isActive: boolean }) =>
+                            `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
+                        }
+                    >
+                        <FileText className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                        <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة العقود</span>
+                    </NavLink>
+
+                    {/* 4. Devices (Single) */}
+                    <NavLink
+                        to="/devices"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={({ isActive }: { isActive: boolean }) =>
+                            `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
+                        }
+                    >
+                        <Gem className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                        <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة الأجهزة وقطع الغيار</span>
+                    </NavLink>
+
+                    {/* 5. Branch Operations (formerly Planning) */}
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setPlanningOpen((o: boolean) => !o)}
@@ -151,7 +246,7 @@ export default function MainLayout() {
                                 }`}
                         >
                             <ClipboardList className="w-5 h-5" />
-                            <span className="flex-1">التخطيط اليومي</span>
+                            <span className="flex-1">إدارة عمل الفرع</span>
                             <motion.div animate={{ rotate: planningOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                                 <ChevronDown className="w-3.5 h-3.5" />
                             </motion.div>
@@ -163,7 +258,6 @@ export default function MainLayout() {
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
                                     className="overflow-hidden"
                                 >
                                     {planningChildren.map(child => (
@@ -187,7 +281,7 @@ export default function MainLayout() {
                         </AnimatePresence>
                     </div>
 
-                    {/* Operations Parent */}
+                    {/* 6. Tasks & Operations */}
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setOperationsOpen((o: boolean) => !o)}
@@ -209,7 +303,6 @@ export default function MainLayout() {
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
                                     className="overflow-hidden"
                                 >
                                     {operationsChildren.map(child => (
@@ -233,36 +326,34 @@ export default function MainLayout() {
                         </AnimatePresence>
                     </div>
 
-                    {/* Contracts Parent */}
+                    {/* 7. Geo Section (Moved above Settings) */}
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
-                            onClick={() => setContractsOpen((o: boolean) => !o)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isContractsActive
+                            onClick={() => setGeoOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isGeoActive
                                 ? 'bg-sky-50 text-sky-600 font-bold'
                                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                                 }`}
                         >
-                            <FileText className="w-5 h-5" />
-                            <span className="flex-1">إدارة العقود</span>
-                            <motion.div animate={{ rotate: contractsOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                            <MapPinned className="w-5 h-5" />
+                            <span className="flex-1">إدارة المناطق الجغرافية</span>
+                            <motion.div animate={{ rotate: geoOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                                 <ChevronDown className="w-3.5 h-3.5" />
                             </motion.div>
                         </button>
 
                         <AnimatePresence initial={false}>
-                            {contractsOpen && (
+                            {geoOpen && (
                                 <motion.div
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: 'auto', opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.2 }}
                                     className="overflow-hidden"
                                 >
-                                    {contractsChildren.map(child => (
+                                    {geoChildren.map(child => (
                                         <NavLink
                                             key={child.path}
                                             to={child.path}
-                                            end={child.path === '/contracts'}
                                             onClick={() => setIsMobileMenuOpen(false)}
                                             className={({ isActive }: { isActive: boolean }) =>
                                                 `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
@@ -279,6 +370,21 @@ export default function MainLayout() {
                             )}
                         </AnimatePresence>
                     </div>
+
+                    {/* 8. System Settings (At Bottom) */}
+                    <NavLink
+                        to="/settings"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={({ isActive }: { isActive: boolean }) =>
+                            `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
+                        }
+                    >
+                        <Settings className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                        <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إعدادات النظام</span>
+                    </NavLink>
 
 
                 </nav>
@@ -308,12 +414,29 @@ export default function MainLayout() {
             </main>
 
             {/* Global FAB */}
-            <FloatingActionButton onEmergencyClick={() => setShowEmergencyModal(true)} />
+            <FloatingActionButton
+                onEmergencyClick={() => setShowEmergencyModal(true)}
+                onAddSuggested={() => {
+                    setCandidateInitialMode(false);
+                    setShowCandidateModal(true);
+                }}
+                onAddCandidate={() => {
+                    setCandidateInitialMode(true);
+                    setShowCandidateModal(true);
+                }}
+            />
 
             {/* Emergency Ticket Modal */}
             <NewEmergencyTicketModal
                 isOpen={showEmergencyModal}
                 onClose={() => setShowEmergencyModal(false)}
+            />
+
+            {/* Add Candidate Modal */}
+            <AddCandidateModal
+                isOpen={showCandidateModal}
+                onClose={() => setShowCandidateModal(false)}
+                initialDirectMode={candidateInitialMode}
             />
         </div>
     );

@@ -2,17 +2,70 @@ import type { GeoUnit, Employee, Task, DeviceModel, SparePart, MaintenanceReques
 
 export const defaultGeoUnits: GeoUnit[] = [
     { id: 1, name: 'دمشق', level: 1, parentId: null },
-    { id: 2, name: 'حلب', level: 1, parentId: null },
-    { id: 3, name: 'حمص', level: 1, parentId: null },
+    { id: 2, name: 'ريف دمشق', level: 1, parentId: null },
+    { id: 3, name: 'حلب', level: 1, parentId: null },
+    { id: 4, name: 'حمص', level: 1, parentId: null },
+
+    // --- دمشق المدينة (مركز دمشق) ---
     { id: 10, name: 'مركز دمشق', level: 2, parentId: 1 },
-    { id: 11, name: 'ريف دمشق', level: 2, parentId: 1 },
+
+    // المزة
     { id: 20, name: 'المزة', level: 3, parentId: 10 },
-    { id: 21, name: 'كفرسوسة', level: 3, parentId: 10 },
-    { id: 22, name: 'أبو رمانة', level: 3, parentId: 10 },
     { id: 30, name: 'المزة فيلات', level: 4, parentId: 20 },
     { id: 31, name: 'المزة جبل', level: 4, parentId: 20 },
-    { id: 32, name: 'تنظيم كفرسوسة', level: 4, parentId: 21 },
-    { id: 33, name: 'الروضة', level: 4, parentId: 22 },
+    { id: 32, name: 'المزة غربية', level: 4, parentId: 20 },
+
+    // كفرسوسة
+    { id: 21, name: 'كفرسوسة', level: 3, parentId: 10 },
+    { id: 33, name: 'تنظيم كفرسوسة', level: 4, parentId: 21 },
+    { id: 34, name: 'اللواتة', level: 4, parentId: 21 },
+
+    // القدم
+    { id: 40, name: 'القدم', level: 3, parentId: 10 },
+    { id: 41, name: 'القدم الغربي', level: 4, parentId: 40 },
+    { id: 42, name: 'القدم الشرقي', level: 4, parentId: 40 },
+
+    // الميدان
+    { id: 50, name: 'الميدان', level: 3, parentId: 10 },
+    { id: 51, name: 'باب مصلى', level: 4, parentId: 50 },
+    { id: 52, name: 'حي الزاهرة', level: 4, parentId: 50 },
+    { id: 53, name: 'القاعة', level: 4, parentId: 50 },
+
+    // القابون
+    { id: 60, name: 'القابون', level: 3, parentId: 10 },
+    { id: 61, name: 'حي القابون السكني', level: 4, parentId: 60 },
+    { id: 62, name: 'المنطقة الصناعية (القابون)', level: 4, parentId: 60 },
+
+    // برزة
+    { id: 70, name: 'برزة', level: 3, parentId: 10 },
+    { id: 71, name: 'مساكن برزة', level: 4, parentId: 70 },
+    { id: 72, name: 'برزة البلد', level: 4, parentId: 70 },
+    { id: 73, name: 'عش الورور', level: 4, parentId: 70 },
+
+    // جوبر
+    { id: 80, name: 'جوبر', level: 3, parentId: 10 },
+    { id: 81, name: 'حي جوبر القديم', level: 4, parentId: 80 },
+    { id: 82, name: 'عين ترما (جزء دمشق)', level: 4, parentId: 80 },
+
+    // --- ريف دمشق ---
+    { id: 100, name: 'منطقة مركز الريف', level: 2, parentId: 2 },
+
+    // جرمانا
+    { id: 110, name: 'جرمانا', level: 3, parentId: 100 },
+    { id: 111, name: 'النهضة', level: 4, parentId: 110 },
+    { id: 112, name: 'حي الروضة (جرمانا)', level: 4, parentId: 110 },
+    { id: 113, name: 'كشكول', level: 4, parentId: 110 },
+
+    // دوما
+    { id: 120, name: 'دوما', level: 2, parentId: 2 },
+    { id: 121, name: 'مدينة دوما', level: 3, parentId: 120 },
+    { id: 122, name: 'العب', level: 4, parentId: 121 },
+
+    // التل
+    { id: 130, name: 'التل', level: 2, parentId: 2 },
+    { id: 131, name: 'مدينة التل', level: 3, parentId: 130 },
+    { id: 132, name: 'حرنة', level: 4, parentId: 131 },
+    { id: 133, name: 'سيدنايا', level: 3, parentId: 130 },
 ];
 
 export const defaultEmployees: Employee[] = [

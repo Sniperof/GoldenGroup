@@ -11,6 +11,7 @@ import { defaultGeoUnits } from '../../lib/defaultData';
 interface AddCandidateModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialDirectMode?: boolean;
 }
 function simpleUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -29,7 +30,7 @@ const initialCandidateState = {
     candidateNotes: ''
 };
 
-export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModalProps) {
+export default function AddCandidateModal({ isOpen, onClose, initialDirectMode }: AddCandidateModalProps) {
     const addCandidate = useCandidateStore((state: any) => state.addCandidate);
     const referralSheets = useCandidateStore((state: any) => state.referralSheets); // Updated
 
@@ -37,7 +38,14 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
     const activeSheets = useMemo(() => referralSheets.filter((s: any) => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
 
     // Mode Toggle
-    const [isDirectMode, setIsDirectMode] = useState(false);
+    const [isDirectMode, setIsDirectMode] = useState(initialDirectMode || false);
+
+    // Sync isDirectMode if prop changes (optional but good for reuse)
+    useEffect(() => {
+        if (isOpen) {
+            setIsDirectMode(initialDirectMode || false);
+        }
+    }, [isOpen, initialDirectMode]);
 
     // Section A: Mode B (Sheet-based)
     const [selectedSheetId, setSelectedSheetId] = useState<number | ''>('');
@@ -250,6 +258,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         setIsDirectMode(false);
         setSelectedSheetId('');
         setCandidateData(initialCandidateState);
+        setReferralType('Personal');
         setReferralNameSnapshot('أحمد (مشرف)');
         setReferralDate(new Date().toISOString().split('T')[0]);
         setError('');
@@ -366,10 +375,10 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                                 disabled={referralType === 'Personal' || referralType === 'Unknown'}
                                                 className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm disabled:bg-slate-50 disabled:text-slate-500"
                                             >
-                                                <option value="App">تطبيق</option>
-                                                <option value="Visit">زيارة</option>
-                                                <option value="Campaign">حملة</option>
-                                                <option value="Acquaintance">معرفة</option>
+                                                <option value="App">سوشال ميديا</option>
+                                                <option value="Visit">زيارة ميدانية</option>
+                                                <option value="Campaign">حملة إعلانية</option>
+                                                <option value="Acquaintance">معرفة شخصية</option>
                                             </select>
                                         </div>
                                     </div>
@@ -572,7 +581,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                             </div>
 
                             <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ملاحظات عن الاسم المقترح</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ملاحظات الوسيط</label>
                                 <textarea value={candidateData.candidateNotes} onChange={e => setCandidateData({ ...candidateData, candidateNotes: e.target.value })} rows={3} className="w-full p-3 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm resize-none" />
                             </div>
                         </div>

@@ -67,7 +67,7 @@ export default function MarketingOperationsContent() {
                         <Target className="w-6 h-6 text-indigo-600" />
                         عمليات التسويق
                     </h1>
-                    <p className="text-slate-500 mt-1">لوحة تحكم مدير التسويق الهاتفي لاستعراض ومتابعة قوائم الاتصال المتاحة.</p>
+                    <p className="text-slate-500 mt-1">لوحة تحكم مدير الفرع لاستعراض ومتابعة الزبائن المحتملين.</p>
                 </div>
             </div>
 

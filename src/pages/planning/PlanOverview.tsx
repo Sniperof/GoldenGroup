@@ -22,13 +22,22 @@ const levelColors: Record<number, { bg: string; text: string }> = {
 
 const formatDateArabic = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return d.toLocaleDateString('ar-SY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const shiftDate = (dateStr: string, days: number) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        d.setDate(d.getDate() + days);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
 };
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -204,7 +213,7 @@ export default function PlanOverview() {
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <h1 className="text-xl font-bold text-slate-900 mb-1">ملخص الخطة</h1>
-                    <p className="text-slate-500 text-sm">نظرة شاملة على جداول العمل اليومية — من يذهب أين.</p>
+                    <p className="text-slate-500 text-sm">نظرة شاملة على جداول العمل اليومية — من يذهب إلى أين.</p>
                 </div>
             </div>
 
@@ -212,23 +221,39 @@ export default function PlanOverview() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 flex items-center justify-center gap-4">
                 <button
                     onClick={() => setDate(d => shiftDate(d, -1))}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 text-sm transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 hover:border-gray-300 text-sm transition-all active:scale-95 z-10"
                 >
                     <ChevronRight className="w-4 h-4" />
                     <span>الأمس</span>
                 </button>
 
-                <div className="flex items-center gap-3 px-6 py-2 rounded-xl bg-gray-50 border border-gray-200">
-                    <Calendar className="w-5 h-5 text-sky-600" />
-                    <div className="text-center">
+                <div
+                    className="flex items-center gap-3 px-6 py-2 rounded-xl bg-gray-50 border border-gray-200 relative group/cal cursor-pointer hover:bg-white hover:border-sky-300 transition-all shadow-sm"
+                    onClick={(e) => {
+                        const input = e.currentTarget.querySelector('input');
+                        if (input) input.showPicker();
+                    }}
+                >
+                    <Calendar className="w-5 h-5 text-sky-600 group-hover/cal:scale-110 transition-transform" />
+                    <div className="text-center pointer-events-none">
                         <p className="text-slate-900 font-bold">{formatDateArabic(date)}</p>
                         {isToday && <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">اليوم</span>}
                     </div>
+                    {/* Native Date Input Overlay */}
+                    <input
+                        type="date"
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        value={date}
+                        onChange={(e) => {
+                            if (e.target.value) setDate(e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    />
                 </div>
 
                 <button
                     onClick={() => setDate(d => shiftDate(d, 1))}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 text-sm transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 hover:border-gray-300 text-sm transition-all active:scale-95 z-10"
                 >
                     <span>الغد</span>
                     <ChevronLeft className="w-4 h-4" />
@@ -243,7 +268,7 @@ export default function PlanOverview() {
                     </div>
                     <div>
                         <p className="text-2xl font-bold text-slate-900">{totalTeams}</p>
-                        <p className="text-xs text-slate-500">إجمالي الفرق والوحدات</p>
+                        <p className="text-xs text-slate-500">إجمالي الفرق</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-3">
@@ -252,7 +277,7 @@ export default function PlanOverview() {
                     </div>
                     <div>
                         <p className="text-2xl font-bold text-emerald-600">{assignedTeams}</p>
-                        <p className="text-xs text-slate-500">فرق معينة مسارات</p>
+                        <p className="text-xs text-slate-500">فرق تم تعيين مسار لها</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-3">

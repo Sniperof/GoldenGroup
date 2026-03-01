@@ -24,7 +24,7 @@ export default function Dashboard() {
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-900 mb-1">لوحة القيادة</h1>
+                <h1 className="text-2xl font-bold text-slate-900 mb-1">نظرة عامة</h1>
                 <p className="text-slate-500 text-sm">نظرة عامة على أداء النظام والبيانات.</p>
             </div>
 

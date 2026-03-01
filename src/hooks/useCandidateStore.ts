@@ -26,7 +26,7 @@ const mockSheets: ReferralSheet[] = [
         id: 1,
         referralType: 'Client',
         referralEntityId: 101, // Ahmed
-        referralNameSnapshot: 'أحمد السوري',
+        referralNameSnapshot: 'محمد حسين',
         referralAddressText: 'دمشق، المزة',
         referralOriginChannel: 'Acquaintance',
         referralNotes: 'أحمد صديق قديم من دمشق',
@@ -62,7 +62,7 @@ const mockCandidates: Candidate[] = [
         referralReason: 'أحمد رشحه بالورقة',
         referralType: 'Client',
         referralOriginChannel: 'Acquaintance',
-        referralNameSnapshot: 'أحمد السوري',
+        referralNameSnapshot: 'محمد حسين',
         referralEntityId: 101,
         referralConfirmationStatus: 'Pending',
         geoUnitId: 6,
@@ -255,7 +255,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
             let savedClient: Client;
             if (clientData) {
                 // We use the ID if provided, or generate a final one just in case
-                const newId = clientData.id || (clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1);
+                const newId = clientData.id || (clients.length > 0 ? Math.max(1000, ...clients.map(c => c.id)) + 1 : 1001);
                 savedClient = { ...clientData, id: newId };
                 // Filter out the client from list if it was somehow added, though in our flow it shouldn't be yet
                 const otherClients = clients.filter(c => c.id !== newId && c.mobile !== savedClient.mobile);
@@ -271,7 +271,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                 }
 
                 savedClient = {
-                    id: clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1,
+                    id: clients.length > 0 ? Math.max(1000, ...clients.map(c => c.id)) + 1 : 1001,
                     firstName: candidate.firstName || '',
                     fatherName: '',
                     lastName: candidate.lastName || '',

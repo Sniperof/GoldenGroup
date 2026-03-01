@@ -120,7 +120,7 @@ export default function RouteManager() {
         <div className="h-full overflow-y-auto p-8 custom-scroll relative">
             <div className="flex items-end justify-between mb-6">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900 mb-1">إدارة المسارات</h1>
+                    <h1 className="text-xl font-bold text-slate-900 mb-1">إدارة خطوط السير</h1>
                     <p className="text-slate-500 text-sm">عرض وإدارة مسارات التوزيع والصيانة.</p>
                 </div>
                 <button onClick={() => openBuilder()} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all">

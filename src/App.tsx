@@ -58,6 +58,7 @@ export default function App() {
                         <Route path="/tasks/followup" element={<FollowUp />} />
                         <Route path="/operations/marketing" element={<MarketingOperations />} />
                         <Route path="/contracts" element={<ContractList />} />
+                        <Route path="/contracts/new" element={<ContractForm />} />
 
                         <Route path="/telemarketer" element={<TelemarketerWorkspace />} />
                         <Route path="/settings" element={<SystemSettings />} />
