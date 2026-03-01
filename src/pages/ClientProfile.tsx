@@ -288,10 +288,10 @@ export default function ClientProfile() {
 function OverviewTab({ client }: { client: Client }) {
     const activities = [
         { type: 'call', date: 'منذ ساعتين', title: 'مكالمة متابعة سريعة', desc: 'تأكيد رضا الزبون بعد الصيانة الأخيرة.', status: 'completed' },
-        { type: 'visit', date: 'أمس، 10:00 ص', title: 'زيارة دورية فنية', desc: 'تم تبديل الفلاتر الأساسية والتأكد من TDS.', status: 'completed' },
-        { type: 'referral', date: '15 فبراير', title: 'ترشيح زبون جديد', desc: 'قام بترشيح صديقه "محمد الجاسم" بنجاح.', status: 'new' },
-        { type: 'contract', date: '10 يناير', title: 'توقيع عقد جديد', desc: 'توقيع عقد شراء جهاز RO 7 مراحل.', status: 'completed' },
-        { type: 'visit', date: '5 يناير', title: 'زيارة تسويق مبدئية', desc: 'تم تقييم موقع التركيب وشرح العروض.', status: 'completed' },
+        { type: 'visit', date: 'أمس، 10:00 ص', title: 'زيارة صيانة دورية ', desc: 'تم تبديل الفلاتر الأساسية.', status: 'completed' },
+        { type: 'referral', date: '15 فبراير', title: 'ترشيح زبون جديد', desc: 'قام بترشيح "محمد الجاسم" .', status: 'new' },
+        { type: 'contract', date: '10 يناير', title: 'إضافة عقد جديد', desc: 'توقيع عقد شراء جهاز RO 7 مراحل.', status: 'completed' },
+        { type: 'visit', date: '5 يناير', title: 'زيارة تسويق ', desc: 'تم تقييم موقع التركيب وشرح العروض.', status: 'completed' },
     ];
 
     return (

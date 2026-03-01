@@ -13,7 +13,7 @@ const statusConfig: Record<string, { label: string; style: string }> = {
     completed: { label: 'مكتمل', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric' });
+const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' });
 
 export default function Periodic() {
     const tasks = defaultTasks.filter(t => t.type === 'periodic');
@@ -38,7 +38,7 @@ export default function Periodic() {
     ];
 
     return (
-        <>
+        <div className="p-8 h-full flex flex-col overflow-hidden">
             <SmartTable<Task>
                 title="الصيانة الدورية"
                 icon={Wrench}
@@ -62,6 +62,6 @@ export default function Periodic() {
                 onClose={() => setSelectedCustomer(null)}
                 customerName={selectedCustomer}
             />
-        </>
+        </div>
     );
 }

@@ -197,7 +197,7 @@ export default function EmergencyTasks() {
     );
 
     return (
-        <div className="p-6 h-full overflow-y-auto">
+        <div className="p-6 h-full flex flex-col overflow-hidden">
             <SmartTable<EmergencyTicket>
                 title="طوارئ الصيانة"
                 icon={ShieldAlert}

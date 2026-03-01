@@ -197,7 +197,7 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                             <CheckCircle2 className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <div className="text-sm font-bold text-emerald-900">تحويل لزبون محتمل</div>
+                                            <div className="text-sm font-bold text-emerald-900">تحويل لاسم مرشح جديد</div>
                                             <div className="text-xs text-emerald-700 mt-0.5">فتح استمارة الزبون مع نقل كافة البيانات</div>
                                         </div>
                                     </button>

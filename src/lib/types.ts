@@ -219,8 +219,8 @@ export interface DeviceModel {
     id: number;
     name: string;
     brand: string;
-    category: 'منزلي' | 'صناعي';
-    maintenanceInterval: ' 3 أشهر' | '6 أشهر' | '1 سنة';
+    category: 'منزلي' | 'صناعي' | 'تجاري';
+    maintenanceInterval: '3 أشهر' | '6 أشهر' | '1 سنة';
     basePrice: number;
     supportedVisitTypes: ('تركيب' | 'صيانة' | 'توصيل')[];
 }
@@ -346,6 +346,7 @@ export interface CallLog {
     notes: string;
     timestamp: string;
     calledBy: number;
+    communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice';
 }
 
 export interface Appointment {

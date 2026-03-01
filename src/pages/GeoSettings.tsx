@@ -115,76 +115,73 @@ export default function GeoSettings() {
     const columnsByLevel: Record<number, ColumnDef<GeoUnit>[]> = { 1: govColumns, 2: regionColumns, 3: subDistrictColumns, 4: neighborhoodColumns };
     const currentData = byLevel(activeTab);
     const currentTab = tabs.find(t => t.level === activeTab)!;
-
     return (
-        <>
-            <div className="h-full overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="px-8 pt-8 pb-0">
-                    <div className="flex items-end justify-between mb-5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
-                                <Globe className="w-5 h-5 text-sky-600" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-slate-900 leading-tight">الهيكل الجغرافي</h1>
-                                <p className="text-slate-500 text-xs mt-0.5">{geoUnits.length} وحدة جغرافية</p>
-                            </div>
+        <div className="h-full overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-8 pt-8 pb-0">
+                <div className="flex items-end justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+                            <Globe className="w-5 h-5 text-sky-600" />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={resetData} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm transition-all">
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                <span>إعادة تعيين</span>
-                            </button>
+                        <div>
+                            <h1 className="text-xl font-bold text-slate-900 leading-tight">إدارة المستويات الإدارية</h1>
+                            <p className="text-slate-500 text-xs mt-0.5">{geoUnits.length} وحدة جغرافية</p>
                         </div>
                     </div>
-
-                    {/* Tabs */}
-                    <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.level}
-                                onClick={() => setActiveTab(tab.level)}
-                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.level
-                                    ? 'bg-white shadow-sm text-sky-600 font-bold'
-                                    : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                            >
-                                <tab.icon className="w-4 h-4" />
-                                <span>{tab.label}</span>
-                                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${activeTab === tab.level ? 'bg-sky-50 text-sky-600' : 'bg-gray-200 text-gray-500'}`}>
-                                    {byLevel(tab.level).length}
-                                </span>
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-2">
+                        <button onClick={resetData} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm transition-all">
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>إعادة تعيين</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* Table Content */}
-                <div className="flex-1 overflow-hidden">
-                    <SmartTable<GeoUnit>
-                        title={currentTab.label}
-                        icon={currentTab.icon}
-                        data={currentData}
-                        columns={columnsByLevel[activeTab]}
-                        searchKeys={['name']}
-                        searchPlaceholder={`بحث في ${currentTab.label}...`}
-                        getId={(u) => u.id}
-                        actions={(u) => (
-                            <button onClick={() => deleteUnit(u.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        )}
-                        headerActions={
-                            <button onClick={openAddModal} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
-                                <Plus className="w-4 h-4" />
-                                <span>إضافة {levelNames[activeTab]}</span>
-                            </button>
-                        }
-                        emptyIcon={currentTab.icon}
-                        emptyMessage={`لا توجد ${currentTab.label}`}
-                    />
+                {/* Tabs */}
+                <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.level}
+                            onClick={() => setActiveTab(tab.level)}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === tab.level
+                                ? 'bg-white shadow-sm text-sky-600 font-bold'
+                                : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                        >
+                            <tab.icon className="w-4 h-4" />
+                            <span>{tab.label}</span>
+                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${activeTab === tab.level ? 'bg-sky-50 text-sky-600' : 'bg-gray-200 text-gray-500'}`}>
+                                {byLevel(tab.level).length}
+                            </span>
+                        </button>
+                    ))}
                 </div>
+            </div>
+
+            {/* Table Content */}
+            <div className="flex-1 min-h-0">
+                <SmartTable<GeoUnit>
+                    title={currentTab.label}
+                    icon={currentTab.icon}
+                    data={currentData}
+                    columns={columnsByLevel[activeTab]}
+                    searchKeys={['name']}
+                    searchPlaceholder={`بحث في ${currentTab.label}...`}
+                    getId={(u) => u.id}
+                    actions={(u) => (
+                        <button onClick={() => deleteUnit(u.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                    headerActions={
+                        <button onClick={openAddModal} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all">
+                            <Plus className="w-4 h-4" />
+                            <span>إضافة {levelNames[activeTab]}</span>
+                        </button>
+                    }
+                    emptyIcon={currentTab.icon}
+                    emptyMessage={`لا توجد ${currentTab.label}`}
+                />
             </div>
 
             {/* ============ Add Modal ============ */}
@@ -281,6 +278,6 @@ export default function GeoSettings() {
                     </div>
                 )}
             </AnimatePresence>
-        </>
+        </div>
     );
 }

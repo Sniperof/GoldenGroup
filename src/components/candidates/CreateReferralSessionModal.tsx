@@ -18,10 +18,10 @@ const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
 ];
 
 const channels: { value: ReferralOriginChannel; label: string }[] = [
-    { value: 'App', label: 'تطبيق' },
+    { value: 'App', label: 'سوشال ميديا' },
     { value: 'Visit', label: 'زيارة' },
-    { value: 'Campaign', label: 'حملة' },
-    { value: 'Acquaintance', label: 'معرفة' }
+    { value: 'Campaign', label: 'حملة إعلانية' },
+    { value: 'Acquaintance', label: 'معرفة شخصية' }
 ];
 
 export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreated }: Props) {
@@ -29,7 +29,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Acquaintance');
-    const [nameSnapshot, setNameSnapshot] = useState('أحمد (مشرف)');
+    const [nameSnapshot, setNameSnapshot] = useState('إبراهيم (مشرف)');
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
@@ -69,7 +69,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
         if (referralType === 'Personal') {
             setOriginChannel('Acquaintance');
-            setNameSnapshot('أحمد (مشرف)'); // Currently assuming supervisor Ahmad is logged in
+            setNameSnapshot('إبراهيم (مشرف)'); // Currently assuming supervisor Ahmad is logged in
         } else if (referralType === 'Unknown') {
             setNameSnapshot('مجهول');
         }
@@ -149,7 +149,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     const resetState = () => {
         setReferralType('Personal');
         setOriginChannel('Acquaintance');
-        setNameSnapshot('أحمد (مشرف)');
+        setNameSnapshot('إبراهيم (مشرف)');
         setEmployeeIdInput('');
         setEmployeeFound(null);
         setEmployeeSearchError('');
@@ -174,7 +174,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             <PlusCircle className="w-5 h-5 text-amber-600" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-slate-800">إضافة ورقة ترشيح جديدة (New Referral Sheet)</h2>
+                            <h2 className="text-xl font-bold text-slate-800">إضافة ورقة ترشيح جديدة </h2>
                             <p className="text-sm text-slate-500">تسجيل قائمة أسماء جديدة تحت وسيط محدد</p>
                         </div>
                     </div>
@@ -193,7 +193,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">نوع الوسيط (Mediator Type)</label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">نوع الوسيط </label>
                             <select
                                 value={referralType}
                                 onChange={(e) => setReferralType(e.target.value as ReferralType)}
@@ -203,7 +203,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">طريقة الوصول (Method)</label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">طريقة الوصول</label>
                             <select
                                 value={originChannel}
                                 onChange={(e) => setOriginChannel(e.target.value as ReferralOriginChannel)}
@@ -218,7 +218,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                     {/* DYNAMIC MEDIATOR RENDER */}
                     {referralType === 'Employee' && (
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">رقم الموظف (Employee ID) <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">رقم الموظف <span className="text-red-500">*</span></label>
                             <div className="flex items-center gap-3">
                                 <input
                                     type="text"
@@ -246,7 +246,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
                     {referralType === 'Client' && (
                         <div ref={clientSearchRef} className="relative">
-                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الزبون (Client Name) <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الزبون <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={clientSearch}
@@ -273,7 +273,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
                     {(referralType === 'Personal' || referralType === 'Unknown') && (
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط / المصدر (Mediator Name) <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={nameSnapshot}
@@ -284,7 +284,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                     )}
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">تاريخ الورقة (Sheet Date) <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">تاريخ الورقة <span className="text-red-500">*</span></label>
                         <input
                             type="date"
                             value={referralDate}
@@ -294,7 +294,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">ملاحظات عامة (Notes)</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">ملاحظات عامة</label>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}

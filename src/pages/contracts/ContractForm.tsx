@@ -223,7 +223,7 @@ export default function ContractForm() {
     const legalResolved = (!needsFatherName || fatherNameOverride.trim().length > 0) && (!needsNationalId || nationalIdOverride.trim().length > 0);
 
     const currencySymbol = currency === 'SYP' ? 'ل.س' : '$';
-    const formatPrice = (n: number) => `${n.toLocaleString('ar-IQ')} ${currencySymbol}`;
+    const formatPrice = (n: number) => `${n.toLocaleString('ar-SY')} ${currencySymbol}`;
 
     // ─── Generate schedule ───
     const generateSchedule = useCallback(() => {
@@ -654,7 +654,7 @@ export default function ContractForm() {
                         <div className="relative">
                             <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 pointer-events-none" />
                             <input type="text"
-                                value={priceOverride || (selectedDevice ? basePrice.toLocaleString('ar-IQ') : '')}
+                                value={priceOverride || (selectedDevice ? basePrice.toLocaleString('ar-SY') : '')}
                                 onChange={e => setPriceOverride(e.target.value.replace(/[^\d]/g, ''))}
                                 placeholder="السعر النهائي" className={`${inputClass} pr-10 font-mono`} dir="ltr" />
                         </div>
@@ -754,7 +754,7 @@ export default function ContractForm() {
                                                                             <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 text-[10px] font-bold inline-flex items-center justify-center">{idx + 1}</span>
                                                                         </td>
                                                                         <td className="px-4 py-2.5 text-slate-700 text-sm">
-                                                                            {new Date(item.date + 'T00:00:00').toLocaleDateString('ar-IQ', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                                            {new Date(item.date + 'T00:00:00').toLocaleDateString('ar-SY', { year: 'numeric', month: 'long', day: 'numeric' })}
                                                                         </td>
                                                                         <td className="px-4 py-2.5 text-left font-mono font-bold text-slate-800 text-sm" dir="ltr">
                                                                             {formatPrice(item.amount)}

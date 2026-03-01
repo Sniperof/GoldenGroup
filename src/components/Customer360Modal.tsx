@@ -26,7 +26,7 @@ const statusConfig: Record<string, { label: string; style: string; icon: any }> 
     completed: { label: 'مكتمل', style: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
 };
 
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric', year: 'numeric' });
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */

@@ -114,7 +114,7 @@ export default function Clients() {
         } else {
             const newClient = {
                 ...clientData,
-                id: Math.max(0, ...clients.map(c => c.id)) + 1,
+                id: Math.max(1000, ...clients.map(c => c.id)) + 1,
                 createdAt: new Date().toISOString(),
                 status: 'Suggested',
                 isCandidate: false // Force false now that tabs are gone
@@ -226,7 +226,7 @@ export default function Clients() {
                             <div className={`p-2 rounded-xl ${kpi.bg} ${kpi.color} group-hover:scale-110 transition-transform`}>
                                 <kpi.icon className="w-5 h-5" />
                             </div>
-                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Live KPI</span>
+                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">مؤشرات مباشرة</span>
                         </div>
                         <p className="text-xs font-bold text-slate-400 mb-1">{kpi.label}</p>
                         <p className={`text-xl font-black ${kpi.color}`}>{kpi.value}</p>
@@ -289,37 +289,35 @@ export default function Clients() {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* 4. Main Data Table */}
-            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden min-h-0">
-                <div className="flex-1 overflow-y-auto custom-scroll">
-                    <SmartTable<Client & { lifecycleStage: string }>
-                        title="جدول بيانات الزبائن"
-                        icon={Users}
-                        hideFilterBar={true}
-                        data={mainList}
-                        columns={clientColumns}
-                        getId={(c) => c.id}
-                        onRowClick={(c) => navigate(`/clients/${c.id}`)}
-                        bulkActions={[
-                            { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} سجلاً؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
-                        ]}
-                        actions={(c) => (
-                            <div className="flex items-center gap-1">
-                                <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100" title="تعديل بيانات الزبون">
-                                    <Pencil className="w-4 h-4" />
-                                </button>
-                                <button onClick={(e) => { e.stopPropagation(); alert(`Opening map for coordinates: ${c.gpsCoordinates?.lat}, ${c.gpsCoordinates?.lng}`); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-emerald-500 transition-all border border-transparent hover:border-gray-100" title="فتح الموقع على الخريطة">
-                                    <MapPin className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
-                        emptyIcon={Users}
-                        emptyMessage="لا يوجد سجلات زبائن حالياً"
-                    />
-                </div>
-            </div>
+            < div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col" >
+                <SmartTable<Client & { lifecycleStage: string }>
+                    title="جدول بيانات الزبائن"
+                    icon={Users}
+                    hideFilterBar={true}
+                    data={mainList}
+                    columns={clientColumns}
+                    getId={(c) => c.id}
+                    onRowClick={(c) => navigate(`/clients/${c.id}`)}
+                    bulkActions={[
+                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} سجلاً؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                    ]}
+                    actions={(c) => (
+                        <div className="flex items-center gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100" title="تعديل بيانات الزبون">
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); alert(`Opening map for coordinates: ${c.gpsCoordinates?.lat}, ${c.gpsCoordinates?.lng}`); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-emerald-500 transition-all border border-transparent hover:border-gray-100" title="فتح الموقع على الخريطة">
+                                <MapPin className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
+                    emptyIcon={Users}
+                    emptyMessage="لا يوجد سجلات زبائن حالياً"
+                />
+            </div >
 
             <ClientModal
                 isOpen={isModalOpen}
@@ -328,6 +326,6 @@ export default function Clients() {
                 initialData={editingClient}
                 geoUnits={geoUnits}
             />
-        </div>
+        </div >
     );
 }
