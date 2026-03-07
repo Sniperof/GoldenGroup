@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, PlusCircle, Building2, User, PhoneCall, Handshake, Search } from 'lucide-react';
 import { ReferralType, ReferralOriginChannel } from '../../lib/types';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
-import { defaultGeoUnits } from '../../lib/defaultData';
+import { api } from '../../lib/api';
+import type { GeoUnit } from '../../lib/types';
 
 interface Props {
     isOpen: boolean;
@@ -35,6 +36,11 @@ const channels: { value: ReferralOriginChannel; label: string }[] = [
 export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreated }: Props) {
     const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    useEffect(() => {
+        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+    }, []);
+
     const [referralType, setReferralType] = useState<ReferralType>('Existing Client');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
     const [nameSnapshot, setNameSnapshot] = useState('');
@@ -43,19 +49,18 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!nameSnapshot.trim() || !referralDate) {
             setError('الرجاء تعبئة جميع الحقول الإلزامية (اسم الوسيط، وتاريخ الورقة).');
             return;
         }
 
-        // Get readable address from selection
         const unitId = addressSelection.neighborhoodId || addressSelection.subId || addressSelection.regionId || addressSelection.govId;
-        const matchingUnit = defaultGeoUnits.find(u => u.id === Number(unitId));
+        const matchingUnit = geoUnits.find(u => u.id === Number(unitId));
         const addressText = matchingUnit ? matchingUnit.name : 'غير محدد';
 
         try {
-            const newId = addReferralSheet({
+            const newId = await addReferralSheet({
                 referralType,
                 referralOriginChannel: originChannel,
                 referralNameSnapshot: nameSnapshot,
@@ -63,7 +68,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                 referralEntityId: null, 
                 referralDate: new Date(referralDate).toISOString(),
                 referralNotes: notes,
-                ownerUserId: 1, // Auto-assigned to current supervisor (Mocked)
+                ownerUserId: 1,
                 status: 'New',
                 createdBy: 1
             });
@@ -163,7 +168,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                     <div>
                         <GeoSmartSearch
                             label="النطاق الجغرافي / منطقة العمل"
-                            geoUnits={defaultGeoUnits}
+                            geoUnits={geoUnits}
                             value={addressSelection}
                             onChange={setAddressSelection}
                             placeholder="ابحث عن المنطقة المستهدفة..."

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, UserPlus, Save, PlusCircle, Building2, User, Search, MapPin, Calendar, FileText } from 'lucide-react';
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
-import { defaultGeoUnits } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
+import type { GeoUnit } from '../../lib/types';
 import CreateReferralSheetModal from './CreateReferralSessionModal'; // Filename kept for now, component renamed
 import { ReferralType, ReferralOriginChannel } from '../../lib/types';
 
@@ -23,6 +24,11 @@ const initialCandidateState = {
 export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModalProps) {
     const addCandidate = useCandidateStore(state => state.addCandidate);
     const referralSheets = useCandidateStore(state => state.referralSheets); // Updated
+
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    useEffect(() => {
+        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+    }, []);
 
     // Filter only active sheets (New or In-Progress)
     const activeSheets = useMemo(() => referralSheets.filter(s => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
@@ -67,11 +73,11 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         return true;
     };
 
-    const handleSave = (addAnother: boolean) => {
+    const handleSave = async (addAnother: boolean) => {
         if (!validateForm()) return;
 
         const candidateUnitId = candidateData.locationSelection.neighborhoodId || candidateData.locationSelection.subId || candidateData.locationSelection.regionId || candidateData.locationSelection.govId;
-        const candidateAddressText = defaultGeoUnits.find(u => u.id === Number(candidateUnitId))?.name || 'غير محدد';
+        const candidateAddressText = geoUnits.find(u => u.id === Number(candidateUnitId))?.name || 'غير محدد';
 
         try {
             if (!isDirectMode) {
@@ -79,7 +85,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                 const sheet = activeSheets.find(s => s.id === selectedSheetId);
                 if (!sheet) throw new Error("الورقة المحددة غير صالحة");
 
-                addCandidate({
+                await addCandidate({
                     firstName: candidateData.firstName || null,
                     nickname: candidateData.nickname || null,
                     lastName: candidateData.lastName,
@@ -101,16 +107,16 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
             } else {
                 // Mode A: Direct
                 const contextUnitId = referralContextAddress.neighborhoodId || referralContextAddress.subId || referralContextAddress.regionId || referralContextAddress.govId;
-                const contextAddressText = defaultGeoUnits.find(u => u.id === Number(contextUnitId))?.name || 'غير محدد';
+                const contextAddressText = geoUnits.find(u => u.id === Number(contextUnitId))?.name || 'غير محدد';
 
-                addCandidate({
+                await addCandidate({
                     firstName: candidateData.firstName || null,
                     nickname: candidateData.nickname || null,
                     lastName: candidateData.lastName,
                     mobile: candidateData.mobile,
                     addressText: candidateAddressText,
 
-                    referralSheetId: null, // Direct has no sheet
+                    referralSheetId: null,
                     referralDate: new Date(referralDate).toISOString(),
                     referralReason,
                     referralType,
@@ -286,7 +292,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                             </div>
 
                             <div>
-                                <GeoSmartSearch label="موقع سكن المرشح" geoUnits={defaultGeoUnits} value={candidateData.locationSelection} onChange={loc => setCandidateData({ ...candidateData, locationSelection: loc })} />
+                                <GeoSmartSearch label="موقع سكن المرشح" geoUnits={geoUnits} value={candidateData.locationSelection} onChange={loc => setCandidateData({ ...candidateData, locationSelection: loc })} />
                             </div>
 
                             <div>

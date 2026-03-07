@@ -12,7 +12,13 @@ export default defineConfig({
         port: 5000,
         allowedHosts: true,
         watch: {
-            ignored: ['**/.local/**', '**/.cache/**', '**/.git/**'],
+            ignored: ['**/.local/**', '**/.cache/**', '**/.git/**', '**/server/**'],
+        },
+        proxy: {
+            '/api': {
+                target: 'http://localhost:3000',
+                changeOrigin: true,
+            },
         },
     },
 })

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Settings, Database, Trash2, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
 
 export default function SystemSettings() {
     const [isClearing, setIsClearing] = useState(false);
@@ -10,7 +9,6 @@ export default function SystemSettings() {
     const handleClearData = () => {
         setIsClearing(true);
         setTimeout(() => {
-            StorageManager.clearAll();
             window.location.reload();
         }, 1000);
     };
@@ -45,7 +43,7 @@ export default function SystemSettings() {
                             <div>
                                 <h3 className="text-sm font-bold text-amber-800 mb-1">منطقة الخطر</h3>
                                 <p className="text-xs text-amber-700 leading-relaxed">
-                                    الإجراءات هنا غير قابلة للتراجع. حذف البيانات سيؤدي إلى مسح جميع السجلات المحلية (العملاء، المسارات، المهام) وإعادة التطبيق إلى حالته الافتراضية.
+                                    البيانات مخزنة في قاعدة البيانات. إعادة التحميل ستقوم بتحديث التطبيق وجلب أحدث البيانات من الخادم.
                                 </p>
                             </div>
                         </div>
@@ -53,7 +51,7 @@ export default function SystemSettings() {
                         <div className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-white hover:bg-gray-50 transition-colors">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-700">إعادة ضبط المصنع (حذف الكل)</h3>
-                                <p className="text-xs text-slate-500 mt-1">مسح التخزين المحلي LocalStorage وإعادة تحميل التطبيق.</p>
+                                <p className="text-xs text-slate-500 mt-1">إعادة تحميل التطبيق</p>
                             </div>
 
                             {!showConfirm ? (
