@@ -1,13 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, ChevronRight, Calendar, Users, User, Route as RouteIcon,
-    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye
+    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye, PhoneCall, Loader2
 } from 'lucide-react';
-import { StorageManager } from '../../lib/storage';
-import { defaultGeoUnits, defaultEmployees, levelNames } from '../../lib/defaultData';
-import type { Route, GeoUnit, DaySchedule, RouteAssignmentData } from '../../lib/types';
+import { api } from '../../lib/api';
+import { levelNames } from '../../lib/defaultData';
+import type { Route, GeoUnit, DaySchedule, RouteAssignmentData, Contract, Visit } from '../../lib/types';
+import { useCandidateStore } from '../../hooks/useCandidateStore';
+import { useClientStore } from '../../hooks/useClientStore';
+import { useTelemarketingStore } from '../../hooks/useTelemarketingStore';
+import TeamDetailsModal from '../../components/planning/TeamDetailsModal';
 
 const levelColors: Record<number, { bg: string; text: string }> = {
     1: { bg: 'bg-purple-50', text: 'text-purple-700' },
@@ -18,13 +22,22 @@ const levelColors: Record<number, { bg: string; text: string }> = {
 
 const formatDateArabic = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return d.toLocaleDateString('ar-SY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const shiftDate = (dateStr: string, days: number) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        d.setDate(d.getDate() + days);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    } catch (e) {
+        return dateStr;
+    }
 };
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -32,15 +45,64 @@ const getToday = () => new Date().toISOString().split('T')[0];
 export default function PlanOverview() {
     const navigate = useNavigate();
     const [date, setDate] = useState(getToday);
+    const [loading, setLoading] = useState(true);
 
-    const geoUnits = useMemo<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
-    const savedRoutes = useMemo<Route[]>(() => StorageManager.load('routes', []), []);
-    const schedules = useMemo<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}), []);
-    const routeAssignments = useMemo<Record<string, RouteAssignmentData>>(() => StorageManager.load('routeAssignments', {}), []);
-    const clients = useMemo<any[]>(() => StorageManager.load('clients', []), []);
-    const employees = defaultEmployees;
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [savedRoutes, setSavedRoutes] = useState<Route[]>([]);
+    const [currentSchedule, setCurrentSchedule] = useState<DaySchedule>({ teams: [], solos: [] });
+    const [routeAssignments, setRouteAssignments] = useState<Record<string, RouteAssignmentData>>({});
+    const [clients, setClients] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
 
-    const currentSchedule: DaySchedule = schedules[date] || { teams: [], solos: [] };
+    const candidates = useCandidateStore(state => state.candidates);
+    const { getLeads } = useClientStore();
+    const generateTaskList = useTelemarketingStore(state => state.generateTaskList);
+
+    const [selectedModalTeam, setSelectedModalTeam] = useState<{
+        key: string;
+        label: string;
+        candidates: any[];
+        leads: any[];
+    } | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadAll = async () => {
+            setLoading(true);
+            try {
+                const [geo, routes, schedule, assignments, cls, emps, cts, vis] = await Promise.all([
+                    api.geoUnits.list(),
+                    api.routes.list(),
+                    api.schedules.get(date),
+                    api.routeAssignments.list(),
+                    api.clients.list(),
+                    api.employees.list(),
+                    api.contracts.list(),
+                    api.visits.list(),
+                ]);
+                if (cancelled) return;
+                setGeoUnits(geo);
+                setSavedRoutes(routes);
+                setCurrentSchedule(schedule || { teams: [], solos: [] });
+                setRouteAssignments(assignments || {});
+                setClients(cls);
+                setEmployees(emps);
+                setContracts(cts);
+                setVisits(vis);
+            } catch (err) {
+                console.error('Failed to load plan overview data:', err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        loadAll();
+        return () => { cancelled = true; };
+    }, [date]);
+
+    const activeLeads = useMemo(() => getLeads(contracts, visits), [getLeads, contracts, visits, clients]);
+
     const isToday = date === getToday();
 
     const getEmp = (id: number | null) => employees.find(e => e.id === id) || null;
@@ -61,7 +123,7 @@ export default function PlanOverview() {
             assignment: RouteAssignmentData | null;
         }[] = [];
 
-        currentSchedule.teams.forEach((t, idx) => {
+        (currentSchedule.teams || []).forEach((t, idx) => {
             const teamKey = `team_${idx}`;
             const assignmentKey = `${date}_${teamKey}`;
             const sup = getEmp(t.supervisor);
@@ -76,7 +138,7 @@ export default function PlanOverview() {
             });
         });
 
-        currentSchedule.solos.forEach((s, idx) => {
+        (currentSchedule.solos || []).forEach((s, idx) => {
             const soloKey = `solo_${idx}`;
             const assignmentKey = `${date}_${soloKey}`;
             const tech = getEmp(s.technician);
@@ -122,7 +184,7 @@ export default function PlanOverview() {
         return results;
     };
 
-    const countLoad = (assignment: RouteAssignmentData) => {
+    const getMarketingLoad = (assignment: RouteAssignmentData) => {
         const zoneIds = new Set<number>();
         assignment.routes.forEach(comp => {
             const route = savedRoutes.find(r => r.id === comp.routeId);
@@ -131,12 +193,62 @@ export default function PlanOverview() {
             stations.slice(comp.startIdx, comp.endIdx + 1).forEach(s => zoneIds.add(s.id));
         });
         assignment.extraZones.forEach(id => zoneIds.add(id));
-        return clients.filter((c: any) => zoneIds.has(parseInt(c.neighborhood))).length;
+
+        const matchedCandidates = candidates.filter(c =>
+            c.status === 'FollowUp' && c.geoUnitId && zoneIds.has(c.geoUnitId)
+        );
+        const matchedLeads = activeLeads.filter(c =>
+            c.neighborhood && zoneIds.has(parseInt(c.neighborhood))
+        );
+
+        return {
+            total: matchedCandidates.length + matchedLeads.length,
+            candidates: matchedCandidates,
+            leads: matchedLeads
+        };
+    };
+
+    const handleGenerateList = (teamKey: string, candList: any[], leadList: any[]) => {
+        if (!confirm(`هل أنت متأكد من توليد قائمة اتصال بـ ${candList.length + leadList.length} زبون لهذا الفريق؟`)) return;
+
+        const items = [
+            ...candList.map(c => ({
+                entityType: 'candidate' as const,
+                entityId: c.id,
+                name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.nickname || 'بدون اسم',
+                mobile: c.mobile,
+                addressText: c.addressText,
+                geoUnitId: c.geoUnitId
+            })),
+            ...leadList.map(l => ({
+                entityType: 'client' as const,
+                entityId: l.id,
+                name: l.name,
+                mobile: l.mobile,
+                addressText: getUnitName(parseInt(l.neighborhood)) || l.neighborhood,
+                geoUnitId: parseInt(l.neighborhood) || null
+            }))
+        ];
+
+        generateTaskList(teamKey, date, items);
+        alert('تم توليد قائمة التسويق الهاتفي بنجاح!');
+        setSelectedModalTeam(null);
     };
 
     const totalTeams = teamCards.length;
     const assignedTeams = teamCards.filter(c => c.assignment && c.assignment.routes.length > 0).length;
     const unassignedTeams = totalTeams - assignedTeams;
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-sky-600 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">جاري تحميل البيانات...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
@@ -144,7 +256,7 @@ export default function PlanOverview() {
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <h1 className="text-xl font-bold text-slate-900 mb-1">ملخص الخطة</h1>
-                    <p className="text-slate-500 text-sm">نظرة شاملة على جداول العمل اليومية — من يذهب أين.</p>
+                    <p className="text-slate-500 text-sm">نظرة شاملة على جداول العمل اليومية — من يذهب إلى أين.</p>
                 </div>
             </div>
 
@@ -152,23 +264,39 @@ export default function PlanOverview() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 flex items-center justify-center gap-4">
                 <button
                     onClick={() => setDate(d => shiftDate(d, -1))}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 text-sm transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 hover:border-gray-300 text-sm transition-all active:scale-95 z-10"
                 >
                     <ChevronRight className="w-4 h-4" />
                     <span>الأمس</span>
                 </button>
 
-                <div className="flex items-center gap-3 px-6 py-2 rounded-xl bg-gray-50 border border-gray-200">
-                    <Calendar className="w-5 h-5 text-sky-600" />
-                    <div className="text-center">
+                <div
+                    className="flex items-center gap-3 px-6 py-2 rounded-xl bg-gray-50 border border-gray-200 relative group/cal cursor-pointer hover:bg-white hover:border-sky-300 transition-all shadow-sm"
+                    onClick={(e) => {
+                        const input = e.currentTarget.querySelector('input');
+                        if (input) input.showPicker();
+                    }}
+                >
+                    <Calendar className="w-5 h-5 text-sky-600 group-hover/cal:scale-110 transition-transform" />
+                    <div className="text-center pointer-events-none">
                         <p className="text-slate-900 font-bold">{formatDateArabic(date)}</p>
                         {isToday && <span className="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">اليوم</span>}
                     </div>
+                    {/* Native Date Input Overlay */}
+                    <input
+                        type="date"
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        value={date}
+                        onChange={(e) => {
+                            if (e.target.value) setDate(e.target.value);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    />
                 </div>
 
                 <button
                     onClick={() => setDate(d => shiftDate(d, 1))}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 text-sm transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-700 hover:bg-gray-50 hover:border-gray-300 text-sm transition-all active:scale-95 z-10"
                 >
                     <span>الغد</span>
                     <ChevronLeft className="w-4 h-4" />
@@ -183,7 +311,7 @@ export default function PlanOverview() {
                     </div>
                     <div>
                         <p className="text-2xl font-bold text-slate-900">{totalTeams}</p>
-                        <p className="text-xs text-slate-500">إجمالي الفرق والوحدات</p>
+                        <p className="text-xs text-slate-500">إجمالي الفرق</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-3">
@@ -192,7 +320,7 @@ export default function PlanOverview() {
                     </div>
                     <div>
                         <p className="text-2xl font-bold text-emerald-600">{assignedTeams}</p>
-                        <p className="text-xs text-slate-500">فرق معينة مسارات</p>
+                        <p className="text-xs text-slate-500">فرق تم تعيين مسار لها</p>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center gap-3">
@@ -211,7 +339,7 @@ export default function PlanOverview() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 py-16 text-center">
                     <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-400" />
                     <p className="text-slate-700 text-lg font-medium mb-2">لا يوجد جدول لهذا اليوم</p>
-                    <p className="text-slate-500 text-sm mb-6">انتقل إلى \"جدولة الفرق\" لإنشاء جدول يومي أولاً.</p>
+                    <p className="text-slate-500 text-sm mb-6">انتقل إلى "جدولة الفرق" لإنشاء جدول يومي أولاً.</p>
                     <button
                         onClick={() => navigate('/planning/schedule')}
                         className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all"
@@ -225,7 +353,7 @@ export default function PlanOverview() {
                     {teamCards.map((card, cardIdx) => {
                         const hasAssignment = card.assignment && card.assignment.routes.length > 0;
                         const routeDetails = hasAssignment ? getAssignmentDetails(card.assignment!) : [];
-                        const loadCount = hasAssignment ? countLoad(card.assignment!) : 0;
+                        const loadData = hasAssignment ? getMarketingLoad(card.assignment!) : { total: 0, candidates: [], leads: [] };
                         const extraZoneCount = card.assignment?.extraZones?.length || 0;
 
                         return (
@@ -234,7 +362,15 @@ export default function PlanOverview() {
                                 initial={{ opacity: 0, y: 15 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: cardIdx * 0.05 }}
-                                className={`bg-white rounded-xl shadow-sm overflow-hidden border ${hasAssignment
+                                onClick={() => {
+                                    if (hasAssignment) setSelectedModalTeam({
+                                        key: card.key,
+                                        label: card.label,
+                                        candidates: loadData.candidates,
+                                        leads: loadData.leads
+                                    });
+                                }}
+                                className={`bg-white rounded-xl shadow-sm overflow-hidden border cursor-pointer hover:border-gray-300 transition-colors ${hasAssignment
                                     ? 'border-gray-200'
                                     : 'border-amber-300'
                                     }`}
@@ -258,8 +394,10 @@ export default function PlanOverview() {
                                         <div className="flex items-center gap-2">
                                             <div className="flex items-center gap-1.5 text-xs">
                                                 <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
-                                                <span className="text-emerald-600 font-bold">{loadCount} مهمة</span>
+                                                <span className="text-emerald-600 font-bold">{loadData.total} مهمة</span>
+                                                <span className="text-slate-400">({loadData.candidates.length} متابعة + {loadData.leads.length} محتمل)</span>
                                             </div>
+                                            {/* Button moved to modal */}
                                             <button
                                                 onClick={() => navigate(`/planning/team-tasks/${card.key}`)}
                                                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[11px] font-bold transition-colors"
@@ -366,6 +504,16 @@ export default function PlanOverview() {
                     })}
                 </div>
             )}
+
+            <TeamDetailsModal
+                isOpen={!!selectedModalTeam}
+                onClose={() => setSelectedModalTeam(null)}
+                teamKey={selectedModalTeam?.key || ''}
+                teamLabel={selectedModalTeam?.label || ''}
+                candidates={selectedModalTeam?.candidates || []}
+                leads={selectedModalTeam?.leads || []}
+                onGenerate={handleGenerateList}
+            />
         </div>
     );
 }

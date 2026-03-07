@@ -1,248 +1,456 @@
-import { useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-    Headset, Phone, PhoneOff, CheckCircle2, XCircle, Clock,
-    MapPin, User, AlertTriangle, Wrench, Calendar, ChevronLeft,
-    ChevronRight, MessageSquare, Send, Zap, RefreshCw, RotateCcw,
-    Star, ArrowRight, PhoneCall, PhoneMissed
+    Headset, Phone, FileText, CheckCircle2, History, CreditCard,
+    AlertTriangle, Calendar, Send, Zap, User, Clock, CheckCircle,
+    MapPin, PlusCircle, MessageSquare, ThumbsUp, Wrench, Activity, Briefcase
 } from 'lucide-react';
+import { StorageManager } from '../lib/storage';
+import { useCandidateStore } from '../hooks/useCandidateStore';
+import { useClientStore } from '../hooks/useClientStore';
+import { useTelemarketingStore } from '../hooks/useTelemarketingStore';
+import TeamAgendaPanel from '../components/telemarketing/TeamAgendaPanel';
+import OutcomeRecorderModal from '../components/telemarketing/OutcomeRecorderModal';
+import AppointmentSchedulerModal from '../components/telemarketing/AppointmentSchedulerModal';
+import type { DaySchedule, CallOutcome, Contract, Visit, CallLog } from '../lib/types';
+import { defaultEmployees } from '../lib/defaultData';
+import { getEntityContacts } from '../lib/contactUtils';
 
-/* ------------------------------------------------------------------ */
-/*  Types & Mock Data                                                   */
-/* ------------------------------------------------------------------ */
+const getToday = () => new Date().toISOString().split('T')[0];
 
-type TaskPriority = 'high' | 'medium' | 'low';
-type TaskType = 'emergency' | 'maintenance' | 'followup' | 'dues' | 'return';
-type CallOutcome = 'booked' | 'no_answer' | 'cancelled' | null;
-
-interface TeleTask {
-    id: number;
-    customerName: string;
-    mobile: string;
-    address: string;
-    zone: string;
-    taskType: TaskType;
-    taskDescription: string;
-    priority: TaskPriority;
-    deviceInfo: string;
-    history: { date: string; type: string; note: string }[];
-}
-
-const taskTypeConfig: Record<TaskType, { label: string; icon: any; color: string; bg: string; border: string }> = {
-    emergency: { label: 'طوارئ', icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-    maintenance: { label: 'صيانة دورية', icon: Wrench, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
-    followup: { label: 'متابعة', icon: PhoneCall, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-    dues: { label: 'مستحقات', icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-    return: { label: 'إرجاع', icon: RotateCcw, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' },
+const outcomeConfig: Record<CallOutcome, { label: string; color: string; bg: string }> = {
+    booked: { label: 'تم الحجز', color: 'text-emerald-700', bg: 'bg-emerald-100' },
+    busy: { label: 'مشغول', color: 'text-amber-700', bg: 'bg-amber-100' },
+    no_answer: { label: 'لا يرد', color: 'text-orange-700', bg: 'bg-orange-100' },
+    rejected: { label: 'مرفوض', color: 'text-red-700', bg: 'bg-red-100' },
 };
 
-const priorityConfig: Record<TaskPriority, { label: string; dot: string; sort: number }> = {
-    high: { label: 'عالي', dot: 'bg-red-500', sort: 1 },
-    medium: { label: 'متوسط', dot: 'bg-amber-400', sort: 2 },
-    low: { label: 'عادي', dot: 'bg-emerald-400', sort: 3 },
-};
-
-const outcomeConfig: Record<string, { label: string; icon: any; color: string; bg: string; border: string; activeRing: string }> = {
-    booked: { label: 'تم الحجز', icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-300', activeRing: 'ring-emerald-200' },
-    no_answer: { label: 'لا يرد', icon: PhoneMissed, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-300', activeRing: 'ring-amber-200' },
-    cancelled: { label: 'إلغاء', icon: XCircle, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300', activeRing: 'ring-red-200' },
-};
-
-const mockTasks: TeleTask[] = [
-    {
-        id: 1, customerName: 'خالد السامرائي', mobile: '07701234567', address: 'حي المنصور، شارع 14، بناية 7', zone: 'المنصور',
-        taskType: 'emergency', taskDescription: 'عطل طارئ - مضخة الماء لا تعمل', priority: 'high', deviceInfo: 'RO-500 Pro — فلتر 7 مراحل',
-        history: [
-            { date: '2026-02-17', type: 'اتصال', note: 'تم الاتصال ولم يرد' },
-            { date: '2026-02-10', type: 'زيارة', note: 'صيانة دورية - تم تبديل الفلاتر' },
-            { date: '2025-12-05', type: 'زيارة', note: 'تركيب الجهاز' },
-        ],
-    },
-    {
-        id: 2, customerName: 'نور الدين', mobile: '07709876543', address: 'الكرادة، مقابل جامع الرحمن', zone: 'الكرادة',
-        taskType: 'maintenance', taskDescription: 'صيانة دورية - تبديل فلتر PP و CTO', priority: 'medium', deviceInfo: 'AquaPure 300 — فلتر 5 مراحل',
-        history: [
-            { date: '2026-01-20', type: 'اتصال', note: 'تأكيد موعد الصيانة' },
-            { date: '2025-11-15', type: 'زيارة', note: 'تركيب الجهاز' },
-        ],
-    },
-    {
-        id: 3, customerName: 'سلمى حسين', mobile: '07705551234', address: 'الكاظمية، حي العطيفية', zone: 'الكاظمية',
-        taskType: 'followup', taskDescription: 'متابعة بعد صيانة طارئة - التأكد من عمل الجهاز', priority: 'medium', deviceInfo: 'CleanWater 200 — فلتر 3 مراحل',
-        history: [
-            { date: '2026-02-15', type: 'زيارة', note: 'صيانة طارئة - تبديل ممبرين RO' },
-            { date: '2025-09-10', type: 'زيارة', note: 'تركيب الجهاز' },
-        ],
-    },
-    {
-        id: 4, customerName: 'عبد الرحمن الجبوري', mobile: '07701112233', address: 'الداوودي، شارع الأميرات', zone: 'الداوودي',
-        taskType: 'dues', taskDescription: 'متأخر - قسط شهر فبراير غير مسدد', priority: 'high', deviceInfo: 'RO-500 Pro — فلتر 7 مراحل',
-        history: [
-            { date: '2026-02-01', type: 'اتصال', note: 'تذكير بالقسط - وعد بالدفع' },
-            { date: '2026-01-15', type: 'زيارة', note: 'صيانة دورية' },
-        ],
-    },
-    {
-        id: 5, customerName: 'ريم عباس', mobile: '07703334455', address: 'حي العدل، مجاور مدرسة النور', zone: 'المنصور',
-        taskType: 'maintenance', taskDescription: 'صيانة دورية - فحص شامل', priority: 'low', deviceInfo: 'AquaPure 300 — فلتر 5 مراحل',
-        history: [
-            { date: '2025-12-20', type: 'زيارة', note: 'تركيب الجهاز وتشغيله' },
-        ],
-    },
-    {
-        id: 6, customerName: 'فادي الموصلي', mobile: '07706667788', address: 'زيونة، شارع فلسطين', zone: 'الكرادة',
-        taskType: 'emergency', taskDescription: 'تسريب مياه من الجهاز', priority: 'high', deviceInfo: 'CleanWater 200 — فلتر 3 مراحل',
-        history: [
-            { date: '2026-02-18', type: 'اتصال', note: 'اتصل العميل يشتكي من تسريب' },
-            { date: '2026-01-05', type: 'زيارة', note: 'صيانة دورية' },
-            { date: '2025-10-01', type: 'زيارة', note: 'تركيب الجهاز' },
-        ],
-    },
-    {
-        id: 7, customerName: 'ياسمين كريم', mobile: '07708889900', address: 'حي الكاظمية، سوق الاستربادي', zone: 'الكاظمية',
-        taskType: 'return', taskDescription: 'طلب إرجاع الجهاز - انتهاء العقد', priority: 'low', deviceInfo: 'RO-500 Pro — فلتر 7 مراحل',
-        history: [
-            { date: '2026-02-16', type: 'اتصال', note: 'العميلة تريد إرجاع الجهاز' },
-        ],
-    },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Component                                                           */
-/* ------------------------------------------------------------------ */
+const getInitials = (name: string) => name.trim().split(' ').map(n => n[0]).slice(0, 2).join('') || 'U';
 
 export default function TelemarketerWorkspace() {
-    const [selectedTaskId, setSelectedTaskId] = useState<number>(mockTasks[0].id);
-    const [processedIds, setProcessedIds] = useState<Set<number>>(new Set());
+    // Stores & Data Load
+    const candidates = useCandidateStore(state => state.candidates);
+    const { clients, loadClients, updateClient } = useClientStore();
+    const { taskLists, appointments, addCallLog, addAppointment, updateTaskListItemStatus, getTaskList, getAppointmentsForTeamDate } = useTelemarketingStore();
 
-    // Action state
-    const [outcome, setOutcome] = useState<CallOutcome>(null);
-    const [visitDate, setVisitDate] = useState('');
-    const [visitTime, setVisitTime] = useState('');
-    const [notes, setNotes] = useState('');
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
+    const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+    const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
+    const [date] = useState(getToday());
 
-    // Sorted queue
-    const sortedTasks = useMemo(
-        () => [...mockTasks].sort((a, b) => priorityConfig[a.priority].sort - priorityConfig[b.priority].sort),
-        []
-    );
+    useEffect(() => {
+        loadClients();
+        setContracts(StorageManager.load('contracts', []));
+        setVisits(StorageManager.load('visits', []));
+        setCallLogs(StorageManager.load('telemarketing_callLogs', []));
+        setMaintenanceRequests(StorageManager.load('maintenanceRequests', []));
+    }, [loadClients]);
 
-    const selectedTask = useMemo(
-        () => sortedTasks.find(t => t.id === selectedTaskId) || sortedTasks[0],
-        [selectedTaskId, sortedTasks]
-    );
+    useEffect(() => {
+        setCallLogs(StorageManager.load('telemarketing_callLogs', []));
+    }, [taskLists]);
 
-    const remainingCount = sortedTasks.length - processedIds.size;
+    // Schedule Parsing
+    const schedules = useMemo<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}), []);
+    const currentSchedule: DaySchedule = schedules[date] || { teams: [], solos: [] };
 
-    // Find next unprocessed task
-    const getNextTask = useCallback(() => {
-        const currentIdx = sortedTasks.findIndex(t => t.id === selectedTaskId);
-        for (let i = 1; i <= sortedTasks.length; i++) {
-            const nextIdx = (currentIdx + i) % sortedTasks.length;
-            if (!processedIds.has(sortedTasks[nextIdx].id)) {
-                return sortedTasks[nextIdx];
+    const getEmp = (id: number | null) => defaultEmployees.find(e => e.id === id) || null;
+
+    const availableTeams = useMemo(() => {
+        const teams: { key: string; label: string; type: 'team' | 'solo'; count: number }[] = [];
+        currentSchedule.teams.forEach((t, idx) => {
+            const sup = getEmp(t.supervisor);
+            const count = (t.telemarketers || []).length;
+            const label = sup ? `فريق ${sup.name}` : `فريق #${idx + 1}`;
+            teams.push({ key: `team_${idx}`, label, type: 'team', count });
+        });
+        currentSchedule.solos.forEach((s, idx) => {
+            const tech = getEmp(s.technician);
+            teams.push({ key: `solo_${idx}`, label: tech ? `فردي ${tech.name}` : `فردي #${idx + 1}`, type: 'solo', count: 1 });
+        });
+        return teams;
+    }, [currentSchedule]);
+
+    const [selectedTeamKey, setSelectedTeamKey] = useState<string>(availableTeams[0]?.key || '');
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+    // Active Task List
+    const activeTaskList = useMemo(() => {
+        if (!selectedTeamKey) return null;
+        return getTaskList(selectedTeamKey, date);
+    }, [getTaskList, selectedTeamKey, date, taskLists]);
+
+    const tasks = useMemo(() => {
+        const raw = activeTaskList?.items || [];
+        return [...raw].sort((a, b) => {
+            if (a.status === 'pending' && b.status !== 'pending') return -1;
+            if (a.status !== 'pending' && b.status === 'pending') return 1;
+            return 0; // Maintain original order (creation) for same status
+        });
+    }, [activeTaskList]);
+
+    const remainingCount = tasks.filter(t => t.status === 'pending').length;
+    const completedCount = tasks.filter(t => t.status !== 'pending').length;
+    const teamAppointments = useMemo(() => getAppointmentsForTeamDate(selectedTeamKey, date), [getAppointmentsForTeamDate, selectedTeamKey, date, appointments]);
+
+    // Auto-select first pending task
+    useEffect(() => {
+        if (!selectedTaskId && tasks.length > 0) {
+            const firstPending = tasks.find(t => t.status === 'pending') || tasks[0];
+            setSelectedTaskId(firstPending.id);
+        }
+    }, [tasks, selectedTaskId]);
+
+    // Workspace UI State
+    const [activeTab, setActiveTab] = useState<'journey' | 'calls' | 'contracts' | 'visits'>('journey');
+    const [isOutcomeModalOpen, setIsOutcomeModalOpen] = useState(false);
+    const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+
+    const selectedTask = useMemo(() => tasks.find(t => t.id === selectedTaskId) || null, [tasks, selectedTaskId]);
+
+    const entityDetails = useMemo(() => {
+        if (!selectedTask) return null;
+        if (selectedTask.entityType === 'candidate') {
+            return candidates.find(c => c.id === selectedTask.entityId);
+        }
+        return clients.find(c => c.id === selectedTask.entityId);
+    }, [selectedTask, candidates, clients]);
+
+    const handleSaveOutcome = (contactId: string, outcome: CallOutcome, notes: string, newContactStatus?: string, communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice') => {
+        if (!selectedTask) return;
+
+        const entityContacts = getEntityContacts(entityDetails as any);
+        const selectedContact = entityContacts.find(c => c.id === contactId) || entityContacts[0];
+
+        addCallLog({
+            entityType: selectedTask.entityType,
+            entityId: selectedTask.entityId,
+            taskListId: activeTaskList!.id,
+            teamKey: selectedTeamKey,
+            outcome,
+            contactLabel: selectedContact.label,
+            contactNumber: selectedContact.number,
+            notes,
+            calledBy: 1, // mock user
+            communicationMethod
+        });
+
+        // Determine if we need to auto-set preferred status
+        const finalContactStatus = (outcome === 'booked') ? 'مفضل' : newContactStatus;
+
+        // Update contact status if requested or booked
+        if (finalContactStatus && selectedTask.entityType === 'client') {
+            const client = clients.find(c => c.id === selectedTask.entityId);
+            if (client) {
+                const updatedContacts = client.contacts.map((c: any) =>
+                    c.id === contactId ? { ...c, status: finalContactStatus } : c
+                );
+                updateClient(client.id, { contacts: updatedContacts });
             }
         }
-        return null;
-    }, [sortedTasks, selectedTaskId, processedIds]);
 
-    const handleSubmit = useCallback(() => {
-        if (!outcome) return;
-        setProcessedIds(prev => new Set(prev).add(selectedTaskId));
+        const currentTaskLogs = callLogs.filter(log => log.entityId === selectedTask.entityId && log.entityType === selectedTask.entityType);
+        const attempts = currentTaskLogs.length + 1;
 
-        // Move to next
-        const next = getNextTask();
-        if (next) {
-            setSelectedTaskId(next.id);
+        const newStatus = (outcome === 'booked') ? 'booked'
+            : (outcome === 'rejected' || attempts >= 3) ? 'called'
+                : 'pending';
+        updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, newStatus, outcome);
+
+        if (newStatus !== 'pending') {
+            // Auto move to next pending task after small delay
+            setTimeout(() => {
+                const pendingTasks = tasks.filter(t => t.status === 'pending' && t.id !== selectedTask.id);
+                if (pendingTasks.length > 0) {
+                    setSelectedTaskId(pendingTasks[0].id);
+                }
+            }, 500);
+        }
+    };
+
+    const handleSaveAppointment = (visitTime: string, duration: string, occupation: string, waterSource: string, notes: string) => {
+        if (!selectedTask) return;
+        addAppointment({
+            entityType: selectedTask.entityType,
+            entityId: selectedTask.entityId,
+            customerName: selectedTask.name,
+            customerAddress: selectedTask.addressText,
+            customerMobile: selectedTask.mobile,
+            teamKey: selectedTeamKey,
+            date,
+            timeSlot: visitTime,
+            occupation,
+            waterSource,
+            notes,
+            createdBy: 1
+        });
+
+        if (selectedTask.entityType === 'client') {
+            updateClient(selectedTask.entityId, { occupation, waterSource });
         }
 
-        // Reset action state
-        setOutcome(null);
-        setVisitDate('');
-        setVisitTime('');
-        setNotes('');
-    }, [outcome, selectedTaskId, getNextTask]);
+        if (selectedTask.status === 'pending') {
+            updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, 'booked', 'booked');
+        }
+    };
 
-    const tc = taskTypeConfig[selectedTask.taskType];
-    const TcIcon = tc.icon;
+    const getEntityCallLogs = () => {
+        if (!selectedTask) return [];
+        return callLogs.filter(log => log.entityId === selectedTask.entityId && log.entityType === selectedTask.entityType)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    };
+
+    const generateJourneyEvents = () => {
+        if (!selectedTask) return [];
+        const events: any[] = [];
+
+        // 1. Suggestion / Candidate creation
+        if (selectedTask.entityType === 'candidate') {
+            const cand = candidates.find(c => c.id === selectedTask.entityId);
+            if (cand) {
+                events.push({
+                    id: 'cand_' + cand.id,
+                    date: cand.createdAt,
+                    type: 'suggestion',
+                    icon: ThumbsUp,
+                    color: 'text-amber-600',
+                    bg: 'bg-amber-100',
+                    content: (
+                        <>
+                            <p className="text-sm font-bold text-slate-800">تم اقتراح الزبون من قبل الوسيط <span className="text-amber-700">"{cand.referralNameSnapshot || 'غير محدد'}"</span></p>
+                            <p className="text-xs text-slate-600 mt-1">المصدر: {cand.referralOriginChannel}</p>
+                            <p className="text-xs text-slate-600">رقم الموبايل: <span dir="ltr">{cand.mobile}</span></p>
+                        </>
+                    )
+                });
+            }
+        }
+
+        // 2. Client Creation
+        if (selectedTask.entityType === 'client') {
+            const client = clients.find(c => c.id === selectedTask.entityId);
+            if (client) {
+                events.push({
+                    id: 'client_' + client.id,
+                    date: client.createdAt,
+                    type: 'suggestion',
+                    icon: User,
+                    color: 'text-amber-600',
+                    bg: 'bg-amber-100',
+                    content: (
+                        <>
+                            <p className="text-sm font-bold text-slate-800">تم تسجيل الزبون في النظام</p>
+                            {client.referrerName && <p className="text-xs text-slate-600 mt-1">الوسيط: {client.referrerName}</p>}
+                            <p className="text-xs text-slate-600">رقم الموبايل: <span dir="ltr">{client.mobile}</span></p>
+                        </>
+                    )
+                });
+            }
+        }
+
+        // 3. Contracts
+        if (selectedTask.entityType === 'client') {
+            const taskContracts = contracts.filter(c => c.customerId === selectedTask.entityId);
+            taskContracts.forEach(c => {
+                events.push({
+                    id: 'contract_' + c.id,
+                    date: c.contractDate || c.createdAt,
+                    type: 'contract',
+                    icon: FileText,
+                    color: 'text-emerald-600',
+                    bg: 'bg-emerald-100',
+                    content: (
+                        <>
+                            <p className="text-sm font-bold text-slate-800">⭐ تم شراء جهاز <span className="text-emerald-700">"{c.deviceModelName}"</span> بعقد رقم #{c.contractNumber}</p>
+                            <p className="text-xs text-slate-600 mt-1">القيمة: {c.finalPrice.toLocaleString()} ل.س | {c.paymentType === 'cash' ? 'نقدي' : 'أقساط'}</p>
+                        </>
+                    )
+                });
+            });
+        }
+
+        // 4. Visits
+        const taskVisits = visits.filter(v => v.customerId === selectedTask.entityId);
+        taskVisits.forEach(v => {
+            events.push({
+                id: 'visit_' + v.id,
+                date: v.date,
+                type: 'visit',
+                icon: Calendar,
+                color: 'text-sky-600',
+                bg: 'bg-sky-100',
+                content: (
+                    <>
+                        <p className="text-sm font-bold text-slate-800">📍 تم تنفيذ زيارة {v.outcome === 'Completed' ? 'ناجحة' : 'بالحالة: ' + v.outcome}</p>
+                        <p className="text-xs text-slate-600 mt-1">بواسطة الفني: {v.employeeName}</p>
+                        {v.notes && <p className="text-xs text-slate-500 mt-1 border border-slate-200 bg-slate-50 p-1.5 rounded">ملاحظات: {v.notes}</p>}
+                    </>
+                )
+            });
+        });
+
+        // 5. Maintenance Requests
+        if (selectedTask.entityType === 'client') {
+            const taskMaintenance = maintenanceRequests.filter(m => m.customerId === selectedTask.entityId);
+            taskMaintenance.forEach(m => {
+                events.push({
+                    id: 'maint_' + m.id,
+                    date: m.requestDate,
+                    type: 'maintenance',
+                    icon: Zap,
+                    color: 'text-orange-600',
+                    bg: 'bg-orange-100',
+                    content: (
+                        <>
+                            <p className="text-sm font-bold text-slate-800">🛠️ تم تنفيذ زيارة صيانة <span className="text-orange-700">"{m.visitType}"</span></p>
+                            <p className="text-xs text-slate-600 mt-1">وصف المشكلة: {m.problemDescription}</p>
+                            <p className="text-xs text-slate-600">الحالة: {m.resolutionStatus}</p>
+                        </>
+                    )
+                });
+            });
+        }
+
+        // 6. Call Logs
+        const taskCalls = callLogs.filter(log => log.entityId === selectedTask.entityId && log.entityType === selectedTask.entityType)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()); // sort ascending by date for attempt counting
+
+        taskCalls.forEach((log, index) => {
+            const isWhatsApp = log.communicationMethod?.startsWith('whatsapp');
+            const isLatest = index === taskCalls.length - 1;
+
+            events.push({
+                id: 'call_' + log.id,
+                date: log.timestamp,
+                type: 'call',
+                icon: isWhatsApp ? MessageSquare : Headset,
+                color: 'text-slate-600',
+                bg: 'bg-slate-100',
+                content: (
+                    <>
+                        <p className="text-sm font-bold text-slate-800 flex items-center justify-between">
+                            <span>محاولة تواصل <span className={`px-1.5 py-0.5 rounded text-[10px] mr-1 ${outcomeConfig[log.outcome]?.bg} ${outcomeConfig[log.outcome]?.color}`}>{outcomeConfig[log.outcome]?.label || log.outcome}</span></span>
+                            <span className="text-xs text-slate-500 font-bold bg-slate-100 rounded px-2 py-0.5" dir="ltr">المحاولة {index + 1}</span>
+                        </p>
+                        <p className="text-xs text-slate-600 mt-2" dir="ltr">{log.contactNumber} ({log.contactLabel})</p>
+                        {log.notes && <p className="text-xs text-slate-500 mt-2 border border-slate-200 bg-slate-50 p-2.5 rounded shadow-sm">ملاحظات: {log.notes}</p>}
+
+                        {isLatest && !['booked', 'rejected'].includes(log.outcome) && taskCalls.length < 3 && (
+                            <button onClick={() => setIsOutcomeModalOpen(true)} className="mt-3 text-xs flex items-center gap-1 text-violet-600 font-bold bg-violet-50 hover:bg-violet-100 px-3 py-2 rounded-lg border border-violet-200 transition-colors w-full justify-center shadow-sm">
+                                <Phone className="w-3.5 h-3.5" /> محاولة مرة أخرى
+                            </button>
+                        )}
+
+                        {isLatest && taskCalls.length >= 3 && !['booked', 'rejected'].includes(log.outcome) && (
+                            <div className="mt-3 text-xs font-bold text-amber-700 bg-amber-50 rounded-lg p-3 border border-amber-200 shadow-sm flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                <div>
+                                    استنفدت 3 محاولات، يرجى المحاولة على رقم آخر.
+                                    <button onClick={() => setIsOutcomeModalOpen(true)} className="block mt-1 underline text-amber-600 hover:text-amber-800 transition-colors">تغيير الرقم وتسجيل اتصال جديد</button>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )
+            });
+        });
+
+        // Sort new to old
+        return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    };
+
+    const journeyEvents = useMemo(() => generateJourneyEvents(), [selectedTask, candidates, clients, contracts, visits, maintenanceRequests, callLogs]);
+
+    // Metrics for Col 3
+    const totalScheduled = teamAppointments.length;
+    const bookingRate = completedCount > 0 ? Math.round((tasks.filter(t => t.status === 'booked').length / completedCount) * 100) : 0;
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
+        <div className="h-full flex flex-col overflow-hidden bg-slate-100" dir="rtl">
             {/* ─── TOP BAR ─── */}
-            <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
+            <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-bl from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                        <Headset className="w-4.5 h-4.5 text-white" />
+                    <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                        <Headset className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-sm font-bold text-slate-800">مساحة عمل المسوّق الهاتفي</h1>
-                        <p className="text-[10px] text-slate-400">معالجة المكالمات بسرعة — بدون مغادرة الشاشة</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-violet-50 rounded-lg px-3 py-1.5 border border-violet-200">
-                        <Zap className="w-3.5 h-3.5 text-violet-600" />
-                        <span className="text-xs font-bold text-violet-700">{remainingCount} متبقي</span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-1.5 border border-emerald-200">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-xs font-bold text-emerald-700">{processedIds.size} مُنجز</span>
+                        <h1 className="text-base font-bold text-slate-800">إدارة المواعيد <span className="text-slate-400 font-normal text-sm">| Telemarketing</span></h1>
                     </div>
                 </div>
             </div>
 
             {/* ─── 3-COLUMN LAYOUT ─── */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden p-3 gap-3">
 
-                {/* ══════════════════════════════════════════════ */}
-                {/* LEFT COLUMN — Task Queue                       */}
-                {/* ══════════════════════════════════════════════ */}
-                <div className="w-72 bg-slate-50 border-l border-gray-200 flex flex-col shrink-0 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100 bg-white">
-                        <h2 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                            <ClipboardList className="w-3.5 h-3.5 text-violet-500" />
-                            <span>قائمة المهام</span>
-                            <span className="mr-auto px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-600">{sortedTasks.length}</span>
-                        </h2>
+                {/* COLUMN 1: Mission Control (20%) */}
+                <div className="w-1/5 min-w-[280px] bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm overflow-hidden">
+                    {/* Team Selector Topsheet */}
+                    <div className="p-3 border-b border-gray-100 bg-slate-50">
+                        <label className="text-xs font-bold text-slate-500 mb-1.5 block">اختر أحد الفرق النشطة</label>
+                        <select
+                            value={selectedTeamKey}
+                            onChange={e => setSelectedTeamKey(e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 shadow-sm focus:border-violet-500 focus:outline-none"
+                        >
+                            {availableTeams.map(t => (
+                                <option key={t.key} value={t.key}>{t.label}</option>
+                            ))}
+                        </select>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-                        {sortedTasks.map(task => {
+
+                    {/* Priority Queue Header - Sticky */}
+                    <div className="sticky top-0 z-10 px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+                        <h2 className="text-sm font-black text-slate-700">قائمة المهام</h2>
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-violet-100 text-violet-700 border border-violet-200">{remainingCount} معلق</span>
+                    </div>
+
+                    {/* Task Queue List - Scrollable Body */}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scroll" style={{ maxHeight: 'calc(100vh - 250px)' }}>
+                        {tasks.length === 0 && (
+                            <div className="text-center p-6 mt-10 opacity-50">
+                                <AlertTriangle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                                <p className="text-xs font-bold">لا توجد مهام اتصال</p>
+                            </div>
+                        )}
+                        {tasks.map(task => {
                             const isActive = task.id === selectedTaskId;
-                            const isProcessed = processedIds.has(task.id);
-                            const ttc = taskTypeConfig[task.taskType];
-                            const pc = priorityConfig[task.priority];
+                            const isProcessed = task.status !== 'pending';
+                            const taskLogs = callLogs.filter(l => l.entityId === task.entityId && l.entityType === task.entityType);
+
                             return (
                                 <button
                                     key={task.id}
-                                    type="button"
-                                    onClick={() => { setSelectedTaskId(task.id); setOutcome(null); setVisitDate(''); setVisitTime(''); setNotes(''); }}
-                                    className={`w-full text-right p-3 rounded-xl border-2 transition-all relative ${isProcessed
-                                        ? 'bg-gray-50 border-gray-100 opacity-50'
-                                        : isActive
-                                            ? 'bg-white border-violet-300 shadow-md shadow-violet-500/10'
-                                            : 'bg-white border-transparent hover:border-gray-200 hover:shadow-sm'
+                                    onClick={() => setSelectedTaskId(task.id)}
+                                    className={`w-full text-right p-2.5 rounded-xl border transition-all flex items-start gap-3 outline-none ${isActive
+                                        ? 'bg-violet-50 border-violet-300 ring-2 ring-violet-500/10 shadow-sm'
+                                        : task.status === 'booked'
+                                            ? 'bg-slate-50 border-transparent opacity-60' // grayed out for booked
+                                            : isProcessed
+                                                ? 'bg-slate-50 border-transparent'
+                                                : 'bg-white border-gray-100 hover:border-violet-200 hover:bg-slate-50 hover:shadow-sm'
                                         }`}
                                 >
-                                    {/* Priority dot */}
-                                    <div className={`absolute top-3 left-3 w-2.5 h-2.5 rounded-full ${pc.dot} ${!isProcessed ? 'animate-pulse' : ''}`} />
-                                    {isProcessed && (
-                                        <div className="absolute top-2.5 left-2.5">
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-sm font-black text-slate-600 shrink-0 border-2 border-slate-200 overflow-hidden relative shadow-sm">
+                                        {getInitials(task.name)}
+                                        {task.entityType === 'client' && <div className="absolute bottom-0 w-full h-1.5 bg-sky-500" />}
+                                        {task.entityType === 'candidate' && <div className="absolute bottom-0 w-full h-1.5 bg-amber-500" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <p className={`text-sm font-bold truncate ${isProcessed ? 'text-slate-500' : 'text-slate-800'}`}>{task.name}</p>
+                                            {task.status === 'booked' ? <Calendar className="w-4 h-4 text-slate-400 shrink-0" /> : isProcessed ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> : <Phone className="w-4 h-4 text-slate-400 shrink-0" />}
                                         </div>
-                                    )}
-
-                                    <div className="flex items-start gap-2.5">
-                                        <div className={`w-8 h-8 rounded-lg ${ttc.bg} ${ttc.border} border flex items-center justify-center shrink-0`}>
-                                            <ttc.icon className={`w-3.5 h-3.5 ${ttc.color}`} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-bold truncate ${isProcessed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{task.customerName}</p>
-                                            <div className="flex items-center gap-1.5 mt-1">
-                                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${ttc.bg} ${ttc.color}`}>{ttc.label}</span>
-                                                <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                                                    <MapPin className="w-2.5 h-2.5" />{task.zone}
+                                        <div className="flex items-center justify-between mt-1">
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${task.entityType === 'client' ? 'bg-sky-50 text-sky-700 border-sky-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                                                {task.entityType === 'client' ? 'زبون' : 'مقترح'}
+                                            </span>
+                                            {task.status === 'booked' ? (
+                                                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">✅ تم حجز موعد</span>
+                                            ) : taskLogs.length > 0 ? (
+                                                <span className="text-[10px] text-slate-500 flex items-center gap-1 font-bold">
+                                                    <History className="w-3 h-3" /> {taskLogs.length} محاولات
                                                 </span>
-                                            </div>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </button>
@@ -251,183 +459,246 @@ export default function TelemarketerWorkspace() {
                     </div>
                 </div>
 
-                {/* ══════════════════════════════════════════════ */}
-                {/* CENTER COLUMN — Customer Context                */}
-                {/* ══════════════════════════════════════════════ */}
-                <div className="flex-1 overflow-y-auto bg-white border-l border-gray-200 p-6 space-y-5">
-                    {/* Customer Header */}
-                    <div className="flex items-start gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-bl from-sky-400 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
-                            <User className="w-7 h-7 text-white" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-xl font-black text-slate-800">{selectedTask.customerName}</h2>
-                            <div className="flex items-center gap-3 mt-1.5">
-                                <a href={`tel:${selectedTask.mobile}`}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors text-sm font-bold">
-                                    <Phone className="w-4 h-4" />
-                                    <span dir="ltr">{selectedTask.mobile}</span>
-                                </a>
-                                <span className="flex items-center gap-1 text-xs text-slate-400">
-                                    <MapPin className="w-3.5 h-3.5" />{selectedTask.address}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Task Details Card */}
-                    <div className={`rounded-xl border-2 ${tc.border} ${tc.bg} p-4`}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <TcIcon className={`w-5 h-5 ${tc.color}`} />
-                            <span className={`text-sm font-bold ${tc.color}`}>{tc.label}</span>
-                            <span className={`mr-auto px-2 py-0.5 rounded-full text-[10px] font-bold border ${priorityConfig[selectedTask.priority].dot === 'bg-red-500' ? 'bg-red-100 text-red-700 border-red-200' : priorityConfig[selectedTask.priority].dot === 'bg-amber-400' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
-                                {priorityConfig[selectedTask.priority].label}
-                            </span>
-                        </div>
-                        <p className="text-sm text-slate-700 font-medium">{selectedTask.taskDescription}</p>
-                        <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1.5">
-                            <Wrench className="w-3 h-3" />{selectedTask.deviceInfo}
-                        </p>
-                    </div>
-
-                    {/* History Mini-log */}
-                    <div>
-                        <h3 className="text-xs font-bold text-slate-500 mb-3 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5" /><span>السجل السابق</span>
-                        </h3>
-                        <div className="relative pr-4">
-                            {/* Timeline line */}
-                            <div className="absolute right-1.5 top-1 bottom-1 w-0.5 bg-gray-200 rounded" />
-
-                            <div className="space-y-3">
-                                {selectedTask.history.map((h, idx) => (
-                                    <div key={idx} className="relative flex items-start gap-3">
-                                        {/* Dot */}
-                                        <div className={`absolute -right-[11px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm z-10 ${idx === 0 ? 'bg-sky-500' : 'bg-gray-300'}`} />
-                                        <div className="flex-1 bg-slate-50 rounded-lg p-3 border border-gray-100 mr-2">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${h.type === 'زيارة' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>{h.type}</span>
-                                                <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{h.date}</span>
+                {/* COLUMN 2: Customer Command Center (55%) */}
+                <div className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm overflow-hidden relative">
+                    {selectedTask && entityDetails ? (
+                        <>
+                            {/* Identity Card Component */}
+                            <div className="p-6 border-b border-gray-100 bg-gradient-to-br from-slate-50 to-white flex gap-6 shrink-0 relative overflow-hidden">
+                                <div className="w-24 h-24 rounded-2xl bg-white flex items-center justify-center text-3xl font-black text-slate-600 shadow-sm border border-slate-200 relative overflow-hidden shrink-0 z-10">
+                                    {getInitials(selectedTask.name)}
+                                    <div className={`absolute bottom-0 w-full h-3 ${selectedTask.entityType === 'client' ? 'bg-sky-500' : 'bg-amber-500'}`} />
+                                </div>
+                                <div className="flex-1 z-10">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <h2 className="text-3xl font-black text-slate-800 mb-2">{selectedTask.name}</h2>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm ${selectedTask.entityType === 'client' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                    {selectedTask.entityType === 'client' ? 'زبون مسجل' : 'اسم مقترح (لم يتم تأهيله)'}
+                                                </span>
+                                                {'occupation' in (entityDetails || {}) && entityDetails.occupation && (
+                                                    <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-50 text-slate-600 border border-slate-200 shadow-sm flex items-center gap-1">
+                                                        <Briefcase className="w-3.5 h-3.5 text-slate-400" /> {entityDetails.occupation}
+                                                    </span>
+                                                )}
+                                                {selectedTask.entityType === 'client' && 'rating' in entityDetails && entityDetails.rating === 'Committed' && (
+                                                    <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm flex items-center gap-1">
+                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> ملتزم
+                                                    </span>
+                                                )}
                                             </div>
-                                            <p className="text-xs text-slate-600">{h.note}</p>
                                         </div>
                                     </div>
+
+                                    {/* Location Intelligence */}
+                                    <div className="flex flex-col gap-1 mt-4 text-sm text-slate-600 font-bold bg-white w-full px-4 py-3 rounded-lg border border-slate-200 shadow-sm">
+                                        <div className="flex items-center gap-1.5 text-slate-500">
+                                            <MapPin className="w-4 h-4 shrink-0" />
+                                            <span>العنوان الكامل:</span>
+                                        </div>
+                                        <p className="text-slate-800 leading-relaxed mr-5">{selectedTask.addressText || 'لا يوجد عنوان تفصيلي'}</p>
+                                    </div>
+
+                                    {/* Contact Arsenal */}
+                                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                                        {getEntityContacts(entityDetails as any).map(contact => (
+                                            <a key={contact.id} href={`tel:${contact.number}`} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-sm font-bold">
+                                                <Phone className="w-4 h-4" />
+                                                <span className="text-base" dir="ltr">{contact.number}</span>
+                                                <span className="text-[10px] bg-white text-emerald-800 px-2 py-0.5 rounded border border-emerald-100 shadow-sm">{contact.label}</span>
+                                                {contact.isPrimary && <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded shadow-sm">أساسي</span>}
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="absolute left-0 top-0 w-64 h-64 bg-slate-100 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2 opacity-60"></div>
+                            </div>
+
+                            {/* Tabs Header */}
+                            <div className="px-6 flex gap-6 border-b border-gray-100 shrink-0 bg-white shadow-sm z-10 transition-colors">
+                                {[
+                                    { id: 'journey', label: 'سجل الرحلة', icon: Activity },
+                                    { id: 'calls', label: 'سجل التواصل', icon: History },
+                                    { id: 'contracts', label: 'العقود', icon: FileText },
+                                    { id: 'visits', label: 'الزيارات', icon: Wrench }
+                                ].map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`py-3.5 text-sm font-bold flex items-center gap-2 relative transition-colors ${activeTab === tab.id ? 'text-violet-800' : 'text-slate-500 hover:text-slate-800'}`}>
+                                        <tab.icon className="w-4 h-4" /> {tab.label}
+                                        {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-violet-600 rounded-t-full shadow-[0_-2px_4px_rgba(124,58,237,0.5)]" />}
+                                    </button>
                                 ))}
                             </div>
+
+                            {/* Tab Content */}
+                            <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 custom-scroll relative">
+                                {activeTab === 'journey' && (
+                                    <>
+                                        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-200" style={{ transform: 'translateX(-50%)' }}></div>
+                                        <div className="space-y-6 max-w-2xl mx-auto relative z-10">
+                                            {journeyEvents.length === 0 ? (
+                                                <div className="text-center bg-white border border-dashed border-gray-300 rounded-xl p-8">
+                                                    <History className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                                    <p className="text-sm font-bold text-slate-500">لا توجد أنشطة مسجلة لهذا الزبون بعد</p>
+                                                </div>
+                                            ) : (
+                                                journeyEvents.map((item, idx) => (
+                                                    <div key={item.id} className={`flex ${idx % 2 === 0 ? 'flex-row' : 'flex-row-reverse'} w-full items-center justify-between`}>
+                                                        <div className="w-5/12"></div>
+                                                        <div className="w-2/12 flex justify-center z-10">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-50 shadow-sm ${item.bg}`}>
+                                                                <item.icon className={`w-4 h-4 ${item.color}`} />
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-5/12">
+                                                            <div className={`bg-white border text-right border-gray-200 p-4 rounded-xl shadow-sm ${idx % 2 === 0 ? 'mr-0 ml-auto' : 'ml-0 mr-auto'}`}>
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <span className="text-xs text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200" dir="ltr">
+                                                                        {new Date(item.date).toLocaleString('ar-SY', { dateStyle: 'short', timeStyle: 'short' })}
+                                                                    </span>
+                                                                </div>
+                                                                {item.content}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                                {activeTab === 'calls' && (
+                                    <div className="flex flex-col border rounded-xl border-gray-200 bg-white shadow-sm overflow-hidden min-h-[400px]">
+                                        <div className="flex-1 overflow-y-auto custom-scroll" style={{ maxHeight: '480px' }}>
+                                            <table className="w-full text-right border-collapse">
+                                                <thead className="sticky top-0 z-10 bg-slate-50 border-b border-gray-200 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-4 h-12 text-xs font-bold text-slate-600">التاريخ</th>
+                                                        <th className="px-4 h-12 text-xs font-bold text-slate-600">القناة</th>
+                                                        <th className="px-4 h-12 text-xs font-bold text-slate-600">الرقم</th>
+                                                        <th className="px-4 h-12 text-xs font-bold text-slate-600">النتيجة</th>
+                                                        <th className="px-4 h-12 text-xs font-bold text-slate-600">ملاحظات</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {getEntityCallLogs().map(log => (
+                                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors h-12 group">
+                                                            <td className="px-4 py-2 text-sm font-bold text-slate-700" dir="ltr">{new Date(log.timestamp).toLocaleString('ar-SY', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                                                            <td className="px-4 py-2 text-sm text-slate-600">{log.communicationMethod?.startsWith('whatsapp') ? 'واتساب' : 'هاتف'}</td>
+                                                            <td className="px-4 py-2 text-sm text-slate-600" dir="ltr">{log.contactNumber}</td>
+                                                            <td className="px-4 py-2">
+                                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${outcomeConfig[log.outcome]?.bg} ${outcomeConfig[log.outcome]?.color} ${outcomeConfig[log.outcome]?.bg.replace('bg-', 'border-').replace('100', '200')}`}>{outcomeConfig[log.outcome]?.label || log.outcome}</span>
+                                                            </td>
+                                                            <td className="px-4 py-2 text-sm text-slate-500 truncate max-w-[150px]">{log.notes || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                    {getEntityCallLogs().length === 0 && (
+                                                        <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-slate-400 font-bold">لا يوجد سجل تواصل</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {/* Optional pagination can be added here if needed, but per-entity logs are usually small */}
+                                    </div>
+                                )}
+                                {activeTab === 'contracts' && (
+                                    <div className="text-center p-8"><p className="text-sm font-bold text-slate-500">سجل العقود (قريباً)</p></div>
+                                )}
+                                {activeTab === 'visits' && (
+                                    <div className="text-center p-8"><p className="text-sm font-bold text-slate-500">سجل الزيارات (قريباً)</p></div>
+                                )}
+                            </div>
+
+                            {/* Action Decision Zone */}
+                            <div className="p-2 bg-white border-t border-gray-200 flex gap-2 shrink-0 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05),_0_-4px_6px_-2px_rgba(0,0,0,0.02)] z-20">
+                                <button
+                                    onClick={() => setIsOutcomeModalOpen(true)}
+                                    disabled={selectedTask.status === 'booked'}
+                                    className={`flex-1 py-1.5 px-3 flex items-center justify-center gap-2 border-none rounded-xl transition-all shadow-sm group active:scale-[0.98] ${selectedTask.status === 'booked' ? 'bg-slate-100 border border-slate-200 text-slate-400 grayscale cursor-not-allowed shadow-none' : 'bg-gradient-to-br from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 shadow-violet-500/10'}`}
+                                >
+                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${selectedTask.status === 'booked' ? 'bg-slate-200' : 'bg-white/20'}`}>
+                                        <Send className={`w-3.5 h-3.5 ${selectedTask.status === 'booked' ? 'text-slate-400' : 'text-white'}`} />
+                                    </div>
+                                    <div className="text-right overflow-hidden">
+                                        <p className={`font-black text-[11px] leading-tight truncate ${selectedTask.status === 'booked' ? 'text-slate-500' : 'text-white'}`}>تسجيل نتيجة التواصل</p>
+                                        <p className={`text-[8px] font-bold opacity-70 truncate ${selectedTask.status === 'booked' ? 'text-slate-400' : 'text-violet-100'}`}>تحديث الحالة</p>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => setIsAppointmentModalOpen(true)}
+                                    disabled={selectedTask.status !== 'booked'}
+                                    className={`flex-1 py-1.5 px-3 flex items-center justify-center gap-2 border-none rounded-xl transition-all group active:scale-[0.98] ${selectedTask.status !== 'booked'
+                                        ? 'bg-slate-100 border border-slate-200 text-slate-400 grayscale cursor-not-allowed shadow-none'
+                                        : 'bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-sm shadow-emerald-500/10 text-white'
+                                        }`}
+                                >
+                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${selectedTask.status !== 'booked' ? 'bg-slate-200' : 'bg-white/20'}`}>
+                                        <Calendar className={`w-3.5 h-3.5 ${selectedTask.status !== 'booked' ? 'text-slate-400' : ''}`} />
+                                    </div>
+                                    <div className="text-right overflow-hidden">
+                                        <p className="font-black text-[11px] leading-tight truncate">جدولة زيارة التسويق</p>
+                                        <p className={`text-[8px] font-bold opacity-70 truncate ${selectedTask.status !== 'booked' ? 'text-slate-400' : 'text-emerald-50'}`}>موعد جديد</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center flex-col text-slate-400 bg-slate-50 relative overflow-hidden">
+                            <Headset className="w-20 h-20 mb-4 text-violet-100" />
+                            <p className="font-bold text-slate-500">يرجى اختيار زبون من قائمة الفريق</p>
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* ══════════════════════════════════════════════ */}
-                {/* RIGHT COLUMN — Action Panel                    */}
-                {/* ══════════════════════════════════════════════ */}
-                <div className="w-80 bg-slate-50 border-l border-gray-200 flex flex-col shrink-0 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100 bg-white">
-                        <h2 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                            <Send className="w-3.5 h-3.5 text-violet-500" />
-                            <span>نتيجة المكالمة</span>
-                        </h2>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Outcome Buttons */}
-                        <div className="space-y-2">
-                            {Object.entries(outcomeConfig).map(([key, cfg]) => {
-                                const isActive = outcome === key;
-                                return (
-                                    <button key={key} type="button"
-                                        onClick={() => setOutcome(key as CallOutcome)}
-                                        className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all text-right ${isActive
-                                            ? `${cfg.bg} ${cfg.border} ${cfg.color} shadow-sm ring-2 ${cfg.activeRing}`
-                                            : 'bg-white border-gray-200 text-slate-600 hover:border-gray-300'}`}>
-                                        <div className={`w-8 h-8 rounded-lg ${isActive ? cfg.bg : 'bg-gray-50'} border ${isActive ? cfg.border : 'border-gray-200'} flex items-center justify-center`}>
-                                            <cfg.icon className={`w-4 h-4 ${isActive ? cfg.color : 'text-gray-400'}`} />
-                                        </div>
-                                        <span className="text-sm font-bold">{cfg.label}</span>
-                                        {isActive && (
-                                            <div className="mr-auto w-5 h-5 rounded-full bg-white border-2 border-current flex items-center justify-center">
-                                                <div className="w-2.5 h-2.5 rounded-full bg-current" />
-                                            </div>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {/* Conditional: Booking Time Picker */}
-                        <AnimatePresence>
-                            {outcome === 'booked' && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                                    <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar className="w-4 h-4 text-emerald-600" />
-                                            <span className="text-xs font-bold text-emerald-700">حجز موعد الزيارة</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-emerald-700">التاريخ</label>
-                                                <input type="date" value={visitDate} onChange={e => setVisitDate(e.target.value)}
-                                                    className="w-full bg-white border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-semibold text-emerald-700">الوقت</label>
-                                                <input type="time" value={visitTime} onChange={e => setVisitTime(e.target.value)}
-                                                    className="w-full bg-white border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none font-mono" dir="ltr" />
-                                            </div>
-                                        </div>
-                                        {visitDate && visitTime && (
-                                            <div className="flex items-center gap-2 text-[11px] text-emerald-600 bg-emerald-100/50 rounded-lg px-3 py-2 border border-emerald-200/50">
-                                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                                                <span>الموعد: <strong>{new Date(visitDate + 'T00:00:00').toLocaleDateString('ar-IQ', { weekday: 'long', month: 'long', day: 'numeric' })} - {visitTime}</strong></span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Notes */}
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                                <MessageSquare className="w-3 h-3" /><span>ملاحظات</span>
-                            </label>
-                            <textarea
-                                value={notes}
-                                onChange={e => setNotes(e.target.value)}
-                                placeholder="ملاحظات حول المكالمة..."
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm placeholder:text-gray-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-400/10 focus:outline-none min-h-[80px] resize-none transition-all"
-                            />
+                {/* COLUMN 3: Team Situational Awareness (25%) */}
+                <div className="w-1/4 min-w-[300px] flex flex-col gap-3 relative shrink-0">
+                    {/* Metrics Top Card */}
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm shrink-0">
+                        <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-1.5">< Zap className="w-4 h-4 text-amber-500" /> مؤشر أداء التيلماركتر</h3>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 shadow-sm flex flex-col justify-between">
+                                <p className="text-[10px] font-bold text-emerald-700 mb-1 leading-tight line-clamp-2">زيارات تمت جدولتها</p>
+                                <p className="text-xl font-black text-emerald-700">{totalScheduled}</p>
+                            </div>
+                            <div className="bg-violet-50 rounded-xl p-3 border border-violet-100 shadow-sm flex flex-col justify-between">
+                                <p className="text-[10px] font-bold text-violet-700 mb-1 leading-tight line-clamp-2">مكالمات مكتملة</p>
+                                <p className="text-xl font-black text-violet-700">{completedCount}</p>
+                            </div>
+                            <div className="bg-sky-50 rounded-xl p-3 border border-sky-100 shadow-sm flex flex-col justify-between">
+                                <p className="text-[10px] font-bold text-sky-700 mb-1 leading-tight line-clamp-2">نسبة نجاح الحجز</p>
+                                <p className="text-xl font-black text-sky-700">{bookingRate}%</p>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Submit */}
-                    <div className="p-4 border-t border-gray-200 bg-white">
-                        <button
-                            type="button"
-                            onClick={handleSubmit}
-                            disabled={!outcome || (outcome === 'booked' && (!visitDate || !visitTime))}
-                            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-l from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-400 text-white text-sm font-bold transition-all shadow-lg shadow-violet-500/20 disabled:shadow-none"
-                        >
-                            <Send className="w-4 h-4" />
-                            <span>حفظ والتالي</span>
-                            <ArrowRight className="w-4 h-4" />
-                        </button>
+                    {/* Team Agenda Timeline Wrapper */}
+                    <div className="flex-1 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col relative w-full h-full">
+                        <div className="absolute inset-0">
+                            <TeamAgendaPanel appointments={teamAppointments} date={date} />
+                        </div>
                     </div>
                 </div>
 
             </div>
-        </div>
-    );
-}
 
-/* ─── Lucide doesn't have ClipboardList, reuse from parent ─── */
-function ClipboardList(props: React.SVGProps<SVGSVGElement>) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-            <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-            <path d="M12 11h4" /><path d="M12 16h4" />
-            <path d="M8 11h.01" /><path d="M8 16h.01" />
-        </svg>
+            {/* Modals */}
+            <OutcomeRecorderModal
+                isOpen={isOutcomeModalOpen}
+                onClose={() => setIsOutcomeModalOpen(false)}
+                task={selectedTask}
+                entityDetails={entityDetails}
+                onSave={handleSaveOutcome}
+            />
+
+            <AppointmentSchedulerModal
+                isOpen={isAppointmentModalOpen}
+                onClose={() => setIsAppointmentModalOpen(false)}
+                task={selectedTask}
+                entityDetails={entityDetails}
+                defaultDate={date}
+                onSave={handleSaveAppointment}
+            />
+
+        </div>
     );
 }

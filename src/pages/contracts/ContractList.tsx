@@ -1,21 +1,10 @@
-import { useState } from 'react';
-import { FileText, Plus, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Plus, Eye, Loader2 } from 'lucide-react';
 import SmartTable from '../../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../../components/SmartTable';
 import type { Contract } from '../../lib/types';
 import { useNavigate } from 'react-router-dom';
-
-/* ------------------------------------------------------------------ */
-/*  Sample contracts                                                    */
-/* ------------------------------------------------------------------ */
-
-import { mockContracts } from '../../lib/mockData';
-
-/* ------------------------------------------------------------------ */
-/*  Sample contracts                                                    */
-/* ------------------------------------------------------------------ */
-
-const sampleContracts = mockContracts;
+import { api } from '../../lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                              */
@@ -30,8 +19,8 @@ const statusConfig: Record<string, { label: string; style: string }> = {
 
 const paymentLabels: Record<string, string> = { cash: 'نقدي', installment: 'أقساط' };
 
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric' });
-const formatPrice = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
+const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' });
+const formatPrice = (n: number) => n.toLocaleString('ar-SY') + ' ل.س';
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                           */
@@ -39,6 +28,15 @@ const formatPrice = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
 
 export default function ContractList() {
     const navigate = useNavigate();
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.contracts.list()
+            .then(data => setContracts(data))
+            .catch(err => console.error('Failed to load contracts:', err))
+            .finally(() => setLoading(false));
+    }, []);
 
     const columns: ColumnDef<Contract>[] = [
         {
@@ -46,7 +44,7 @@ export default function ContractList() {
             render: (c) => <span className="text-sm font-mono font-semibold text-sky-600">{c.contractNumber}</span>,
         },
         {
-            key: 'customerName', label: 'العميل', sortable: true,
+            key: 'customerName', label: 'الزبون', sortable: true,
             render: (c) => <span className="text-sm font-semibold text-slate-800">{c.customerName}</span>,
         },
         {
@@ -101,35 +99,45 @@ export default function ContractList() {
         },
     ];
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+            </div>
+        );
+    }
+
     return (
-        <SmartTable<Contract>
-            title="إدارة العقود"
-            icon={FileText}
-            data={sampleContracts}
-            columns={columns}
-            filters={filters}
-            searchKeys={['contractNumber', 'customerName', 'deviceModelName', 'serialNumber']}
-            searchPlaceholder="بحث عن عقد..."
-            getId={(c) => c.id}
-            headerActions={
-                <button
-                    onClick={() => navigate('/contracts/new')}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors shadow-sm"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>عقد جديد</span>
-                </button>
-            }
-            actions={(c) => (
-                <button
-                    onClick={() => alert(`عرض العقد: ${c.contractNumber}`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors"
-                >
-                    <Eye className="w-3.5 h-3.5" /><span>عرض</span>
-                </button>
-            )}
-            emptyIcon={FileText}
-            emptyMessage="لا توجد عقود"
-        />
+        <div className="p-8 h-full flex flex-col overflow-hidden">
+            <SmartTable<Contract>
+                title="إدارة العقود"
+                icon={FileText}
+                data={contracts}
+                columns={columns}
+                filters={filters}
+                searchKeys={['contractNumber', 'customerName', 'deviceModelName', 'serialNumber']}
+                searchPlaceholder="بحث عن عقد..."
+                getId={(c) => c.id}
+                headerActions={
+                    <button
+                        onClick={() => navigate('/contracts/new')}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors shadow-sm"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>عقد جديد</span>
+                    </button>
+                }
+                actions={(c) => (
+                    <button
+                        onClick={() => alert(`عرض العقد: ${c.contractNumber}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors"
+                    >
+                        <Eye className="w-3.5 h-3.5" /><span>عرض</span>
+                    </button>
+                )}
+                emptyIcon={FileText}
+                emptyMessage="لا توجد عقود"
+            />
+        </div>
     );
 }

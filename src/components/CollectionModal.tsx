@@ -111,7 +111,7 @@ export default function CollectionModal({ isOpen, onClose, due }: CollectionModa
 
                         {outcome === 'Partial Pay' && (
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-700">المبلغ المدفوع (د.ع)</label>
+                                <label className="text-sm font-medium text-slate-700">المبلغ المدفوع (ل.س)</label>
                                 <input
                                     type="number"
                                     required

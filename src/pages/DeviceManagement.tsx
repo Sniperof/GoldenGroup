@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Wrench, PenTool, Truck, Clock, Package, Cog, X, Save, AlertTriangle, RefreshCw, Gem } from 'lucide-react';
-import { defaultDeviceModels, defaultSpareParts } from '../lib/defaultData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Wrench, PenTool, Truck, Clock, Package, Cog, X, Save, AlertTriangle, RefreshCw, Gem, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 import type { DeviceModel, SparePart, MaintenancePartType } from '../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import SmartTable from '../components/SmartTable';
@@ -11,21 +11,21 @@ import type { ColumnDef, FilterDef } from '../components/SmartTable';
 /* ------------------------------------------------------------------ */
 
 const categoryLabels: Record<string, { label: string; icon: string; color: string }> = {
-    'Residential': { label: 'منزلي', icon: '🏠', color: 'bg-green-100 text-green-800' },
-    'Industrial': { label: 'صناعي', icon: '🏭', color: 'bg-orange-100 text-orange-800' },
-    'Commercial': { label: 'تجاري', icon: '🏢', color: 'bg-blue-100 text-blue-800' },
+    'منزلي': { label: 'منزلي', icon: '🏠', color: 'bg-green-100 text-green-800' },
+    'صناعي': { label: 'صناعي', icon: '🏭', color: 'bg-orange-100 text-orange-800' },
+    'تجاري': { label: 'تجاري', icon: '🏢', color: 'bg-blue-100 text-blue-800' },
 };
 
 const maintenanceLabels: Record<string, string> = {
-    '3 Months': '3 أشهر',
-    '6 Months': '6 أشهر',
-    '1 Year': 'سنة واحدة',
+    '3 أشهر': '3 أشهر',
+    '6 أشهر': '6 أشهر',
+    '1 سنة': 'سنة واحدة',
 };
 
 const serviceLabels: Record<string, { label: string; Icon: any }> = {
-    'Installation': { label: 'تركيب', Icon: Wrench },
-    'Maintenance': { label: 'صيانة', Icon: PenTool },
-    'Delivery': { label: 'توصيل', Icon: Truck },
+    'تركيب': { label: 'تركيب', Icon: Wrench },
+    'صيانة': { label: 'صيانة', Icon: PenTool },
+    'توصيل': { label: 'توصيل', Icon: Truck },
 };
 
 const partTypeConfig: Record<MaintenancePartType, { label: string; color: string; bg: string; border: string; hint: string }> = {
@@ -34,7 +34,7 @@ const partTypeConfig: Record<MaintenancePartType, { label: string; color: string
     Accessory: { label: 'ملحقات', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', hint: 'ملحق إضافي غير إلزامي' },
 };
 
-const formatPrice = (n: number) => new Intl.NumberFormat('ar-IQ', { style: 'currency', currency: 'IQD', maximumFractionDigits: 0 }).format(n);
+const formatPrice = (n: number) => new Intl.NumberFormat('ar-SY', { style: 'currency', currency: 'SYP', maximumFractionDigits: 0 }).format(n);
 
 type ActiveTab = 'devices' | 'parts';
 
@@ -44,21 +44,42 @@ type ActiveTab = 'devices' | 'parts';
 
 const DeviceManagement = () => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('devices');
+    const [loading, setLoading] = useState(true);
 
     // ──── Devices state ────
-    const [devices, setDevices] = useState<DeviceModel[]>(defaultDeviceModels);
+    const [devices, setDevices] = useState<DeviceModel[]>([]);
     const [isAddingDevice, setIsAddingDevice] = useState(false);
     const [newDevice, setNewDevice] = useState<Partial<DeviceModel>>({
-        name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [],
+        name: '', brand: '', category: 'صناعي', maintenanceInterval: '6 أشهر', basePrice: 0, supportedVisitTypes: [],
     });
 
     // ──── Spare Parts state ────
-    const [parts, setParts] = useState<SparePart[]>(defaultSpareParts);
+    const [parts, setParts] = useState<SparePart[]>([]);
     const [isAddingPart, setIsAddingPart] = useState(false);
     const [editingPart, setEditingPart] = useState<SparePart | null>(null);
     const [partForm, setPartForm] = useState<Partial<SparePart>>({
         name: '', code: '', basePrice: 0, maintenanceType: 'Periodic', compatibleDeviceIds: [],
     });
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [devicesData, partsData] = await Promise.all([
+                api.deviceModels.list(),
+                api.spareParts.list(),
+            ]);
+            setDevices(devicesData);
+            setParts(partsData);
+        } catch (err) {
+            console.error('Failed to fetch device management data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     // ──── Device handlers ────
     const handleDeviceInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -66,24 +87,28 @@ const DeviceManagement = () => {
         setNewDevice(prev => ({ ...prev, [name]: value }));
     };
 
-    const toggleVisitType = (type: 'Installation' | 'Maintenance' | 'Delivery') => {
+    const toggleVisitType = (type: 'تركيب' | 'صيانة' | 'توصيل') => {
         setNewDevice(prev => {
             const current = prev.supportedVisitTypes || [];
             return { ...prev, supportedVisitTypes: current.includes(type) ? current.filter(t => t !== type) : [...current, type] };
         });
     };
 
-    const handleDeviceSubmit = (e: React.FormEvent) => {
+    const handleDeviceSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newDevice.name && newDevice.brand && newDevice.basePrice) {
-            const device: DeviceModel = {
-                id: devices.length + 1, name: newDevice.name, brand: newDevice.brand,
-                category: newDevice.category as any, maintenanceInterval: newDevice.maintenanceInterval as any,
-                basePrice: Number(newDevice.basePrice), supportedVisitTypes: newDevice.supportedVisitTypes as any || [],
-            };
-            setDevices([...devices, device]);
-            setIsAddingDevice(false);
-            setNewDevice({ name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [] });
+            try {
+                await api.deviceModels.create({
+                    name: newDevice.name, brand: newDevice.brand,
+                    category: newDevice.category, maintenanceInterval: newDevice.maintenanceInterval,
+                    basePrice: Number(newDevice.basePrice), supportedVisitTypes: newDevice.supportedVisitTypes || [],
+                });
+                setIsAddingDevice(false);
+                setNewDevice({ name: '', brand: '', category: 'صناعي', maintenanceInterval: '6 أشهر', basePrice: 0, supportedVisitTypes: [] });
+                await fetchData();
+            } catch (err) {
+                console.error('Failed to create device:', err);
+            }
         }
     };
 
@@ -106,24 +131,28 @@ const DeviceManagement = () => {
         });
     };
 
-    const handlePartSubmit = (e: React.FormEvent) => {
+    const handlePartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!partForm.name || !partForm.code) return;
-        if (editingPart) {
-            setParts(prev => prev.map(p => p.id === editingPart.id ? { ...editingPart, ...partForm } as SparePart : p));
-        } else {
-            const newPart: SparePart = {
-                id: Math.max(0, ...parts.map(p => p.id)) + 1,
+        try {
+            const partData = {
                 name: partForm.name!,
                 code: partForm.code!,
                 basePrice: Number(partForm.basePrice) || 0,
                 maintenanceType: partForm.maintenanceType as MaintenancePartType || 'Periodic',
                 compatibleDeviceIds: partForm.compatibleDeviceIds || [],
             };
-            setParts([...parts, newPart]);
+            if (editingPart) {
+                await api.spareParts.update(editingPart.id, partData);
+            } else {
+                await api.spareParts.create(partData);
+            }
+            setIsAddingPart(false);
+            setEditingPart(null);
+            await fetchData();
+        } catch (err) {
+            console.error('Failed to save spare part:', err);
         }
-        setIsAddingPart(false);
-        setEditingPart(null);
     };
 
     // ──── Columns ────
@@ -141,13 +170,13 @@ const DeviceManagement = () => {
         {
             key: 'category', label: 'الفئة', sortable: true,
             render: (d) => {
-                const cat = categoryLabels[d.category];
+                const cat = categoryLabels[d.category] || { label: d.category, icon: '📦', color: 'bg-gray-100 text-gray-800' };
                 return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium gap-1.5 ${cat.color}`}><span className="text-[10px]">{cat.icon}</span>{cat.label}</span>;
             },
         },
         {
             key: 'maintenanceInterval', label: 'دورة الصيانة', sortable: true,
-            render: (d) => <span className="text-sm text-slate-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-gray-400" />{maintenanceLabels[d.maintenanceInterval]}</span>,
+            render: (d) => <span className="text-sm text-slate-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-gray-400" />{maintenanceLabels[d.maintenanceInterval] || d.maintenanceInterval}</span>,
         },
         {
             key: 'basePrice', label: 'السعر الأساسي', sortable: true,
@@ -159,6 +188,7 @@ const DeviceManagement = () => {
                 <div className="flex gap-2">
                     {d.supportedVisitTypes.map(type => {
                         const S = serviceLabels[type];
+                        if (!S) return null;
                         return <div key={type} title={S.label} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-600 transition-all cursor-help"><S.Icon size={16} /></div>;
                     })}
                 </div>
@@ -210,8 +240,8 @@ const DeviceManagement = () => {
     ];
 
     const deviceFilters: FilterDef[] = [
-        { key: 'category', label: 'جميع الفئات', options: [{ value: 'Residential', label: 'منزلي' }, { value: 'Industrial', label: 'صناعي' }, { value: 'Commercial', label: 'تجاري' }] },
-        { key: 'maintenanceInterval', label: 'جميع الدورات', options: [{ value: '3 Months', label: '3 أشهر' }, { value: '6 Months', label: '6 أشهر' }, { value: '1 Year', label: 'سنة واحدة' }] },
+        { key: 'category', label: 'جميع الفئات', options: [{ value: 'منزلي', label: 'منزلي' }, { value: 'صناعي', label: 'صناعي' }, { value: 'تجاري', label: 'تجاري' }] },
+        { key: 'maintenanceInterval', label: 'جميع الدورات', options: [{ value: '3 أشهر', label: '3 أشهر' }, { value: '6 أشهر', label: '6 أشهر' }, { value: '1 سنة', label: 'سنة واحدة' }] },
     ];
 
     const partFilters: FilterDef[] = [
@@ -222,6 +252,17 @@ const DeviceManagement = () => {
         { id: 'devices', label: 'الأجهزة', icon: Package, count: devices.length },
         { id: 'parts', label: 'قطع الغيار', icon: Cog, count: parts.length },
     ];
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+                    <span className="text-sm text-gray-500">جاري تحميل البيانات...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -247,10 +288,10 @@ const DeviceManagement = () => {
                 </div>
 
                 {/* ============ TAB CONTENT ============ */}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
                     {activeTab === 'devices' && (
                         <SmartTable<DeviceModel>
-                            title="دليل الأجهزة"
+                            title="إدارة الأجهزة وقطع الغيار"
                             icon={Package}
                             data={devices}
                             columns={deviceColumns}
@@ -311,7 +352,7 @@ const DeviceManagement = () => {
                                         <input type="text" name="brand" required value={newDevice.brand} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" placeholder="مثال: Golden" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">السعر (د.ع)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">السعر (ل.س)</label>
                                         <input type="number" name="basePrice" required value={newDevice.basePrice} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" />
                                     </div>
                                 </div>
@@ -319,10 +360,10 @@ const DeviceManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">الفئة</label>
                                         <div className="flex bg-gray-100 p-1 rounded-lg">
-                                            {(['Residential', 'Industrial', 'Commercial'] as const).map(cat => (
+                                            {(['منزلي', 'صناعي', 'تجاري'] as const).map(cat => (
                                                 <button type="button" key={cat} onClick={() => setNewDevice(prev => ({ ...prev, category: cat }))}
                                                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${newDevice.category === cat ? 'bg-white shadow-sm text-sky-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                                                    <span>{categoryLabels[cat].icon}</span>{categoryLabels[cat].label}
+                                                    <span>{categoryLabels[cat]?.icon || '📦'}</span>{categoryLabels[cat]?.label || cat}
                                                 </button>
                                             ))}
                                         </div>
@@ -330,9 +371,9 @@ const DeviceManagement = () => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">دورة الصيانة</label>
                                         <select name="maintenanceInterval" value={newDevice.maintenanceInterval} onChange={handleDeviceInputChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none bg-white text-right text-sm">
-                                            <option value="3 Months">3 أشهر</option>
-                                            <option value="6 Months">6 أشهر</option>
-                                            <option value="1 Year">سنة واحدة</option>
+                                            <option value="3 أشهر">3 أشهر</option>
+                                            <option value="6 أشهر">6 أشهر</option>
+                                            <option value="1 سنة">سنة واحدة</option>
                                         </select>
                                     </div>
                                 </div>
@@ -340,9 +381,9 @@ const DeviceManagement = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">الخدمات المدعومة</label>
                                     <div className="flex gap-4">
                                         {[
-                                            { id: 'Installation' as const, icon: <Wrench size={16} />, label: 'تركيب' },
-                                            { id: 'Maintenance' as const, icon: <PenTool size={16} />, label: 'صيانة' },
-                                            { id: 'Delivery' as const, icon: <Truck size={16} />, label: 'توصيل' },
+                                            { id: 'تركيب' as const, icon: <Wrench size={16} />, label: 'تركيب' },
+                                            { id: 'صيانة' as const, icon: <PenTool size={16} />, label: 'صيانة' },
+                                            { id: 'توصيل' as const, icon: <Truck size={16} />, label: 'توصيل' },
                                         ].map(type => (
                                             <label key={type.id} className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-all ${newDevice.supportedVisitTypes?.includes(type.id) ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 hover:bg-gray-50'}`}>
                                                 <input type="checkbox" className="hidden" checked={newDevice.supportedVisitTypes?.includes(type.id)} onChange={() => toggleVisitType(type.id)} />
@@ -395,7 +436,7 @@ const DeviceManagement = () => {
 
                                 {/* Price */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">السعر (د.ع)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">السعر ل.س</label>
                                     <input type="number" value={partForm.basePrice || ''} onChange={e => setPartForm(p => ({ ...p, basePrice: Number(e.target.value) }))}
                                         className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none text-right text-sm" />
                                 </div>
@@ -445,7 +486,7 @@ const DeviceManagement = () => {
                                                     <input type="checkbox" checked={isSelected} onChange={() => toggleDeviceCompat(dev.id)} className="accent-sky-600 w-4 h-4" />
                                                     <div className="flex-1 min-w-0">
                                                         <span className="text-sm font-medium text-slate-700 block">{dev.name}</span>
-                                                        <span className="text-[10px] text-gray-400">{dev.brand} · {categoryLabels[dev.category].label}</span>
+                                                        <span className="text-[10px] text-gray-400">{dev.brand} · {categoryLabels[dev.category]?.label || dev.category}</span>
                                                     </div>
                                                     <Gem className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-sky-500' : 'text-gray-300'}`} />
                                                 </label>

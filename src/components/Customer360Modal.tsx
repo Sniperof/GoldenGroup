@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Phone, MapPin, Eye, Users, Clock, CheckCircle2,
     AlertTriangle, DollarSign, Wrench, RotateCcw, MessageSquare,
-    Calendar, ChevronLeft, Pause, UserCheck, Monitor
+    Calendar, ChevronLeft, Pause, UserCheck, Monitor, Loader2
 } from 'lucide-react';
 import type { Task } from '../lib/types';
-import { defaultTasks } from '../lib/defaultData';
+import { api } from '../lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                              */
@@ -26,7 +26,7 @@ const statusConfig: Record<string, { label: string; style: string; icon: any }> 
     completed: { label: 'مكتمل', style: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
 };
 
-const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric', year: 'numeric' });
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -120,12 +120,23 @@ function TaskRow({ task, onAction }: { task: Task; onAction?: Customer360ModalPr
 
 export default function Customer360Modal({ isOpen, onClose, customerName, onTaskAction }: Customer360ModalProps) {
     const [activeTab, setActiveTab] = useState<ModalTab>('overview');
+    const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    // Get all tasks for this customer
+    useEffect(() => {
+        if (isOpen && customerName) {
+            setLoading(true);
+            api.tasks.list()
+                .then(data => setAllTasks(data))
+                .catch(console.error)
+                .finally(() => setLoading(false));
+        }
+    }, [isOpen, customerName]);
+
     const customerTasks = useMemo(() => {
         if (!customerName) return [];
-        return defaultTasks.filter(t => t.customerName === customerName);
-    }, [customerName]);
+        return allTasks.filter(t => t.customerName === customerName);
+    }, [customerName, allTasks]);
 
     const activeTasks = useMemo(() => customerTasks.filter(t => t.status !== 'completed'), [customerTasks]);
     const completedTasks = useMemo(() => customerTasks.filter(t => t.status === 'completed'), [customerTasks]);
@@ -183,7 +194,7 @@ export default function Customer360Modal({ isOpen, onClose, customerName, onTask
                         <div className="bg-gradient-to-l from-sky-600 to-sky-700 text-white p-5 shrink-0">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
-                                    <p className="text-sky-200 text-xs font-medium mb-1">ملف العميل الشامل</p>
+                                    <p className="text-sky-200 text-xs font-medium mb-1">ملف الزبون الشامل</p>
                                     <h2 className="text-xl font-bold">{customerName}</h2>
                                 </div>
                                 <button onClick={onClose} className="text-white/60 hover:text-white transition-colors mt-0.5">
@@ -276,7 +287,7 @@ export default function Customer360Modal({ isOpen, onClose, customerName, onTask
                                         <div className="text-center py-10 text-slate-400">
                                             <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-300" />
                                             <p className="font-medium">لا توجد مهام نشطة</p>
-                                            <p className="text-xs">جميع مهام هذا العميل مكتملة</p>
+                                            <p className="text-xs">جميع مهام هذا الزبون مكتملة</p>
                                         </div>
                                     )}
                                 </div>

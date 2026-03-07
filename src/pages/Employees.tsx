@@ -1,11 +1,20 @@
+import { useState, useEffect } from 'react';
 import { Users } from 'lucide-react';
-import { defaultEmployees } from '../lib/defaultData';
+import { api } from '../lib/api';
 import type { Employee } from '../lib/types';
 import SmartTable from '../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../components/SmartTable';
 
 export default function Employees() {
-    const employees = defaultEmployees;
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.employees.list()
+            .then((data) => setEmployees(data))
+            .catch((err) => console.error('Failed to fetch employees:', err))
+            .finally(() => setLoading(false));
+    }, []);
 
     const columns: ColumnDef<Employee>[] = [
         {
@@ -39,9 +48,17 @@ export default function Employees() {
         { key: 'status', label: 'جميع الحالات', options: [{ value: 'active', label: 'نشط' }, { value: 'leave', label: 'إجازة' }, { value: 'inactive', label: 'غير فعّال' }] },
     ];
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
+
     return (
         <SmartTable<Employee>
-            title="إدارة الفرق"
+            title="سجلات الموظفين"
             icon={Users}
             data={employees}
             columns={columns}

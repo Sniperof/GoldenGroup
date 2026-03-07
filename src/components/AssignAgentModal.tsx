@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { X, UserCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, UserCheck, Loader2 } from 'lucide-react';
 import { useCollectionStore } from '../hooks/useCollectionStore';
-import { defaultEmployees } from '../lib/defaultData';
+import { api } from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface AssignAgentModalProps {
@@ -13,7 +13,18 @@ interface AssignAgentModalProps {
 export default function AssignAgentModal({ isOpen, onClose, selectedDueIds }: AssignAgentModalProps) {
     const { assignAgent } = useCollectionStore();
     const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-    const telemarketers = defaultEmployees.filter(e => e.role === 'telemarketer');
+    const [telemarketers, setTelemarketers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setLoading(true);
+            api.employees.list()
+                .then(data => setTelemarketers(data.filter((e: any) => e.role === 'telemarketer')))
+                .catch(console.error)
+                .finally(() => setLoading(false));
+        }
+    }, [isOpen]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
