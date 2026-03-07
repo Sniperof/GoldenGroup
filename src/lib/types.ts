@@ -21,7 +21,7 @@ export interface Route {
 }
 
 export type ReferralType = 'Personal' | 'Client' | 'Employee' | 'Unknown';
-export type ReferralOriginChannel = 'App' | 'Visit' | 'Campaign' | 'Acquaintance';
+export type ReferralOriginChannel = 'App' | 'Campaign' | 'Acquaintance';
 export type ClientRating = 'Committed' | 'NotCommitted' | 'Undefined';
 
 // --- Referral Sheet (Previously Session) ---

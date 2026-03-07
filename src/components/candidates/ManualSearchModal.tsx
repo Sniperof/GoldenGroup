@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Search, CheckCircle2, AlertCircle, Clock, Link2, ArrowRight } from 'lucide-react';
+import { X, Search, CheckCircle2, AlertCircle, Clock, Link2, ArrowRight, User } from 'lucide-react';
 import { Candidate, Client } from '../../lib/types';
 import { performSmartSearch, SearchResult, ConfidenceScore } from '../../lib/searchUtils';
 
@@ -8,7 +8,8 @@ interface ManualSearchModalProps {
     onClose: () => void;
     candidate: Partial<Candidate>;
     clients: Client[];
-    onLink: (client: Client) => void;
+    candidates: Candidate[];
+    onLink: (entity: Client | Candidate, type: 'Client' | 'Candidate') => void;
     onNoMatch: () => void;
 }
 
@@ -17,21 +18,30 @@ export default function ManualSearchModal({
     onClose,
     candidate,
     clients,
+    candidates,
     onLink,
     onNoMatch
 }: ManualSearchModalProps) {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
 
+    const [inputs, setInputs] = useState({
+        name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim(),
+        mobile: candidate.mobile || ''
+    });
+
     useEffect(() => {
         if (isOpen) {
             setIsSearching(true);
-            // Simulate a brief delay for UX if needed, but here we run it instantly
-            const searchResults = performSmartSearch(candidate, clients);
+            const searchCandidate = {
+                firstName: inputs.name,
+                mobile: inputs.mobile
+            };
+            const searchResults = performSmartSearch(searchCandidate, clients, candidates);
             setResults(searchResults);
             setIsSearching(false);
         }
-    }, [isOpen, candidate, clients]);
+    }, [isOpen, inputs, clients, candidates]);
 
     const getConfidenceUI = (confidence: ConfidenceScore) => {
         switch (confidence) {
@@ -86,22 +96,40 @@ export default function ManualSearchModal({
 
                 {/* Body */}
                 <div className="p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar bg-slate-50/30">
-                    <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 border-dashed">
-                        <div className="text-xs font-semibold text-indigo-600 mb-2 uppercase tracking-wider">بيانات البحث الحالية</div>
-                        <div className="flex flex-wrap gap-4 text-sm">
-                            <div className="flex items-center gap-2">
-                                <span className="text-slate-400">الاسم:</span>
-                                <span className="font-bold text-slate-700">{candidate.firstName} {candidate.lastName}</span>
+                    <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-4">
+                        <div className="text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                            <Search className="w-3.5 h-3.5" />
+                            بيانات البحث والتحقق
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">الاسم / الكنية</label>
+                                <input
+                                    type="text"
+                                    value={inputs.name}
+                                    onChange={e => setInputs(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="ابحث بالاسم..."
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all"
+                                />
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-slate-400">الهاتف:</span>
-                                <span className="font-mono font-bold text-slate-700">{candidate.mobile}</span>
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">رقم الموبايل</label>
+                                <input
+                                    type="text"
+                                    value={inputs.mobile}
+                                    onChange={e => setInputs(prev => ({ ...prev, mobile: e.target.value }))}
+                                    placeholder="ابحث بالرقم..."
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all text-right"
+                                    dir="ltr"
+                                />
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-slate-700">النتائج المحتملة ({results.length})</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-slate-700">نتائج البحث في قاعدة البيانات ({results.length})</h3>
+                        </div>
 
                         {isSearching ? (
                             <div className="py-12 text-center">
@@ -109,42 +137,48 @@ export default function ManualSearchModal({
                                 <p className="text-slate-500 font-medium">جاري البحث والمطابقة...</p>
                             </div>
                         ) : results.length > 0 ? (
-                            results.map(({ client, confidence }) => {
+                            results.map(({ entity, recordType, confidence }) => {
                                 const ui = getConfidenceUI(confidence);
                                 const Icon = ui.icon;
+                                const name = recordType === 'Client' ? (entity as Client).name : `${(entity as Candidate).firstName || ''} ${(entity as Candidate).lastName || ''}`.trim() || (entity as Candidate).nickname;
+                                const mobile = (entity as any).mobile;
+                                const neighborhood = (entity as any).neighborhood || (entity as any).neighborhoodText || 'حي غير محدد';
+
                                 return (
-                                    <div key={client.id} className="group bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between gap-4">
+                                    <div key={`${recordType}-${entity.id}`} className="group bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between gap-4">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-100 shrink-0">
-                                                <img
-                                                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(client.name)}&background=f1f5f9&color=64748b&size=48`}
-                                                    alt=""
-                                                    className="w-full h-full object-cover"
-                                                />
+                                            <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-100 shrink-0 bg-slate-50 flex items-center justify-center">
+                                                <User className={`w-6 h-6 ${recordType === 'Client' ? 'text-sky-400' : 'text-amber-400'}`} />
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-bold text-slate-800">{client.name}</span>
+                                                    <span className="font-bold text-slate-800">{name}</span>
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${recordType === 'Client' ? 'bg-sky-50 text-sky-600 border border-sky-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                                        {recordType === 'Client' ? 'زبون حالي' : 'اسم مقترح'}
+                                                    </span>
                                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${ui.bgColor} ${ui.color} border ${ui.borderColor} flex items-center gap-1`}>
                                                         <Icon className="w-2.5 h-2.5" />
                                                         {ui.label}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-4 text-xs text-slate-500">
-                                                    <span className="font-mono">{client.mobile}</span>
+                                                <div className="flex items-center gap-4 text-xs text-slate-500 font-medium">
+                                                    <span className="font-mono">{mobile}</span>
                                                     <span>•</span>
-                                                    <span>ID: #{client.id}</span>
+                                                    <span>ID: #{entity.id}</span>
                                                     <span>•</span>
-                                                    <span>{client.neighborhood || 'حي غير محدد'}</span>
+                                                    <span>{neighborhood}</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => onLink(client)}
-                                            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-lg text-sm font-bold transition-all border border-indigo-100"
+                                            onClick={() => onLink(entity, recordType)}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all border ${recordType === 'Client'
+                                                ? 'bg-sky-50 text-sky-600 hover:bg-sky-600 hover:text-white border-sky-100'
+                                                : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white border-amber-100'
+                                                }`}
                                         >
                                             <Link2 className="w-4 h-4" />
-                                            ربط ودمج
+                                            {recordType === 'Client' ? 'عرض الزبون' : 'عرض المقترح'}
                                         </button>
                                     </div>
                                 );

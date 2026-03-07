@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Download, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -158,7 +158,7 @@ export default function SmartTable<T>({
     }, [sorted, currentPage, ITEMS_PER_PAGE]);
 
     // Reset page if data changes dramatically
-    useMemo(() => {
+    useEffect(() => {
         if (currentPage > 1 && totalPages > 0 && currentPage > totalPages) {
             setCurrentPage(totalPages);
         }

@@ -19,7 +19,6 @@ const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
 
 const channels: { value: ReferralOriginChannel; label: string }[] = [
     { value: 'App', label: 'سوشال ميديا' },
-    { value: 'Visit', label: 'زيارة' },
     { value: 'Campaign', label: 'حملة إعلانية' },
     { value: 'Acquaintance', label: 'معرفة شخصية' }
 ];
@@ -58,7 +57,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     useEffect(() => {
         // Reset changing fields when mode changes
         setNameSnapshot('');
-        setOriginChannel('Visit');
+        setOriginChannel('Acquaintance');
         setEmployeeIdInput('');
         setEmployeeFound(null);
         setEmployeeSearchError('');
@@ -273,7 +272,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
                     {(referralType === 'Personal' || referralType === 'Unknown') && (
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">اسم الوسيط <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-bold text-slate-700 mb-2"> اسم الوسيط <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={nameSnapshot}
