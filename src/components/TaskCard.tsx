@@ -18,7 +18,7 @@ const statusConfig = {
 
 const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' });
 };
 
 interface TaskCardProps {

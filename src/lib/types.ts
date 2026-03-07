@@ -1,3 +1,5 @@
+
+
 export interface GeoUnit {
     id: number;
     name: string;
@@ -18,8 +20,9 @@ export interface Route {
     status: string;
 }
 
-export type ReferralType = 'Existing Client' | 'Supervisor' | 'Technician' | 'App' | 'Direct Call' | 'Marketing Visit' | 'Maintenance Visit' | 'Campaign' | 'Other';
-export type ReferralOriginChannel = 'App' | 'Visit' | 'Call' | 'Maintenance' | 'Campaign' | 'Field Activity';
+export type ReferralType = 'Personal' | 'Client' | 'Employee' | 'Unknown';
+export type ReferralOriginChannel = 'App' | 'Campaign' | 'Acquaintance';
+export type ClientRating = 'Committed' | 'NotCommitted' | 'Undefined';
 
 // --- Referral Sheet (Previously Session) ---
 export interface ReferralSheetStats {
@@ -36,15 +39,15 @@ export interface ReferralSheet {
     referralAddressText: string;
     referralOriginChannel: ReferralOriginChannel;
     referralNotes?: string;
-    
+
     // Core Timing
     referralDate: string; // The "Sheet Date" (Manual)
-    
+
     // Ownership
     ownerUserId: number; // The Supervisor/User who owns this sheet
-    
+
     status: 'New' | 'In-Progress' | 'Completed' | 'Archived';
-    
+
     // Stats
     stats: ReferralSheetStats;
 
@@ -52,7 +55,7 @@ export interface ReferralSheet {
     createdBy: number;
 }
 
-export type CandidateStatus = 'New' | 'Contacted' | 'Qualified' | 'Junk';
+export type CandidateStatus = 'Prospect' | 'Suggested' | 'FollowUp' | 'Contacted' | 'Qualified' | 'Junk';
 export type ReferralConfirmationStatus = 'Pending' | 'Confirmed' | 'Rejected';
 export type DuplicateType = 'Candidate' | 'Client' | 'Both';
 
@@ -63,17 +66,20 @@ export interface Candidate {
     lastName?: string;
     nickname: string | null;
     mobile: string;
+    occupation?: string;
+    contacts?: ContactEntry[];
     addressText: string;
+    geoUnitId: number | null;
     ownerUserId: number;
     status: CandidateStatus;
 
     // Referral Data (Lineage)
     referralSheetId: number | null; // Renamed from Session
-    referralDate: string; 
-    referralReason: string; 
-    referralType: ReferralType; 
-    referralOriginChannel: ReferralOriginChannel; 
-    referralNameSnapshot: string; 
+    referralDate: string;
+    referralReason: string;
+    referralType: ReferralType;
+    referralOriginChannel: ReferralOriginChannel;
+    referralNameSnapshot: string;
     referralEntityId: number | null;
 
     referralConfirmationStatus: ReferralConfirmationStatus; // Deprecated but kept for compatibility
@@ -112,16 +118,36 @@ export interface ContactEntry {
     status: ContactStatus;
 }
 
+export interface ClientReferrer {
+    id: string;
+    referrerType: string;
+    referralEntityId: number | null;
+    referrerName: string;
+    sourceChannel: string;
+    referralDate: string;
+    referralReason: string;
+    referralSheetId?: number | null;
+}
+
 export interface Client {
+
     id: number;
-    name: string;
+    firstName: string;
+    fatherName: string;
+    lastName: string;
+    nickname?: string;
+    name: string; // Computed or legacy? keeping for now
     mobile: string;
-    contacts?: ContactEntry[];
+    contacts: ContactEntry[];
     governorate: string;
     district: string;
     neighborhood: string;
     detailedAddress?: string;
     gpsCoordinates?: { lat: number; lng: number };
+    occupation?: string;
+    waterSource?: string;
+    notes?: string;
+    rating?: ClientRating;
 
     // Lineage fields
     sourceChannel?: string;
@@ -133,6 +159,8 @@ export interface Client {
     referralReason?: string;
     referralSheetId?: number | null; // Renamed
     referralAddressText?: string;
+
+    referrers?: ClientReferrer[]; // To hold multiple brokers/referrers for this client
 
     createdAt: string;
     isCandidate?: boolean;
@@ -152,6 +180,7 @@ export interface Visit {
 export interface TeamSlot {
     supervisor: number | null;
     technician: number | null;
+    telemarketers?: number[];
 }
 
 export interface SoloSlot {
@@ -190,10 +219,10 @@ export interface DeviceModel {
     id: number;
     name: string;
     brand: string;
-    category: 'Residential' | 'Industrial' | 'Commercial';
-    maintenanceInterval: '3 Months' | '6 Months' | '1 Year';
+    category: 'منزلي' | 'صناعي' | 'تجاري';
+    maintenanceInterval: '3 أشهر' | '6 أشهر' | '1 سنة';
     basePrice: number;
-    supportedVisitTypes: ('Installation' | 'Maintenance' | 'Delivery')[];
+    supportedVisitTypes: ('تركيب' | 'صيانة' | 'توصيل')[];
 }
 
 export type ContractStatus = 'draft' | 'active' | 'completed' | 'cancelled';
@@ -278,4 +307,85 @@ export interface MaintenanceRequest {
         technicianNotes: string;
         recommendations: string;
     };
+}
+
+// --- Telemarketing Engine ---
+export type CallOutcome = 'no_answer' | 'busy' | 'rejected' | 'booked';
+
+export interface TaskListItem {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    name: string;
+    mobile: string;
+    contactNumber?: string;
+    contactLabel?: string;
+    addressText: string;
+    geoUnitId: number | null;
+    status: 'pending' | 'called' | 'booked';
+    callOutcome?: CallOutcome;
+}
+
+export interface TaskList {
+    id: string;
+    teamKey: string;
+    date: string;
+    items: TaskListItem[];
+    createdAt: string;
+}
+
+export interface CallLog {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    taskListId: string;
+    teamKey: string;
+    outcome: CallOutcome;
+    contactLabel?: string;
+    contactNumber?: string;
+    notes: string;
+    timestamp: string;
+    calledBy: number;
+    communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice';
+}
+
+export interface Appointment {
+    id: string;
+    entityType: 'candidate' | 'client';
+    entityId: number;
+    customerName: string;
+    customerAddress: string;
+    customerMobile: string;
+    teamKey: string;
+    date: string;
+    timeSlot: string;
+    occupation: string;
+    waterSource: string;
+    notes: string;
+    createdAt: string;
+    createdBy: number;
+}
+
+export const WORKING_HOURS = { start: 9, end: 17, slotMinutes: 60 };
+
+// --- Emergency Triage & Dispatch ---
+export type EmergencyTicketStatus = 'New' | 'Assigned' | 'In Progress' | 'Completed' | 'Cancelled';
+export type EmergencyTicketPriority = 'Critical' | 'High' | 'Normal';
+
+export interface EmergencyTicket {
+    id: number;
+    clientId: number;
+    clientName: string;
+    clientAddress: string;
+    clientRating: ClientRating;
+    contractId: number | null;
+    deviceModelName: string | null;
+    problemDescription: string;
+    callNotes?: string;
+    attachments: string[];
+    callReceiver: string;
+    priority: EmergencyTicketPriority;
+    status: EmergencyTicketStatus;
+    assignedTechnicianId: number | null;
+    createdAt: string;
 }

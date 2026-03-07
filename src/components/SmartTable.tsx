@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Download, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -44,6 +44,7 @@ export interface SmartTableProps<T> {
     emptyIcon?: LucideIcon;
     emptyMessage?: string;
     getId: (item: T) => string | number;
+    hideFilterBar?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -92,6 +93,7 @@ export default function SmartTable<T>({
     emptyMessage = 'لا توجد بيانات',
     getId,
     rowClassName,
+    hideFilterBar = false,
 }: SmartTableProps<T> & { rowClassName?: (item: T) => string }) {
 
     /* ---------- state ---------- */
@@ -102,6 +104,9 @@ export default function SmartTable<T>({
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>(null);
     const [selected, setSelected] = useState<Set<string | number>>(new Set());
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
+
 
     /* ---------- filtering ---------- */
     const filtered = useMemo(() => {
@@ -145,6 +150,20 @@ export default function SmartTable<T>({
         return arr;
     }, [filtered, sortKey, sortDir, columns]);
 
+    /* ---------- pagination ---------- */
+    const totalPages = Math.ceil(sorted.length / ITEMS_PER_PAGE);
+    const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return sorted.slice(start, start + ITEMS_PER_PAGE);
+    }, [sorted, currentPage, ITEMS_PER_PAGE]);
+
+    // Reset page if data changes dramatically
+    useEffect(() => {
+        if (currentPage > 1 && totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
+
     /* ---------- selection ---------- */
     const allSelected = sorted.length > 0 && sorted.every(item => selected.has(getId(item)));
 
@@ -182,6 +201,7 @@ export default function SmartTable<T>({
         setSortKey(null);
         setSortDir(null);
         setSelected(new Set());
+        setCurrentPage(1);
     }, [filters]);
 
     const selectedItems = sorted.filter(item => selected.has(getId(item)));
@@ -191,11 +211,11 @@ export default function SmartTable<T>({
     /*  Render                                                           */
     /* ---------------------------------------------------------------- */
     return (
-        <div className="h-full overflow-y-auto p-8 custom-scroll">
+        <div className="p-4 md:p-8 custom-scroll">
             {/* ==================== HEADER ==================== */}
-            <div className="flex items-end justify-between mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
                         <Icon className="w-5 h-5 text-sky-600" />
                     </div>
                     <div>
@@ -207,11 +227,11 @@ export default function SmartTable<T>({
                     </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
                     {hasActiveFilters && (
                         <button
                             onClick={resetFilters}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors whitespace-nowrap"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>إعادة ضبط</span>
@@ -219,7 +239,7 @@ export default function SmartTable<T>({
                     )}
                     <button
                         onClick={() => exportCSV(columns, sorted, title)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm transition-colors whitespace-nowrap"
                     >
                         <Download className="w-3.5 h-3.5" />
                         <span>تصدير Excel</span>
@@ -229,34 +249,36 @@ export default function SmartTable<T>({
             </div>
 
             {/* ==================== FILTER BAR ==================== */}
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 mb-5 flex items-center gap-3 flex-wrap">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder={searchPlaceholder}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-lg pr-10 pl-4 py-2 text-sm text-slate-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none transition-colors"
-                    />
-                </div>
+            {!hideFilterBar && (
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 mb-5 flex items-center gap-3 flex-wrap">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder={searchPlaceholder}
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="w-full bg-white border border-gray-200 rounded-lg pr-10 pl-4 py-2 text-sm text-slate-900 placeholder:text-gray-400 focus:border-sky-500 focus:outline-none transition-colors"
+                        />
+                    </div>
 
-                {/* Dropdowns */}
-                {filters.map(f => (
-                    <select
-                        key={f.key}
-                        value={filterValues[f.key]}
-                        onChange={e => setFilterValues(prev => ({ ...prev, [f.key]: e.target.value }))}
-                        className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none transition-colors min-w-[140px]"
-                    >
-                        <option value="all">{f.label}</option>
-                        {f.options.map(o => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                    </select>
-                ))}
-            </div>
+                    {/* Dropdowns */}
+                    {filters.map(f => (
+                        <select
+                            key={f.key}
+                            value={filterValues[f.key]}
+                            onChange={e => setFilterValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none transition-colors min-w-[140px]"
+                        >
+                            <option value="all">{f.label}</option>
+                            {f.options.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    ))}
+                </div>
+            )}
 
             {/* ==================== BULK ACTIONS BAR ==================== */}
             {bulkActions && selected.size > 0 && (
@@ -285,14 +307,14 @@ export default function SmartTable<T>({
             )}
 
             {/* ==================== TABLE ==================== */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-gray-50 border-b border-gray-200">
+            <div className="flex flex-col border rounded-2xl border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="flex-1 overflow-y-auto custom-scroll" style={{ maxHeight: '480px' }}>
+                    <table className="w-full border-collapse">
+                        <thead className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+                            <tr>
                                 {/* Checkbox header */}
                                 {bulkActions && (
-                                    <th className="w-12 p-4">
+                                    <th className="w-12 p-4 text-right">
                                         <input
                                             type="checkbox"
                                             checked={allSelected}
@@ -305,10 +327,10 @@ export default function SmartTable<T>({
                                 {columns.map(col => (
                                     <th
                                         key={col.key}
-                                        className={`text-right p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider ${col.width || ''} ${col.sortable ? 'cursor-pointer select-none hover:text-gray-700 transition-colors' : ''}`}
+                                        className={`text-right px-4 h-12 text-xs font-bold text-slate-500 uppercase tracking-wider ${col.width || ''} ${col.sortable ? 'cursor-pointer select-none hover:text-slate-700 transition-colors' : ''}`}
                                         onClick={() => col.sortable && handleSort(col.key)}
                                     >
-                                        <span className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1">
                                             {col.label}
                                             {col.sortable && (
                                                 <span className="text-gray-400">
@@ -321,25 +343,25 @@ export default function SmartTable<T>({
                                                     )}
                                                 </span>
                                             )}
-                                        </span>
+                                        </div>
                                     </th>
                                 ))}
 
                                 {/* Actions header */}
                                 {actions && (
-                                    <th className="text-right p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">إجراءات</th>
+                                    <th className="text-right px-4 h-12 text-xs font-bold text-slate-500 uppercase tracking-wider">إجراءات</th>
                                 )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {sorted.length === 0 ? (
+                            {paginatedData.length === 0 ? (
                                 <tr>
                                     <td colSpan={columns.length + (bulkActions ? 1 : 0) + (actions ? 1 : 0)} className="py-16 text-center">
                                         {EmptyIcon && <EmptyIcon className="w-12 h-12 mx-auto mb-4 text-slate-300" />}
-                                        <p className="text-slate-500 text-sm">{emptyMessage}</p>
+                                        <p className="text-slate-500 text-sm font-medium">{emptyMessage}</p>
                                     </td>
                                 </tr>
-                            ) : sorted.map((item, rowIdx) => {
+                            ) : paginatedData.map((item, rowIdx) => {
                                 const id = getId(item);
                                 const isSelected = selected.has(id);
                                 const customRowClass = rowClassName ? rowClassName(item) : '';
@@ -348,11 +370,11 @@ export default function SmartTable<T>({
                                         key={String(id)}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className={`transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-sky-50/60' : ''} ${!isSelected && rowIdx % 2 === 1 ? 'bg-gray-50/50' : ''} hover:bg-sky-50/80 ${customRowClass}`}
+                                        className={`group transition-colors h-12 ${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-sky-50/60' : ''} ${!isSelected && rowIdx % 2 === 1 ? 'bg-slate-50/40' : ''} hover:bg-sky-50 ${customRowClass}`}
                                         onClick={() => onRowClick?.(item)}
                                     >
                                         {bulkActions && (
-                                            <td className="w-12 p-4" onClick={e => e.stopPropagation()}>
+                                            <td className="w-12 px-4" onClick={e => e.stopPropagation()}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
@@ -362,15 +384,15 @@ export default function SmartTable<T>({
                                             </td>
                                         )}
                                         {columns.map(col => (
-                                            <td key={col.key} className={`p-4 ${col.width || ''}`}>
+                                            <td key={col.key} className={`px-4 py-2 ${col.width || ''} group-hover:text-sky-700 transition-colors`}>
                                                 {col.render ? col.render(item) : (
                                                     <span className="text-sm text-slate-700">{String((item as any)[col.key] ?? '')}</span>
                                                 )}
                                             </td>
                                         ))}
                                         {actions && (
-                                            <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                {actions(item)}
+                                            <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                                                <div className="flex justify-end">{actions(item)}</div>
                                             </td>
                                         )}
                                     </motion.tr>
@@ -379,6 +401,53 @@ export default function SmartTable<T>({
                         </tbody>
                     </table>
                 </div>
+
+                {/* ==================== PAGINATION FOOTER ==================== */}
+                {sorted.length > 0 && (
+                    <div className="sticky bottom-0 bg-white z-20 border-t border-gray-100 p-3 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="text-xs font-bold text-slate-500">
+                            عرض <span className="text-slate-800">{Math.min(sorted.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)}</span>
+                            <span> - </span>
+                            <span className="text-slate-800">{Math.min(sorted.length, currentPage * ITEMS_PER_PAGE)}</span>
+                            <span> من أصل </span>
+                            <span className="text-slate-800">{sorted.length}</span> سجل
+                        </div>
+
+                        <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-gray-200">
+                            <button
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(prev => prev - 1)}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white text-slate-600"
+                            >
+                                السابق
+                            </button>
+
+                            <div className="flex items-center gap-1 px-2">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                    .map((p, i, arr) => (
+                                        <div key={p} className="flex items-center gap-1">
+                                            {i > 0 && arr[i - 1] !== p - 1 && <span className="text-slate-400 text-xs">...</span>}
+                                            <button
+                                                onClick={() => setCurrentPage(p)}
+                                                className={`w-7 h-7 flex items-center justify-center text-xs font-black rounded-lg transition-all ${currentPage === p ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}
+                                            >
+                                                {p}
+                                            </button>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <button
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white text-slate-600"
+                            >
+                                التالي
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

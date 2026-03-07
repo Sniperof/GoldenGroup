@@ -1,7 +1,12 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { MapPin, Search, ChevronLeft, X, CheckCircle2 } from 'lucide-react';
 import type { GeoUnit } from '../lib/types';
-import { levelNames } from '../lib/defaultData';
+const levelNames: Record<number, string> = {
+    1: 'المحافظة',
+    2: 'المنطقة',
+    3: 'الناحية',
+    4: 'الحي',
+};
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */

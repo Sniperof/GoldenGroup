@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
-import { AlertTriangle, Eye, Calendar, User, Smartphone, AlertCircle, CheckCircle2, Clock, Battery, FileText, Phone, Droplets, Zap, Gauge, PenTool } from 'lucide-react';
-import { defaultMaintenanceRequests, defaultEmployees } from '../../lib/defaultData';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, Eye, Calendar, User, Smartphone, AlertCircle, CheckCircle2, Clock, Battery, FileText, Phone, Droplets, Zap, Gauge, PenTool, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
 import type { MaintenanceRequest } from '../../lib/types';
 import SmartTable from '../../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../../components/SmartTable';
-import { StorageManager } from '../../lib/storage';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const priorityConfig = {
@@ -21,27 +20,41 @@ const statusConfig = {
 };
 
 export default function Emergency() {
-    const [requests] = useState<MaintenanceRequest[]>(() => StorageManager.load('maintenanceRequests', defaultMaintenanceRequests));
+    const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState<MaintenanceRequest | null>(null);
     const [activeTab, setActiveTab] = useState<'details' | 'report' | 'calls'>('details');
 
-    const technicians = defaultEmployees.filter(e => e.role === 'technician');
-    const telemarketers = defaultEmployees.filter(e => e.role === 'telemarketer');
+    useEffect(() => {
+        Promise.all([
+            api.maintenanceRequests.list(),
+            api.employees.list(),
+        ])
+            .then(([reqData, empData]) => {
+                setRequests(reqData);
+                setEmployees(empData);
+            })
+            .catch(err => console.error('Failed to fetch data:', err))
+            .finally(() => setLoading(false));
+    }, []);
 
-    // ─── Columns ───
+    const technicians = employees.filter(e => e.role === 'technician');
+    const telemarketers = employees.filter(e => e.role === 'telemarketer');
+
     const columns: ColumnDef<MaintenanceRequest>[] = [
         { key: 'id', label: 'ID', sortable: true, render: (r) => <span className="font-mono text-xs text-slate-500">#{r.id}</span> },
         {
             key: 'requestDate', label: 'تاريخ الطلب', sortable: true,
             render: (r) => (
                 <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-slate-700">{new Date(r.requestDate).toLocaleDateString('ar-IQ')}</span>
-                    <span className="text-[10px] text-slate-400">{new Date(r.requestDate).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-sm font-semibold text-slate-700">{new Date(r.requestDate).toLocaleDateString('ar-SY')}</span>
+                    <span className="text-[10px] text-slate-400">{new Date(r.requestDate).toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
             )
         },
         {
-            key: 'customerName', label: 'العميل والجهاز', sortable: true,
+            key: 'customerName', label: 'الزبون والجهاز', sortable: true,
             render: (r) => (
                 <div className="flex flex-col">
                     <span className="text-sm font-bold text-slate-800">{r.customerName}</span>
@@ -97,12 +110,19 @@ export default function Emergency() {
         },
     ];
 
-    // ─── Filters ───
     const filters: FilterDef[] = [
         { key: 'priority', label: 'الأولوية', options: [{ value: 'Critical', label: 'حرج جداً' }, { value: 'High', label: 'مرتفع' }, { value: 'Normal', label: 'اعتيادي' }] },
         { key: 'resolutionStatus', label: 'حالة الطلب', options: Object.entries(statusConfig).map(([k, v]) => ({ value: k, label: v.label })) },
         { key: 'telemarketerId', label: 'الصبية المسؤولة', options: telemarketers.map(t => ({ value: String(t.id), label: t.name })) },
     ];
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-sky-600 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <>
@@ -113,7 +133,7 @@ export default function Emergency() {
                 columns={columns}
                 filters={filters}
                 searchKeys={['customerName', 'deviceModelName', 'id']}
-                searchPlaceholder="بحث برقم الطلب، العميل، أو الجهاز..."
+                searchPlaceholder="بحث برقم الطلب، الزبون، أو الجهاز..."
                 getId={(r) => r.id}
                 onRowClick={(r) => { setSelectedRequest(r); setActiveTab('details'); }}
                 emptyIcon={AlertTriangle}
@@ -173,7 +193,7 @@ export default function Emergency() {
                                                 <span className="text-xs text-slate-400 block mb-1">تاريخ الطلب</span>
                                                 <div className="flex items-center gap-2 text-slate-700 font-medium text-sm">
                                                     <Calendar className="w-4 h-4 text-slate-400" />
-                                                    {new Date(selectedRequest.requestDate).toLocaleString('ar-IQ')}
+                                                    {new Date(selectedRequest.requestDate).toLocaleString('ar-SY')}
                                                 </div>
                                             </div>
                                             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
@@ -331,8 +351,7 @@ export default function Emergency() {
                                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                                                 <Battery className="w-8 h-8 text-gray-400" />
                                             </div>
-                                            <h3 className="text-slate-600 font-medium">التقرير الفني غير متوفر</h3>
-                                            <p className="text-xs text-slate-400 max-w-xs mx-auto">سيظهر هنا تقرير الفني عن الصيانة وقطع الغيار المستبدلة بعد إغلاق الطلب.</p>
+                                            <p className="text-slate-500 font-medium">لم يتم رفع تقرير فني بعد</p>
                                         </div>
                                     )
                                 )}
@@ -349,7 +368,7 @@ export default function Emergency() {
                                                         <span className="text-sm font-bold text-slate-700">مكالمة صادرة - متابعة</span>
                                                         <span className="text-[10px] text-slate-400">منذ ساعتين</span>
                                                     </div>
-                                                    <p className="text-xs text-slate-500 mt-1">تم الاتصال بالعميل للتأكد من وصول الفني. العميل أكد الوصول والبدء بالعمل.</p>
+                                                    <p className="text-xs text-slate-500 mt-1">تم الاتصال بالزبون للتأكد من وصول الفني. الزبون أكد الوصول والبدء بالعمل.</p>
                                                     <div className="flex items-center gap-2 mt-2">
                                                         <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">مدة المكالمة: 02:15</span>
                                                         <span className="text-[10px] text-slate-400">سها جميل</span>
@@ -359,14 +378,6 @@ export default function Emergency() {
                                         ))}
                                     </div>
                                 )}
-                            </div>
-
-                            {/* Modal Footer */}
-                            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                                <button onClick={() => setSelectedRequest(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">إغلاق</button>
-                                <button className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2">
-                                    <CheckCircle2 className="w-4 h-4" /> تحديث الحالة
-                                </button>
                             </div>
                         </motion.div>
                     </div>

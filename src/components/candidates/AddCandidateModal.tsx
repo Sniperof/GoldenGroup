@@ -1,129 +1,286 @@
-import React, { useState, useMemo } from 'react';
-import { X, UserPlus, Save, PlusCircle, Building2, User, Search, MapPin, Calendar, FileText } from 'lucide-react';
-import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
-import { defaultGeoUnits } from '../../lib/defaultData';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import CreateReferralSheetModal from './CreateReferralSessionModal'; // Filename kept for now, component renamed
-import { ReferralType, ReferralOriginChannel } from '../../lib/types';
+import { UserPlus, Calendar, PlusCircle, X, CheckCircle, AlertCircle, Save, MapPin, Trash2, MessageCircle, Plus } from 'lucide-react';
+import { CandidateStatus, ReferralType, ReferralOriginChannel, Client, ContactEntry, Candidate, ContactType, ContactStatus } from '../../lib/types';
+import CreateReferralSheetModal from './CreateReferralSessionModal';
+import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
+import { api } from '../../lib/api';
+import type { GeoUnit } from '../../lib/types';
 
 interface AddCandidateModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialDirectMode?: boolean;
+    initialData?: Candidate;
+    title?: string;
 }
+function simpleUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+const contactTypeConfig = {
+    mobile: { label: 'موبايل', emoji: '📱', color: 'text-indigo-600' },
+    landline: { label: 'هاتف أرضي', emoji: '☎️', color: 'text-blue-600' },
+    other: { label: 'أخرى', emoji: '🔗', color: 'text-slate-600' }
+};
+
+const contactStatusConfig = {
+    active: { label: 'نشط', style: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    objection: { label: 'اعتراض', style: 'bg-amber-50 text-amber-700 border-amber-200' },
+    nonbinding: { label: 'غير ملزم', style: 'bg-sky-50 text-sky-700 border-sky-200' },
+    inactive: { label: 'خارج الخدمة', style: 'bg-red-50 text-red-700 border-red-200' }
+};
 
 const initialCandidateState = {
     firstName: '',
     nickname: '',
     lastName: '',
-    mobile: '',
+    contacts: [{ id: simpleUUID(), type: 'mobile' as ContactType, number: '', label: 'شخصي', hasWhatsApp: true, isPrimary: true, status: 'active' as ContactStatus }],
     locationSelection: { govId: '', regionId: '', subId: '', neighborhoodId: '' } as GeoSelection,
+    addressText: '',
+    occupation: '',
     candidateNotes: ''
 };
 
-export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModalProps) {
-    const addCandidate = useCandidateStore(state => state.addCandidate);
-    const referralSheets = useCandidateStore(state => state.referralSheets); // Updated
+export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, initialData, title }: AddCandidateModalProps) {
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    useEffect(() => {
+        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+    }, []);
 
-    // Filter only active sheets (New or In-Progress)
-    const activeSheets = useMemo(() => referralSheets.filter(s => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
+    const addCandidate = useCandidateStore((state: any) => state.addCandidate);
+    const updateCandidate = useCandidateStore((state: any) => state.updateCandidate);
+    const referralSheets = useCandidateStore((state: any) => state.referralSheets);
 
-    // Mode Toggle
-    const [isDirectMode, setIsDirectMode] = useState(false);
+    const activeSheets = useMemo(() => referralSheets.filter((s: any) => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
 
-    // Section A: Mode B (Sheet-based)
+    const [isDirectMode, setIsDirectMode] = useState(initialDirectMode || false);
+
     const [selectedSheetId, setSelectedSheetId] = useState<number | ''>('');
     const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
 
-    // Section A: Mode A (Direct Referral)
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
-    const [referralReason, setReferralReason] = useState('');
-    const [referralType, setReferralType] = useState<ReferralType>('Existing Client');
-    const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Visit');
+    const [referralType, setReferralType] = useState<ReferralType>('Personal');
+    const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Acquaintance');
     const [referralNameSnapshot, setReferralNameSnapshot] = useState('');
-    const [referralContextAddress, setReferralContextAddress] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
 
-    // Section B: Candidate
+    const [employeeIdInput, setEmployeeIdInput] = useState('');
+    const [employeeFound, setEmployeeFound] = useState<{ name: string, id: number } | null>(null);
+    const [employeeSearchError, setEmployeeSearchError] = useState('');
+
+    const [clientSearch, setClientSearch] = useState('');
+    const [clientSuggestions, setClientSuggestions] = useState<Client[]>([]);
+    const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+
+    const clientSearchRef = useRef<HTMLDivElement>(null);
+    const isInitialSync = useRef(true);
+
     const [candidateData, setCandidateData] = useState(initialCandidateState);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            if (initialData) {
+                const sheetId = initialData.referralSheetId;
+                setIsDirectMode(sheetId === null);
+                setCandidateData({
+                    firstName: initialData.firstName || '',
+                    nickname: initialData.nickname || '',
+                    lastName: initialData.lastName || '',
+                    contacts: initialData.contacts || [],
+                    locationSelection: { govId: '', regionId: '', subId: '', neighborhoodId: initialData.geoUnitId?.toString() || '' },
+                    addressText: initialData.addressText || '',
+                    occupation: initialData.occupation || '',
+                    candidateNotes: initialData.candidateNotes || ''
+                });
+
+                if (sheetId === null) {
+                    setReferralType(initialData.referralType);
+                    setOriginChannel(initialData.referralOriginChannel);
+                    setReferralNameSnapshot(initialData.referralNameSnapshot);
+                    setReferralDate(initialData.referralDate?.split('T')[0] || new Date().toISOString().split('T')[0]);
+
+                    if (initialData.referralType === 'Employee') {
+                        setEmployeeIdInput(initialData.referralEntityId?.toString() || '');
+                    } else if (initialData.referralType === 'Client') {
+                        setSelectedClientId(initialData.referralEntityId);
+                        setClientSearch(initialData.referralNameSnapshot);
+                    }
+                } else {
+                    setSelectedSheetId(sheetId);
+                }
+            } else {
+                setIsDirectMode(initialDirectMode || false);
+                setCandidateData(initialCandidateState);
+                setReferralType('Personal');
+                setReferralNameSnapshot('أحمد (مشرف)');
+                setReferralDate(new Date().toISOString().split('T')[0]);
+                setSelectedSheetId('');
+                setEmployeeIdInput('');
+                setEmployeeFound(null);
+                setClientSearch('');
+                setSelectedClientId(null);
+                setOriginChannel('Acquaintance');
+            }
+            isInitialSync.current = false;
+        } else {
+            isInitialSync.current = true;
+        }
+    }, [isOpen, initialData, initialDirectMode]);
+
+    useEffect(() => {
+        if (!isOpen || isInitialSync.current || !isDirectMode) return;
+
+        if (referralType === 'Personal') {
+            setOriginChannel('Acquaintance');
+            setReferralNameSnapshot('أحمد (مشرف)');
+        } else if (referralType === 'Unknown') {
+            setReferralNameSnapshot('مجهول');
+        } else {
+            setReferralNameSnapshot('');
+            setEmployeeIdInput('');
+            setEmployeeFound(null);
+            setClientSearch('');
+            setSelectedClientId(null);
+        }
+    }, [referralType, isDirectMode, isOpen]);
+
+
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
+                setClientSuggestions([]);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+
+
+    const handleEmployeeBlur = async () => {
+        if (!employeeIdInput.trim()) {
+            setEmployeeFound(null);
+            setEmployeeSearchError('');
+            return;
+        }
+        try {
+            const employees = await api.employees.list();
+            const emp = employees.find((e: any) => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+            if (emp) {
+                setEmployeeFound({ name: emp.name, id: emp.id });
+                setReferralNameSnapshot(emp.name);
+                setEmployeeSearchError('');
+            } else {
+                setEmployeeFound(null);
+                setReferralNameSnapshot('');
+                setEmployeeSearchError('لم يتم العثور على الموظف');
+            }
+        } catch {
+            setEmployeeFound(null);
+            setReferralNameSnapshot('');
+            setEmployeeSearchError('خطأ في البحث عن الموظف');
+        }
+    };
+
+    const handleClientSearch = async (text: string) => {
+        setClientSearch(text);
+        if (text.trim().length < 2) {
+            setClientSuggestions([]);
+            return;
+        }
+        try {
+            const clients = await api.clients.list();
+            const matches = clients.filter((c: any) =>
+                c.name.includes(text) ||
+                c.contacts?.some((con: any) => con.number.includes(text))
+            ).slice(0, 5);
+            setClientSuggestions(matches);
+        } catch {
+            setClientSuggestions([]);
+        }
+    };
+
+    const handleSelectClient = (client: Client) => {
+        setClientSearch(client.name);
+        setReferralNameSnapshot(client.name);
+        setSelectedClientId(client.id);
+        setClientSuggestions([]);
+    };
+
+
+
+    const candidatesList = useCandidateStore((state: any) => state.candidates);
 
     const validateForm = () => {
         if (!isDirectMode && !selectedSheetId) {
             setError('يجب اختيار ورقة ترشيح في وضع (ورقة الترشيح).');
             return false;
         }
-        if (isDirectMode && (!referralDate || !referralReason || !referralNameSnapshot)) {
+        if (isDirectMode && (!referralDate || !referralNameSnapshot)) {
             setError('الرجاء تعبئة جميع الحقول الإلزامية الخاصة بالاستقطاب المباشر.');
             return false;
         }
         if (!candidateData.firstName.trim() && !candidateData.nickname.trim()) {
-            setError('يجب إدخال الاسم الأول أو اللقب للمرشح على الأقل.');
+            setError('يجب إدخال الاسم الأول أو اللقب للاسم المقترح على الأقل.');
             return false;
         }
-        if (!candidateData.mobile.trim()) {
-            setError('رقم هاتف المرشح مطلوب.');
+        if (candidateData.contacts.length === 0 || !candidateData.contacts.some(c => c.number.trim() && c.isPrimary)) {
+            setError('يجب إدخال رقم هاتف واحد أساسي على الأقل.');
             return false;
         }
         setError('');
         return true;
     };
 
-    const handleSave = (addAnother: boolean) => {
+    const handleSave = async (addAnother: boolean) => {
         if (!validateForm()) return;
 
         const candidateUnitId = candidateData.locationSelection.neighborhoodId || candidateData.locationSelection.subId || candidateData.locationSelection.regionId || candidateData.locationSelection.govId;
-        const candidateAddressText = defaultGeoUnits.find(u => u.id === Number(candidateUnitId))?.name || 'غير محدد';
+        const candidateAddressText = geoUnits.find(u => u.id === Number(candidateUnitId))?.name || 'غير محدد';
 
         try {
-            if (!isDirectMode) {
-                // Mode B: Sheet-based
-                const sheet = activeSheets.find(s => s.id === selectedSheetId);
-                if (!sheet) throw new Error("الورقة المحددة غير صالحة");
+            const firstName = candidateData.firstName || null;
+            const nickname = candidateData.nickname || null;
+            const lastName = candidateData.lastName;
+            const mobile = candidateData.contacts.find(c => c.isPrimary)?.number || candidateData.contacts[0]?.number || '';
+            const contacts = candidateData.contacts.filter(c => c.number.trim());
+            const neighborhood = candidateAddressText;
+            const detailedAddress = candidateData.addressText;
 
-                addCandidate({
-                    firstName: candidateData.firstName || null,
-                    nickname: candidateData.nickname || null,
-                    lastName: candidateData.lastName,
-                    mobile: candidateData.mobile,
-                    addressText: candidateAddressText,
-
-                    referralSheetId: sheet.id, // Updated
-                    referralDate: sheet.referralDate,
-                    referralReason: 'Part of Sheet', // Implicit
-                    referralType: sheet.referralType,
-                    referralOriginChannel: sheet.referralOriginChannel,
-                    referralNameSnapshot: sheet.referralNameSnapshot,
-                    referralEntityId: sheet.referralEntityId,
-
-                    candidateNotes: candidateData.candidateNotes,
-                    ownerUserId: 1,
-                    createdBy: 1
-                });
-            } else {
-                // Mode A: Direct
-                const contextUnitId = referralContextAddress.neighborhoodId || referralContextAddress.subId || referralContextAddress.regionId || referralContextAddress.govId;
-                const contextAddressText = defaultGeoUnits.find(u => u.id === Number(contextUnitId))?.name || 'غير محدد';
-
-                addCandidate({
-                    firstName: candidateData.firstName || null,
-                    nickname: candidateData.nickname || null,
-                    lastName: candidateData.lastName,
-                    mobile: candidateData.mobile,
-                    addressText: candidateAddressText,
-
-                    referralSheetId: null, // Direct has no sheet
-                    referralDate: new Date(referralDate).toISOString(),
-                    referralReason,
-                    referralType,
-                    referralOriginChannel: originChannel,
-                    referralNameSnapshot,
-                    referralEntityId: null,
-
-                    candidateNotes: candidateData.candidateNotes,
-                    ownerUserId: 1,
-                    createdBy: 1
-                });
+            let entityId: number | null = null;
+            if (referralType === 'Employee' && employeeFound) {
+                entityId = employeeFound.id;
+            } else if (referralType === 'Client' && selectedClientId) {
+                entityId = selectedClientId;
             }
 
+            const newC: Omit<Candidate, 'id' | 'createdAt' | 'duplicateFlag' | 'duplicateType' | 'duplicateReferenceId' | 'status' | 'referralConfirmationStatus' | 'convertedToLeadId' | 'referralSheetId'> & { referralSheetId: number | null } = {
+                firstName,
+                lastName,
+                nickname,
+                mobile,
+                contacts,
+                addressText: detailedAddress || neighborhood,
+                geoUnitId: Number(candidateUnitId) || null,
+                referralSheetId: isDirectMode ? null : (selectedSheetId as number),
+                referralType: referralType,
+                referralOriginChannel: originChannel,
+                referralNameSnapshot: referralNameSnapshot,
+                referralEntityId: entityId,
+                referralDate: new Date(referralDate).toISOString(),
+                referralReason: isDirectMode ? 'Direct Referral' : 'Part of Sheet',
+                occupation: candidateData.occupation,
+                candidateNotes: candidateData.candidateNotes,
+                ownerUserId: 1,
+                createdBy: 1
+            };
+            await addCandidate(newC as any);
             if (addAnother) {
                 setCandidateData(initialCandidateState);
                 setError('');
@@ -139,11 +296,16 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
         setIsDirectMode(false);
         setSelectedSheetId('');
         setCandidateData(initialCandidateState);
+        setReferralType('Personal');
+        setReferralNameSnapshot('أحمد (مشرف)');
         setReferralDate(new Date().toISOString().split('T')[0]);
-        setReferralReason('');
-        setReferralNameSnapshot('');
-        setReferralContextAddress({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
         setError('');
+        setEmployeeIdInput('');
+        setEmployeeFound(null);
+        setEmployeeSearchError('');
+        setClientSearch('');
+        setClientSuggestions([]);
+        setSelectedClientId(null);
         onClose();
     };
 
@@ -161,8 +323,7 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 <UserPlus className="w-5 h-5 text-sky-600" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">إضافة اسم جديد</h2>
-                                <p className="text-sm text-slate-500"></p>
+                                <h2 className="text-lg font-bold text-slate-800">{title || 'إضافة اسم مرشح جديد'}</h2>
                             </div>
                         </div>
                         <button onClick={resetAndClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
@@ -190,26 +351,26 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                 onClick={() => setIsDirectMode(true)}
                                 className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${isDirectMode ? 'bg-indigo-100 text-indigo-800 shadow-sm border border-indigo-200' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                استقطاب مباشر (بدون ورقة)
+                                عبر ترشيح مباشر
                             </button>
                         </div>
 
                         {/* SECTION A */}
                         <div className="space-y-4">
-<div className="mb-2"></div>
+                            <div className="mb-2"></div>
 
                             {!isDirectMode ? (
                                 /* MODE B: Sheet-based */
                                 <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 flex items-end gap-3 transition-all">
                                     <div className="flex-1">
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">اختر ورقة الترشيح المفتوحة <span className="text-red-500">*</span></label>
+                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">اختر ورقة ترشيح  <span className="text-red-500">*</span></label>
                                         <select
                                             value={selectedSheetId}
                                             onChange={(e) => setSelectedSheetId(e.target.value ? Number(e.target.value) : '')}
                                             className="w-full p-2.5 rounded-xl border border-amber-200 bg-white focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
                                         >
-                                            <option value="" disabled>-- اختر الورقة للإرتباط بها --</option>
-                                            {activeSheets.map(sheet => (
+                                            <option value="" disabled>-- اختر ورقة ترشيح لإضافة أسماء مقترحة مرتبطة بها --</option>
+                                            {activeSheets.map((sheet: any) => (
                                                 <option key={sheet.id} value={sheet.id}>
                                                     [#{sheet.id}] {sheet.referralNameSnapshot} - {sheet.stats.totalCandidates} أسماء
                                                 </option>
@@ -237,33 +398,103 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع الوسيط *</label>
                                             <select value={referralType} onChange={e => setReferralType(e.target.value as ReferralType)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
-                                                <option value="Existing Client">عميل حالي</option>
-                                                <option value="Supervisor">مشرف</option>
-                                                <option value="Technician">فني</option>
-                                                <option value="Direct Call">اتصال مباشر</option>
+                                                <option value="Personal">شخصي</option>
+                                                <option value="Client">زبون</option>
+                                                <option value="Employee">موظف</option>
+                                                <option value="Unknown">مجهول</option>
                                             </select>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">طريقة الوصول *</label>
-                                            <select value={originChannel} onChange={e => setOriginChannel(e.target.value as ReferralOriginChannel)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
-                                                <option value="Visit">زيارة ميدانية</option>
-                                                <option value="Call">اتصال هاتفي</option>
-                                                <option value="Field Activity">نشاط ترويجي</option>
+                                            <select
+                                                value={originChannel}
+                                                onChange={e => setOriginChannel(e.target.value as ReferralOriginChannel)}
+                                                disabled={referralType === 'Personal' || referralType === 'Unknown'}
+                                                className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm disabled:bg-slate-50 disabled:text-slate-500"
+                                            >
+                                                <option value="App">سوشال ميديا</option>
+                                                <option value="Campaign">حملة إعلانية</option>
+                                                <option value="Acquaintance">معرفة شخصية</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">الوسيط *</label>
-                                        <input type="text" value={referralNameSnapshot} onChange={e => setReferralNameSnapshot(e.target.value)} placeholder="اسم العميل أو الجهة..." className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm" />
-                                    </div>
-                                    {/* Geo Removed */}
+
+                                    {/* DYNAMIC MEDIATOR RENDER */}
+                                    {referralType === 'Employee' && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">رقم الموظف *</label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={employeeIdInput}
+                                                    onChange={(e) => setEmployeeIdInput(e.target.value)}
+                                                    onBlur={handleEmployeeBlur}
+                                                    placeholder="أدخل رقم الموظف..."
+                                                    className="w-1/2 p-2.5 rounded-xl border border-indigo-200 bg-white text-sm"
+                                                />
+                                                {employeeFound && (
+                                                    <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 flex-1 text-sm">
+                                                        <CheckCircle className="w-5 h-5" />
+                                                        {employeeFound.name}
+                                                    </div>
+                                                )}
+                                                {employeeSearchError && (
+                                                    <div className="flex items-center gap-2 text-red-600 font-bold bg-red-50 px-3 py-2 rounded-lg border border-red-100 flex-1 text-sm">
+                                                        <AlertCircle className="w-5 h-5" />
+                                                        {employeeSearchError}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {referralType === 'Client' && (
+                                        <div ref={clientSearchRef} className="relative">
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">اسم الزبون *</label>
+                                            <input
+                                                type="text"
+                                                value={clientSearch}
+                                                onChange={(e) => handleClientSearch(e.target.value)}
+                                                placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
+                                                className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm"
+                                            />
+                                            {clientSuggestions.length > 0 && (
+                                                <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-10 overflow-hidden">
+                                                    {clientSuggestions.map(client => (
+                                                        <button
+                                                            key={client.id}
+                                                            onClick={() => handleSelectClient(client)}
+                                                            className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
+                                                        >
+                                                            <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">
+                                                                {client.contacts?.find(con => con.isPrimary)?.number || client.contacts?.[0]?.number || '--'}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {(referralType === 'Personal' || referralType === 'Unknown') && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">  اسم الوسيط*</label>
+                                            <input
+                                                type="text"
+                                                value={referralNameSnapshot}
+                                                disabled
+                                                className="w-full p-2.5 rounded-xl border border-indigo-200 bg-slate-50 text-slate-500 font-bold cursor-not-allowed text-sm"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
 
                         {/* SECTION B: Candidate */}
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-800 border-r-4 border-sky-500 pr-2">ثانياً: بيانات المرشح (Candidate)</h3>
+                            <h3 className="text-sm font-bold text-slate-800 border-r-4 border-sky-500 pr-2"> بيانات الاسم المقترح</h3>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
@@ -271,46 +502,203 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
                                     <input type="text" value={candidateData.firstName} onChange={e => setCandidateData({ ...candidateData, firstName: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم العائلة</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5"> اسم العائلة / الكنية</label>
                                     <input type="text" value={candidateData.lastName} onChange={e => setCandidateData({ ...candidateData, lastName: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">اللقب/الكنية</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">اللقب</label>
                                     <input type="text" value={candidateData.nickname} onChange={e => setCandidateData({ ...candidateData, nickname: e.target.value })} className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm" />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5 text-red-500">رقم الهاتف *</label>
-                                <input type="tel" value={candidateData.mobile} onChange={e => { setCandidateData({ ...candidateData, mobile: e.target.value }); setError(''); }} className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm" dir="ltr" />
+                            <div className="md:col-span-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-xs font-semibold text-slate-500">أرقام التواصل <span className="text-red-500">*</span></label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCandidateData({
+                                            ...candidateData,
+                                            contacts: [...candidateData.contacts, { id: simpleUUID(), type: 'mobile', number: '', label: '', hasWhatsApp: false, isPrimary: candidateData.contacts.length === 0, status: 'active' }]
+                                        })}
+                                        className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                                    >
+                                        <PlusCircle className="w-3.5 h-3.5" /> إضافة رقم
+                                    </button>
+                                </div>
+                                <div className="space-y-3">
+                                    <AnimatePresence initial={false}>
+                                        {candidateData.contacts.map((contact, index) => (
+                                            <motion.div
+                                                key={contact.id}
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="bg-gray-50 rounded-xl p-3 border border-gray-100 space-y-2.5"
+                                            >
+                                                {/* Row 1: Type + Number */}
+                                                <div className="flex items-center gap-2">
+                                                    <select
+                                                        value={contact.type}
+                                                        onChange={e => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, type: e.target.value as any };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className="bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-slate-700 focus:border-sky-500 focus:outline-none min-w-[100px]"
+                                                    >
+                                                        {Object.entries(contactTypeConfig).map(([key, cfg]) => (
+                                                            <option key={key} value={key}>{cfg.emoji} {cfg.label}</option>
+                                                        ))}
+                                                    </select>
+
+                                                    <input
+                                                        type="text"
+                                                        value={contact.number}
+                                                        onChange={e => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, number: e.target.value.replace(/\D/g, '') };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                            setError('');
+                                                        }}
+                                                        placeholder={contact.type === 'mobile' ? '09XXXXXXXX' : 'الرقم...'}
+                                                        dir="ltr"
+                                                        className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 placeholder:text-gray-300 focus:border-sky-500 focus:outline-none"
+                                                    />
+
+                                                    {candidateData.contacts.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const newContacts = candidateData.contacts.filter((_, i) => i !== index);
+                                                                if (contact.isPrimary && newContacts.length > 0) newContacts[0].isPrimary = true;
+                                                                setCandidateData({ ...candidateData, contacts: newContacts });
+                                                            }}
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all border border-transparent hover:border-red-100 shrink-0"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Row 2: Label + Status + WhatsApp + Primary */}
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={contact.label}
+                                                        onChange={e => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, label: e.target.value };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        placeholder="العلاقة (شخصي، زوجة، ابن...)"
+                                                        className="flex-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-gray-300 focus:border-sky-500 focus:outline-none"
+                                                    />
+
+                                                    <select
+                                                        value={contact.status}
+                                                        onChange={e => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, status: e.target.value as any };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className={`border rounded-lg px-2 py-1.5 text-[11px] font-medium focus:outline-none min-w-[110px] ${contactStatusConfig[contact.status as keyof typeof contactStatusConfig]?.style || ''}`}
+                                                    >
+                                                        {Object.entries(contactStatusConfig).map(([key, cfg]) => (
+                                                            <option key={key} value={key}>{cfg.label}</option>
+                                                        ))}
+                                                    </select>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newContacts = [...candidateData.contacts];
+                                                            newContacts[index] = { ...contact, hasWhatsApp: !contact.hasWhatsApp };
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border shrink-0 ${contact.hasWhatsApp
+                                                            ? 'bg-green-50 border-green-200 text-green-600'
+                                                            : 'bg-white border-gray-200 text-gray-300 hover:text-gray-400'
+                                                            }`}
+                                                        title={contact.hasWhatsApp ? 'يدعم واتساب' : 'بدون واتساب'}
+                                                    >
+                                                        <MessageCircle className="w-3.5 h-3.5" />
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newContacts = candidateData.contacts.map((c, i) => ({ ...c, isPrimary: i === index }));
+                                                            setCandidateData({ ...candidateData, contacts: newContacts });
+                                                        }}
+                                                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border shrink-0 ${contact.isPrimary
+                                                            ? 'bg-sky-50 border-sky-200'
+                                                            : 'bg-white border-gray-200 hover:border-gray-300'
+                                                            }`}
+                                                        title="تعيين كرقم أساسي"
+                                                    >
+                                                        <div className={`w-3 h-3 rounded-full border-2 flex items-center justify-center ${contact.isPrimary ? 'border-sky-500' : 'border-gray-300'}`}>
+                                                            {contact.isPrimary && <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <GeoSmartSearch label="العنوان" geoUnits={geoUnits} value={candidateData.locationSelection} onChange={loc => setCandidateData({ ...candidateData, locationSelection: loc })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />تفاصيل العنوان</label>
+                                    <input
+                                        type="text"
+                                        placeholder="الشارع، البناية، الطابق..."
+                                        value={candidateData.addressText}
+                                        onChange={e => setCandidateData({ ...candidateData, addressText: e.target.value })}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">المهنة</label>
+                                    <input
+                                        type="text"
+                                        placeholder="مثال: موظف، عمل حر، طبيب..."
+                                        value={candidateData.occupation}
+                                        onChange={e => setCandidateData({ ...candidateData, occupation: e.target.value })}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
+                                    />
+                                </div>
                             </div>
 
                             <div>
-                                <GeoSmartSearch label="موقع سكن المرشح" geoUnits={defaultGeoUnits} value={candidateData.locationSelection} onChange={loc => setCandidateData({ ...candidateData, locationSelection: loc })} />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ملاحظات عن المرشح</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ملاحظات الوسيط</label>
                                 <textarea value={candidateData.candidateNotes} onChange={e => setCandidateData({ ...candidateData, candidateNotes: e.target.value })} rows={3} className="w-full p-3 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm resize-none" />
                             </div>
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-                        <button onClick={resetAndClose} className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors">إلغاء</button>
-                        <div className="flex gap-3">
-                            <button onClick={() => handleSave(true)} className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 rounded-xl transition-colors">
-                                <PlusCircle className="w-4 h-4" /> حفظ وإضافة آخر
+                    <div className="bg-gray-50 p-4 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                        <button onClick={resetAndClose} className="px-5 py-2 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-all">إلغاء</button>
+                        {!initialData && (
+                            <button onClick={() => handleSave(true)} className="px-5 py-2 rounded-xl text-sky-600 bg-sky-50 border border-sky-100 font-bold hover:bg-sky-100 transition-all flex items-center gap-2">
+                                <PlusCircle className="w-4 h-4" />
+                                <span>حفظ وإضافة آخر</span>
                             </button>
-                            <button onClick={() => handleSave(false)} className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-500/20 rounded-xl transition-colors">
-                                <Save className="w-4 h-4" /> حفظ وإغلاق
-                            </button>
-                        </div>
+                        )}
+                        <button onClick={() => handleSave(false)} className="px-8 py-2 rounded-xl text-white bg-sky-600 font-bold hover:bg-sky-700 shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2">
+                            <Save className="w-4 h-4" />
+                            <span>{initialData ? 'حفظ التغييرات' : 'حفظ الاسم'}</span>
+                        </button>
                     </div>
 
                 </div>
-            </div>
+            </div >
 
             <CreateReferralSheetModal
                 isOpen={isCreateSheetOpen}

@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Users, Save, Plus, MapPin, Route as RouteIcon, ListOrdered, Calculator, X, ArrowRight, ArrowLeft } from 'lucide-react';
-import { StorageManager } from '../../lib/storage';
-import { defaultGeoUnits, defaultEmployees, levelNames } from '../../lib/defaultData';
+import { Calendar, Users, Save, Plus, MapPin, Route as RouteIcon, ListOrdered, Calculator, X, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
+import { levelNames } from '../../lib/defaultData';
 import type { Route, GeoUnit, DaySchedule, RouteComposition, RouteAssignmentData } from '../../lib/types';
 
 const levelColors: Record<number, { bg: string; text: string; border: string }> = {
@@ -15,11 +15,14 @@ const levelColors: Record<number, { bg: string; text: string; border: string }> 
 const getToday = () => new Date().toISOString().split('T')[0];
 
 export default function RouteAssigner() {
-    const [geoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
-    const [savedRoutes] = useState<Route[]>(() => StorageManager.load('routes', []));
-    const [schedules] = useState<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}));
-    const [clients] = useState<any[]>(() => StorageManager.load('clients', []));
-    const [routeAssignments, setRouteAssignments] = useState<Record<string, RouteAssignmentData>>(() => StorageManager.load('routeAssignments', {}));
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [savedRoutes, setSavedRoutes] = useState<Route[]>([]);
+    const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({});
+    const [clients, setClients] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [routeAssignments, setRouteAssignments] = useState<Record<string, RouteAssignmentData>>({});
 
     const [date, setDate] = useState(getToday);
     const [selectedTeam, setSelectedTeam] = useState('');
@@ -28,12 +31,54 @@ export default function RouteAssigner() {
     const [selectedRouteId, setSelectedRouteId] = useState('');
     const [loadCount, setLoadCount] = useState<number | null>(null);
 
-    const employees = defaultEmployees;
     const allGeoUnits = geoUnits;
 
     const currentKey = date + '_' + selectedTeam;
 
-    // Build team options from schedule
+    useEffect(() => {
+        let cancelled = false;
+        const loadAll = async () => {
+            setLoading(true);
+            try {
+                const [geo, routes, cls, emps, assignments] = await Promise.all([
+                    api.geoUnits.list(),
+                    api.routes.list(),
+                    api.clients.list(),
+                    api.employees.list(),
+                    api.routeAssignments.list(),
+                ]);
+                if (cancelled) return;
+                setGeoUnits(geo);
+                setSavedRoutes(routes);
+                setClients(cls);
+                setEmployees(emps);
+                setRouteAssignments(assignments || {});
+            } catch (err) {
+                console.error('Failed to load route assigner data:', err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        loadAll();
+        return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadSchedule = async () => {
+            if (schedules[date]) return;
+            try {
+                const schedule = await api.schedules.get(date);
+                if (cancelled) return;
+                setSchedules(prev => ({ ...prev, [date]: schedule || { teams: [], solos: [] } }));
+            } catch (err) {
+                console.error('Failed to load schedule:', err);
+            }
+        };
+        loadSchedule();
+        return () => { cancelled = true; };
+    }, [date]);
+
     const teamOptions = useMemo(() => {
         const sched = schedules[date];
         if (!sched) return [];
@@ -131,13 +176,32 @@ export default function RouteAssigner() {
         setLoadCount(count);
     };
 
-    const saveAssignment = () => {
+    const saveAssignment = async () => {
         if (!selectedTeam) { alert('اختر الفريق أولاً'); return; }
-        const next = { ...routeAssignments, [currentKey]: { routes: JSON.parse(JSON.stringify(composition)), extraZones: [...extraZones] } };
-        setRouteAssignments(next);
-        StorageManager.save('routeAssignments', next);
-        alert('تم حفظ تعيين المسار!');
+        setSaving(true);
+        try {
+            const data = { routes: JSON.parse(JSON.stringify(composition)), extraZones: [...extraZones] };
+            await api.routeAssignments.save(currentKey, data);
+            setRouteAssignments(prev => ({ ...prev, [currentKey]: data }));
+            alert('تم حفظ تعيين المسار!');
+        } catch (err) {
+            console.error('Failed to save assignment:', err);
+            alert('حدث خطأ أثناء الحفظ');
+        } finally {
+            setSaving(false);
+        }
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-sky-600 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">جاري تحميل البيانات...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
@@ -163,8 +227,8 @@ export default function RouteAssigner() {
                     </select>
                 </div>
                 <div className="mr-auto">
-                    <button onClick={saveAssignment} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all">
-                        <Save className="w-4 h-4" /><span>حفظ التعيين</span>
+                    <button onClick={saveAssignment} disabled={saving} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}<span>حفظ التعيين</span>
                     </button>
                 </div>
             </div>
@@ -223,7 +287,7 @@ export default function RouteAssigner() {
                                             <span>نهاية: <strong className="text-slate-900">{stations[comp.endIdx]?.name || '--'}</strong></span>
                                         </div>
                                         <div className="route-range-track">
-                                            <div className="route-range-fill" style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }} />
+                                            <div className="route-range-fill" style={{ right: `${startPct}%`, width: `${endPct - startPct}%` }} />
                                             <input type="range" className="route-slider" min={0} max={maxIdx} value={comp.startIdx} onChange={e => onSliderChange(idx, 'start', parseInt(e.target.value))} />
                                             <input type="range" className="route-slider" min={0} max={maxIdx} value={comp.endIdx} onChange={e => onSliderChange(idx, 'end', parseInt(e.target.value))} />
                                         </div>
@@ -291,7 +355,7 @@ export default function RouteAssigner() {
                         {loadCount !== null && (
                             <div className="p-3 border-t border-gray-200 bg-gray-50">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-slate-500 text-sm">عدد العملاء المتوقع:</span>
+                                    <span className="text-slate-500 text-sm">عدد الزبائن المتوقع:</span>
                                     <span className="text-2xl font-bold text-emerald-600">{loadCount}</span>
                                 </div>
                             </div>
