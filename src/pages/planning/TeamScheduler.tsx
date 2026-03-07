@@ -1,30 +1,39 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Users, UserCheck, Plus, User, Copy, Save, X, PhoneCall } from 'lucide-react';
-import { StorageManager } from '../../lib/storage';
-import { defaultEmployees } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 import type { DaySchedule, Employee } from '../../lib/types';
 
 const getToday = () => new Date().toISOString().split('T')[0];
 const getYesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; };
 
 export default function TeamScheduler() {
-    const [schedules, setSchedules] = useState<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}));
+    const [current, setCurrent] = useState<DaySchedule>({ teams: [], solos: [] });
     const [date, setDate] = useState(getToday);
     const [selectedSlot, setSelectedSlot] = useState<{ type: string; slotIdx: number; role: string } | null>(null);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const employees = defaultEmployees;
-    const current: DaySchedule = schedules[date] || { teams: [], solos: [] };
-
-    const saveSchedules = useCallback((s: Record<string, DaySchedule>) => {
-        setSchedules(s);
-        StorageManager.save('schedules', s);
+    useEffect(() => {
+        api.employees.list().then((data: Employee[]) => setEmployees(data)).catch(() => {});
     }, []);
 
+    useEffect(() => {
+        setLoading(true);
+        api.schedules.get(date)
+            .then((data: DaySchedule) => {
+                setCurrent(data && (data.teams || data.solos) ? data : { teams: [], solos: [] });
+            })
+            .catch(() => {
+                setCurrent({ teams: [], solos: [] });
+            })
+            .finally(() => setLoading(false));
+    }, [date]);
+
     const updateCurrent = useCallback((sched: DaySchedule) => {
-        const next = { ...schedules, [date]: sched };
-        saveSchedules(next);
-    }, [schedules, date, saveSchedules]);
+        setCurrent(sched);
+        api.schedules.save(date, { teams: sched.teams, solos: sched.solos }).catch(() => {});
+    }, [date]);
 
     const addTeamSlot = () => updateCurrent({ ...current, teams: [...current.teams, { supervisor: null, technician: null }] });
     const addSoloSlot = () => updateCurrent({ ...current, solos: [...current.solos, { technician: null }] });
@@ -92,21 +101,43 @@ export default function TeamScheduler() {
         }
     };
 
-    const copyFromYesterday = () => {
+    const copyFromYesterday = async () => {
         const yest = getYesterday();
-        if (!schedules[yest]) { alert('لا يوجد جدول محفوظ ليوم ' + yest); return; }
-        if (current.teams.length > 0 || current.solos.length > 0) {
-            if (!confirm('سيتم استبدال الجدول الحالي. متابعة؟')) return;
+        try {
+            const yesterdaySchedule: DaySchedule = await api.schedules.get(yest);
+            if (!yesterdaySchedule || (!yesterdaySchedule.teams?.length && !yesterdaySchedule.solos?.length)) {
+                alert('لا يوجد جدول محفوظ ليوم ' + yest);
+                return;
+            }
+            if (current.teams.length > 0 || current.solos.length > 0) {
+                if (!confirm('سيتم استبدال الجدول الحالي. متابعة؟')) return;
+            }
+            updateCurrent(JSON.parse(JSON.stringify(yesterdaySchedule)));
+        } catch {
+            alert('لا يوجد جدول محفوظ ليوم ' + yest);
         }
-        updateCurrent(JSON.parse(JSON.stringify(schedules[yest])));
     };
 
-    const saveSchedule = () => {
-        saveSchedules({ ...schedules, [date]: current });
-        alert('تم حفظ الجدول!');
+    const saveSchedule = async () => {
+        try {
+            await api.schedules.save(date, { teams: current.teams, solos: current.solos });
+            alert('تم حفظ الجدول!');
+        } catch {
+            alert('حدث خطأ أثناء الحفظ');
+        }
     };
 
     const getEmpName = (id: number | null) => { const e = employees.find(e => e.id === id); return e?.name || ''; };
+
+    if (loading) {
+        return (
+            <div className="h-full overflow-y-auto p-8 custom-scroll">
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-slate-400 text-lg">جاري التحميل...</div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     FileText, ChevronDown, Search, Calendar, Monitor, Hash, Wrench,
@@ -6,16 +6,16 @@ import {
     RotateCcw, CheckCircle2, User, Calculator, MapPin,
     AlertTriangle, ShieldCheck, ArrowRightLeft, Globe, Landmark,
     TableProperties, Sparkles, BadgeDollarSign,
-    ExternalLink, Smartphone, Clipboard
+    ExternalLink, Smartphone, Clipboard, Loader2
 } from 'lucide-react';
 import type { MaintenancePlan } from '../../lib/types';
-import { defaultDeviceModels, defaultGeoUnits } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 import MapPicker from '../../components/MapPicker';
 import GeoSmartSearch from '../../components/GeoSmartSearch';
 import type { GeoSelection } from '../../components/GeoSmartSearch';
 
 /* ------------------------------------------------------------------ */
-/*  Mock customers — some missing legal fields                         */
+/*  Customer type                                                       */
 /* ------------------------------------------------------------------ */
 
 interface MockCustomer {
@@ -25,16 +25,6 @@ interface MockCustomer {
     fatherName?: string;
     nationalId?: string;
 }
-
-const mockCustomers: MockCustomer[] = [
-    { id: 1, name: 'خالد السامرائي', mobile: '07701234567', fatherName: 'عبد الله', nationalId: '19850112345' },
-    { id: 2, name: 'نور الدين', mobile: '07709876543' },                                            // missing both
-    { id: 3, name: 'سلمى حسين', mobile: '07705551234', fatherName: 'حسين' },                         // missing national ID
-    { id: 4, name: 'عبد الرحمن الجبوري', mobile: '07701112233', nationalId: '19900198765' },          // missing father name
-    { id: 5, name: 'ريم عباس', mobile: '07703334455', fatherName: 'عباس', nationalId: '19930176543' },
-    { id: 6, name: 'فادي الموصلي', mobile: '07706667788' },                                          // missing both
-    { id: 7, name: 'ياسمين كريم', mobile: '07708889900', fatherName: 'كريم', nationalId: '19970154321' },
-];
 
 /* ------------------------------------------------------------------ */
 /*  Sale type config                                                    */
@@ -155,6 +145,34 @@ const selectClass = "w-full bg-white border border-gray-200 rounded-lg px-3 py-2
 /* ------------------------------------------------------------------ */
 
 export default function ContractForm() {
+    // ─── API Data ───
+    const [customers, setCustomers] = useState<MockCustomer[]>([]);
+    const [deviceModels, setDeviceModels] = useState<any[]>([]);
+    const [geoUnits, setGeoUnits] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        Promise.all([
+            api.clients.list(),
+            api.deviceModels.list(),
+            api.geoUnits.list(),
+        ])
+            .then(([clientsData, modelsData, geoData]) => {
+                setCustomers(clientsData.map((c: any) => ({
+                    id: c.id,
+                    name: c.name,
+                    mobile: c.mobile || c.phone || '',
+                    fatherName: c.fatherName,
+                    nationalId: c.nationalId,
+                })));
+                setDeviceModels(modelsData);
+                setGeoUnits(geoData);
+            })
+            .catch(err => console.error('Failed to load form data:', err))
+            .finally(() => setLoading(false));
+    }, []);
+
     // ─── 1. Customer & Legal ───
     const [customerSearch, setCustomerSearch] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState<MockCustomer | null>(null);
@@ -194,7 +212,7 @@ export default function ContractForm() {
     const [showSchedule, setShowSchedule] = useState(false);
 
     // ─── Computed ───
-    const selectedDevice = useMemo(() => defaultDeviceModels.find(d => d.id === deviceModelId) || null, [deviceModelId]);
+    const selectedDevice = useMemo(() => deviceModels.find(d => d.id === deviceModelId) || null, [deviceModelId, deviceModels]);
     const basePrice = selectedDevice?.basePrice || 0;
     const finalPrice = priceOverride ? parseInt(priceOverride, 10) || basePrice : basePrice;
 
@@ -212,8 +230,8 @@ export default function ContractForm() {
 
     // Customer search
     const filteredCustomers = useMemo(
-        () => mockCustomers.filter(c => c.name.includes(customerSearch) || c.mobile.includes(customerSearch)),
-        [customerSearch]
+        () => customers.filter(c => c.name.includes(customerSearch) || c.mobile.includes(customerSearch)),
+        [customerSearch, customers]
     );
 
     // Legal info missing?
@@ -252,10 +270,38 @@ export default function ContractForm() {
         return true;
     }, [selectedCustomer, legalMissing, legalResolved, deviceModelId, serialNumber, geoSelection]);
 
-    const handleSubmit = useCallback(() => {
-        if (!isValid) return;
-        alert('تم حفظ العقد بنجاح ✅');
-    }, [isValid]);
+    const handleSubmit = useCallback(async () => {
+        if (!isValid || saving) return;
+        setSaving(true);
+        try {
+            await api.contracts.create({
+                customerId: selectedCustomer?.id,
+                customerName: selectedCustomer?.name,
+                deviceModelId,
+                deviceModelName: selectedDevice?.name,
+                serialNumber,
+                maintenancePlan,
+                contractDate,
+                saleType,
+                paymentType,
+                finalPrice,
+                downPayment: parseInt(downPayment, 10) || 0,
+                installmentsCount: parseInt(installmentsCount, 10) || 0,
+                currency,
+                geoSelection,
+                detailedAddress,
+                mapPosition,
+                fatherName: fatherNameOverride || selectedCustomer?.fatherName,
+                nationalId: nationalIdOverride || selectedCustomer?.nationalId,
+            });
+            alert('تم حفظ العقد بنجاح ✅');
+        } catch (err) {
+            console.error('Failed to save contract:', err);
+            alert('فشل في حفظ العقد ❌');
+        } finally {
+            setSaving(false);
+        }
+    }, [isValid, saving, selectedCustomer, deviceModelId, selectedDevice, serialNumber, maintenancePlan, contractDate, saleType, paymentType, finalPrice, downPayment, installmentsCount, currency, geoSelection, detailedAddress, mapPosition, fatherNameOverride, nationalIdOverride]);
 
     const handleReset = () => {
         setSelectedCustomer(null); setCustomerSearch(''); setFatherNameOverride(''); setNationalIdOverride('');
@@ -271,6 +317,14 @@ export default function ContractForm() {
     const handleLocationSelect = useCallback((lat: number, lng: number) => {
         if (lat === 0 && lng === 0) { setMapPosition(null); } else { setMapPosition([lat, lng]); }
     }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto">
@@ -290,9 +344,9 @@ export default function ContractForm() {
                         <button onClick={handleReset} className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 text-sm font-medium transition-colors">
                             <RotateCcw className="w-4 h-4" /><span>إعادة تعيين</span>
                         </button>
-                        <button onClick={handleSubmit} disabled={!isValid}
+                        <button onClick={handleSubmit} disabled={!isValid || saving}
                             className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-bold transition-colors shadow-sm disabled:shadow-none">
-                            <Save className="w-4 h-4" /><span>حفظ العقد</span>
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}<span>{saving ? 'جاري الحفظ...' : 'حفظ العقد'}</span>
                         </button>
                     </div>
                 </div>
@@ -567,7 +621,7 @@ export default function ContractForm() {
                         <Field label="موديل الجهاز" required>
                             <select value={deviceModelId} onChange={e => { setDeviceModelId(Number(e.target.value) || ''); setPriceOverride(''); }} className={selectClass}>
                                 <option value="">اختر الموديل...</option>
-                                {defaultDeviceModels.map(d => (
+                                {deviceModels.map(d => (
                                     <option key={d.id} value={d.id}>{d.name} — {d.brand}</option>
                                 ))}
                             </select>
@@ -594,7 +648,7 @@ export default function ContractForm() {
 
                     {/* Smart Geo Search */}
                     <GeoSmartSearch
-                        geoUnits={defaultGeoUnits}
+                        geoUnits={geoUnits}
                         value={geoSelection}
                         onChange={setGeoSelection}
                         label="عنوان التركيب"

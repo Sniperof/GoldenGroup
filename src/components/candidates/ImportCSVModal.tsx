@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { Upload, X, AlertCircle, FileText } from 'lucide-react';
 // import Papa from 'papaparse'; // Temporarily disabled due to build issues
-import { defaultGeoUnits } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 
 interface ImportCSVModalProps {
     isOpen: boolean;

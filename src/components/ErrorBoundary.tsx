@@ -1,6 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RefreshCw, Trash2 } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
 
 interface Props {
     children: ReactNode;
@@ -26,8 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     private handleReset = () => {
-        if (confirm('هل أنت متأكد من حذف جميع البيانات المحلية وإعادة التحميل؟ هذا الإجراء لا يمكن التراجع عنه.')) {
-            StorageManager.clearAll();
+        if (confirm('هل أنت متأكد من إعادة التحميل؟')) {
             window.location.href = '/';
         }
     };

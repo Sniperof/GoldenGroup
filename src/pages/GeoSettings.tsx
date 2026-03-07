@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, RotateCcw, Globe, MapPin, Map, Building, Home, X } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import { defaultGeoUnits, levelNames } from '../lib/defaultData';
+import { levelNames } from '../lib/defaultData';
+import { api } from '../lib/api';
 import type { GeoUnit } from '../lib/types';
 import SmartTable from '../components/SmartTable';
 import type { ColumnDef } from '../components/SmartTable';
@@ -15,31 +15,39 @@ const tabs = [
 ];
 
 export default function GeoSettings() {
-    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Modal cascading state
     const [modalGov, setModalGov] = useState('');
     const [modalRegion, setModalRegion] = useState('');
     const [modalSubDistrict, setModalSubDistrict] = useState('');
     const [modalName, setModalName] = useState('');
 
-    const save = useCallback((units: GeoUnit[]) => {
-        setGeoUnits(units);
-        StorageManager.save('geoUnits', units);
+    const fetchGeoUnits = useCallback(async () => {
+        try {
+            setLoading(true);
+            const data = await api.geoUnits.list();
+            setGeoUnits(data);
+        } catch (err) {
+            console.error('Failed to fetch geo units:', err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    // helpers
+    useEffect(() => {
+        fetchGeoUnits();
+    }, [fetchGeoUnits]);
+
     const byLevel = (level: number) => geoUnits.filter(u => u.level === level);
     const getParentName = (parentId: number | null) => geoUnits.find(u => u.id === parentId)?.name || '--';
 
-    // cascading lists for modal
     const governorates = byLevel(1);
     const regions = useMemo(() => modalGov ? geoUnits.filter(u => u.level === 2 && u.parentId === Number(modalGov)) : [], [geoUnits, modalGov]);
     const subDistricts = useMemo(() => modalRegion ? geoUnits.filter(u => u.level === 3 && u.parentId === Number(modalRegion)) : [], [geoUnits, modalRegion]);
 
-    // breadcrumb path for levels 2-4
     const getPath = (unit: GeoUnit): string => {
         const parts: string[] = [];
         let current: GeoUnit | undefined = unit;
@@ -51,7 +59,7 @@ export default function GeoSettings() {
         return parts.join(' › ') || '--';
     };
 
-    const deleteUnit = (id: number) => {
+    const deleteUnit = async (id: number) => {
         const descendants = new Set<number>();
         const collect = (pid: number) => {
             geoUnits.filter(u => u.parentId === pid).forEach(u => { descendants.add(u.id); collect(u.id); });
@@ -59,7 +67,12 @@ export default function GeoSettings() {
         descendants.add(id);
         collect(id);
         if (!confirm(`سيتم حذف هذا العنصر و ${descendants.size - 1} عناصر تابعة. متابعة؟`)) return;
-        save(geoUnits.filter(u => !descendants.has(u.id)));
+        try {
+            await api.geoUnits.delete(id);
+            await fetchGeoUnits();
+        } catch (err) {
+            console.error('Failed to delete geo unit:', err);
+        }
     };
 
     const openAddModal = () => {
@@ -70,7 +83,7 @@ export default function GeoSettings() {
         setIsModalOpen(true);
     };
 
-    const handleAdd = () => {
+    const handleAdd = async () => {
         const name = modalName.trim();
         if (!name) return;
         const level = activeTab;
@@ -78,18 +91,20 @@ export default function GeoSettings() {
         if (level === 2) { if (!modalGov) return; parentId = Number(modalGov); }
         if (level === 3) { if (!modalRegion) return; parentId = Number(modalRegion); }
         if (level === 4) { if (!modalSubDistrict) return; parentId = Number(modalSubDistrict); }
-        const newId = Math.max(0, ...geoUnits.map(u => u.id)) + 1;
-        save([...geoUnits, { id: newId, name, level, parentId }]);
-        setIsModalOpen(false);
+        try {
+            await api.geoUnits.create({ name, level, parentId });
+            await fetchGeoUnits();
+            setIsModalOpen(false);
+        } catch (err) {
+            console.error('Failed to create geo unit:', err);
+        }
     };
 
-    const resetData = () => {
-        if (!confirm('سيتم حذف جميع البيانات وإعادة التعيين. متابعة؟')) return;
-        StorageManager.clearAll();
-        save(defaultGeoUnits);
+    const resetData = async () => {
+        if (!confirm('سيتم إعادة تحميل البيانات من الخادم. متابعة؟')) return;
+        await fetchGeoUnits();
     };
 
-    // -- Column definitions per level
     const govColumns: ColumnDef<GeoUnit>[] = [
         { key: 'name', label: 'اسم المحافظة', sortable: true, render: (u) => <span className="text-sm font-semibold text-slate-800">{u.name}</span> },
         { key: 'children', label: 'عدد المناطق', sortable: true, render: (u) => <span className="text-sm text-slate-600">{geoUnits.filter(c => c.parentId === u.id).length}</span>, getValue: (u) => geoUnits.filter(c => c.parentId === u.id).length },
@@ -115,6 +130,18 @@ export default function GeoSettings() {
     const columnsByLevel: Record<number, ColumnDef<GeoUnit>[]> = { 1: govColumns, 2: regionColumns, 3: subDistrictColumns, 4: neighborhoodColumns };
     const currentData = byLevel(activeTab);
     const currentTab = tabs.find(t => t.level === activeTab)!;
+
+    if (loading && geoUnits.length === 0) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                    <p className="text-slate-500 text-sm">جاري تحميل البيانات...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="h-full overflow-hidden flex flex-col">
             {/* Header */}

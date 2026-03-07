@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, PlusCircle, Building2, User, PhoneCall, Handshake, Search, CheckCircle, AlertCircle } from 'lucide-react';
 import { ReferralType, ReferralOriginChannel, Client } from '../../lib/types';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import { StorageManager } from '../../lib/storage';
+import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
+import { api } from '../../lib/api';
+import type { GeoUnit } from '../../lib/types';
 
 interface Props {
     isOpen: boolean;
@@ -26,9 +28,15 @@ const channels: { value: ReferralOriginChannel; label: string }[] = [
 export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreated }: Props) {
     const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    useEffect(() => {
+        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+    }, []);
+
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Acquaintance');
     const [nameSnapshot, setNameSnapshot] = useState('إبراهيم (مشرف)');
+    const [addressSelection, setAddressSelection] = useState<GeoSelection>({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
@@ -44,7 +52,6 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     const clientSearchRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Handle clicking outside of client suggestions
         function handleClickOutside(event: MouseEvent) {
             if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
                 setClientSuggestions([]);
@@ -55,7 +62,6 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     }, []);
 
     useEffect(() => {
-        // Reset changing fields when mode changes
         setNameSnapshot('');
         setOriginChannel('Acquaintance');
         setEmployeeIdInput('');
@@ -68,40 +74,50 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
 
         if (referralType === 'Personal') {
             setOriginChannel('Acquaintance');
-            setNameSnapshot('إبراهيم (مشرف)'); // Currently assuming supervisor Ahmad is logged in
+            setNameSnapshot('إبراهيم (مشرف)');
         } else if (referralType === 'Unknown') {
             setNameSnapshot('مجهول');
         }
     }, [referralType]);
 
-    const handleEmployeeBlur = () => {
+    const handleEmployeeBlur = async () => {
         if (!employeeIdInput.trim()) {
             setEmployeeFound(null);
             setEmployeeSearchError('');
             return;
         }
-        const employees = StorageManager.load<any[]>('employees', []);
-        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
-        if (emp) {
-            setEmployeeFound({ name: emp.name, id: emp.id });
-            setNameSnapshot(emp.name);
-            setEmployeeSearchError('');
-        } else {
+        try {
+            const employees = await api.employees.list();
+            const emp = employees.find((e: any) => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+            if (emp) {
+                setEmployeeFound({ name: emp.name, id: emp.id });
+                setNameSnapshot(emp.name);
+                setEmployeeSearchError('');
+            } else {
+                setEmployeeFound(null);
+                setNameSnapshot('');
+                setEmployeeSearchError('لم يتم العثور على الموظف');
+            }
+        } catch {
             setEmployeeFound(null);
             setNameSnapshot('');
-            setEmployeeSearchError('لم يتم العثور على الموظف');
+            setEmployeeSearchError('خطأ في البحث عن الموظف');
         }
     };
 
-    const handleClientSearch = (text: string) => {
+    const handleClientSearch = async (text: string) => {
         setClientSearch(text);
         if (text.trim().length < 2) {
             setClientSuggestions([]);
             return;
         }
-        const clients = StorageManager.load<Client[]>('clients', []);
-        const matches = clients.filter(c => c.name.includes(text) || c.mobile.includes(text)).slice(0, 5);
-        setClientSuggestions(matches);
+        try {
+            const clients = await api.clients.list();
+            const matches = clients.filter((c: any) => c.name.includes(text) || c.mobile?.includes(text)).slice(0, 5);
+            setClientSuggestions(matches);
+        } catch {
+            setClientSuggestions([]);
+        }
     };
 
     const handleSelectClient = (client: Client) => {
@@ -111,7 +127,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
         setClientSuggestions([]);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!nameSnapshot.trim() || !referralDate) {
             setError('الرجاء تعبئة جميع الحقول الإلزامية (اسم الوسيط، وتاريخ الورقة).');
             return;
@@ -123,16 +139,20 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
             entityId = selectedClientId;
         }
 
+        const unitId = addressSelection.neighborhoodId || addressSelection.subId || addressSelection.regionId || addressSelection.govId;
+        const matchingUnit = geoUnits.find(u => u.id === Number(unitId));
+        const addressText = matchingUnit ? matchingUnit.name : 'غير محدد';
+
         try {
-            const newId = addReferralSheet({
+            const newId = await addReferralSheet({
                 referralType,
                 referralOriginChannel: originChannel,
                 referralNameSnapshot: nameSnapshot,
-                referralAddressText: 'غير محدد',
+                referralAddressText: addressText,
                 referralEntityId: entityId,
                 referralDate: new Date(referralDate).toISOString(),
                 referralNotes: notes,
-                ownerUserId: 1, // Auto-assigned to current supervisor (Mocked)
+                ownerUserId: 1,
                 status: 'New',
                 createdBy: 1
             });
@@ -289,6 +309,16 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                             value={referralDate}
                             onChange={(e) => setReferralDate(e.target.value)}
                             className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 text-sm"
+                        />
+                    </div>
+
+                    <div>
+                        <GeoSmartSearch
+                            label="النطاق الجغرافي / منطقة العمل"
+                            geoUnits={geoUnits}
+                            value={addressSelection}
+                            onChange={setAddressSelection}
+                            placeholder="ابحث عن المنطقة المستهدفة..."
                         />
                     </div>
 

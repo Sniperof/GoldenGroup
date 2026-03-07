@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { RotateCcw, Eye } from 'lucide-react';
-import { defaultTasks, defaultGeoUnits } from '../../lib/defaultData';
+import { useState, useEffect } from 'react';
+import { RotateCcw, Eye, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
 import type { Task } from '../../lib/types';
 import SmartTable from '../../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../../components/SmartTable';
@@ -16,13 +16,30 @@ const statusConfig: Record<string, { label: string; style: string }> = {
 const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ar-SY', { month: 'short', day: 'numeric' });
 
 export default function Returns() {
-    const tasks = defaultTasks.filter(t => t.type === 'returns');
+    const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [geoUnits, setGeoUnits] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+
+    useEffect(() => {
+        Promise.all([
+            api.tasks.list(),
+            api.geoUnits.list(),
+        ])
+            .then(([tasksData, geoData]) => {
+                setAllTasks(tasksData);
+                setGeoUnits(geoData);
+            })
+            .catch(err => console.error('Failed to fetch data:', err))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const tasks = allTasks.filter(t => t.type === 'returns');
 
     const columns: ColumnDef<Task>[] = [
         { key: 'customerName', label: 'الزبون', sortable: true, render: (t) => <span className="text-sm font-semibold text-slate-800">{t.customerName}</span> },
         { key: 'context', label: 'التفاصيل', render: (t) => <span className="text-sm text-slate-600">{t.context}</span> },
-        { key: 'location', label: 'الموقع', sortable: true, render: (t) => { const lp = getLocationBadgeProps(t.location, defaultGeoUnits); return <LocationBadge {...lp} />; } },
+        { key: 'location', label: 'الموقع', sortable: true, render: (t) => { const lp = getLocationBadgeProps(t.location, geoUnits); return <LocationBadge {...lp} />; } },
         { key: 'dueDate', label: 'التاريخ', sortable: true, render: (t) => <span className="text-sm text-slate-500">{formatDate(t.dueDate)}</span> },
         {
             key: 'status', label: 'الحالة', sortable: true,
@@ -36,6 +53,14 @@ export default function Returns() {
     const filters: FilterDef[] = [
         { key: 'status', label: 'جميع الحالات', options: [{ value: 'pending', label: 'قيد الانتظار' }, { value: 'in-progress', label: 'قيد التنفيذ' }, { value: 'completed', label: 'مكتمل' }] },
     ];
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-sky-600 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="p-8 h-full flex flex-col overflow-hidden">
