@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Phone, MapPin, Eye, Users, Clock, CheckCircle2,
     AlertTriangle, DollarSign, Wrench, RotateCcw, MessageSquare,
-    Calendar, ChevronLeft, Pause, UserCheck, Monitor
+    Calendar, ChevronLeft, Pause, UserCheck, Monitor, Loader2
 } from 'lucide-react';
 import type { Task } from '../lib/types';
-import { defaultTasks } from '../lib/defaultData';
+import { api } from '../lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                              */
@@ -120,12 +120,23 @@ function TaskRow({ task, onAction }: { task: Task; onAction?: Customer360ModalPr
 
 export default function Customer360Modal({ isOpen, onClose, customerName, onTaskAction }: Customer360ModalProps) {
     const [activeTab, setActiveTab] = useState<ModalTab>('overview');
+    const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    // Get all tasks for this customer
+    useEffect(() => {
+        if (isOpen && customerName) {
+            setLoading(true);
+            api.tasks.list()
+                .then(data => setAllTasks(data))
+                .catch(console.error)
+                .finally(() => setLoading(false));
+        }
+    }, [isOpen, customerName]);
+
     const customerTasks = useMemo(() => {
         if (!customerName) return [];
-        return defaultTasks.filter(t => t.customerName === customerName);
-    }, [customerName]);
+        return allTasks.filter(t => t.customerName === customerName);
+    }, [customerName, allTasks]);
 
     const activeTasks = useMemo(() => customerTasks.filter(t => t.status !== 'completed'), [customerTasks]);
     const completedTasks = useMemo(() => customerTasks.filter(t => t.status === 'completed'), [customerTasks]);

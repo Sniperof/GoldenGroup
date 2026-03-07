@@ -1,14 +1,13 @@
-import { useState } from 'react';
-import { DollarSign, UserPlus, AlertTriangle, TrendingDown, Flag } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { DollarSign, UserPlus, AlertTriangle, TrendingDown, Flag, Loader2 } from 'lucide-react';
 import { useCollectionStore } from '../../hooks/useCollectionStore';
-import { defaultEmployees } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 import SmartTable from '../../components/SmartTable';
 import type { ColumnDef, FilterDef, BulkActionDef } from '../../components/SmartTable';
 import CollectionModal from '../../components/CollectionModal';
 import AssignAgentModal from '../../components/AssignAgentModal';
 import { Due } from '../../lib/types';
 
-// Helper for date formatting
 const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-IQ', { month: 'short', day: 'numeric', year: 'numeric' });
 const formatMoney = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
 
@@ -16,12 +15,20 @@ export default function Dues() {
     const { dues, getKPIs } = useCollectionStore();
     const kpis = getKPIs();
 
-    // Modals State
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [loadingEmployees, setLoadingEmployees] = useState(true);
+
     const [selectedDue, setSelectedDue] = useState<(Due & { customerName: string; mobile: string }) | null>(null);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [selectedDueIds, setSelectedDueIds] = useState<number[]>([]);
 
-    // Column Definitions
+    useEffect(() => {
+        api.employees.list()
+            .then(data => setEmployees(data))
+            .catch(err => console.error('Failed to fetch employees:', err))
+            .finally(() => setLoadingEmployees(false));
+    }, []);
+
     const columns: ColumnDef<typeof dues[0]>[] = [
         { key: 'customerName', label: 'العميل', sortable: true, render: (d) => <span className="text-sm font-bold text-slate-800">{d.customerName}</span> },
         { key: 'mobile', label: 'الموبايل', render: (d) => <span className="text-sm font-mono text-slate-500 dir-ltr">{d.mobile}</span> },
@@ -40,7 +47,7 @@ export default function Dues() {
         {
             key: 'assignedTelemarketerId', label: 'الموظف المسند', sortable: true,
             render: (d) => {
-                const agent = defaultEmployees.find(e => e.id === d.assignedTelemarketerId);
+                const agent = employees.find(e => e.id === d.assignedTelemarketerId);
                 return agent ? (
                     <div className="flex items-center gap-1.5">
                         <img src={agent.avatar} alt="" className="w-5 h-5 rounded-full" />
@@ -70,13 +77,11 @@ export default function Dues() {
         },
     ];
 
-    // Filters
     const filters: FilterDef[] = [
         { key: 'status', label: 'جميع الحالات', options: [{ value: 'Pending', label: 'انتظار' }, { value: 'Overdue', label: 'متأخر' }, { value: 'Partial', label: 'دفع جزئي' }, { value: 'Paid', label: 'مدفوع' }] },
         { key: 'type', label: 'جميع الأنواع', options: [{ value: 'Installment', label: 'قسط' }, { value: 'Maintenance Fee', label: 'رسوم صيانة' }] },
     ];
 
-    // Bulk Actions
     const bulkActions: BulkActionDef<typeof dues[0]>[] = [
         {
             label: 'إسناد لموظف',
@@ -88,20 +93,27 @@ export default function Dues() {
         }
     ];
 
-    // Row Styling Logic
     const getRowClass = (d: typeof dues[0]) => {
-        if (d.status === 'Paid') return 'opacity-60 bg-gray-50'; // Paid rows dim
+        if (d.status === 'Paid') return 'opacity-60 bg-gray-50';
 
         const today = new Date();
         const due = new Date(d.adjustedDate);
         const diffTime = today.getTime() - due.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 30) return 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500'; // Critical Overdue
-        if (diffDays > 0) return 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-500'; // Overdue
+        if (diffDays > 30) return 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500';
+        if (diffDays > 0) return 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-500';
 
         return '';
     };
+
+    if (loadingEmployees) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-sky-600 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full space-y-6">

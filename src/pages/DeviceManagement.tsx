@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Wrench, PenTool, Truck, Clock, Package, Cog, X, Save, AlertTriangle, RefreshCw, Gem } from 'lucide-react';
-import { defaultDeviceModels, defaultSpareParts } from '../lib/defaultData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Wrench, PenTool, Truck, Clock, Package, Cog, X, Save, AlertTriangle, RefreshCw, Gem, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 import type { DeviceModel, SparePart, MaintenancePartType } from '../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import SmartTable from '../components/SmartTable';
@@ -44,21 +44,42 @@ type ActiveTab = 'devices' | 'parts';
 
 const DeviceManagement = () => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('devices');
+    const [loading, setLoading] = useState(true);
 
     // ──── Devices state ────
-    const [devices, setDevices] = useState<DeviceModel[]>(defaultDeviceModels);
+    const [devices, setDevices] = useState<DeviceModel[]>([]);
     const [isAddingDevice, setIsAddingDevice] = useState(false);
     const [newDevice, setNewDevice] = useState<Partial<DeviceModel>>({
         name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [],
     });
 
     // ──── Spare Parts state ────
-    const [parts, setParts] = useState<SparePart[]>(defaultSpareParts);
+    const [parts, setParts] = useState<SparePart[]>([]);
     const [isAddingPart, setIsAddingPart] = useState(false);
     const [editingPart, setEditingPart] = useState<SparePart | null>(null);
     const [partForm, setPartForm] = useState<Partial<SparePart>>({
         name: '', code: '', basePrice: 0, maintenanceType: 'Periodic', compatibleDeviceIds: [],
     });
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [devicesData, partsData] = await Promise.all([
+                api.deviceModels.list(),
+                api.spareParts.list(),
+            ]);
+            setDevices(devicesData);
+            setParts(partsData);
+        } catch (err) {
+            console.error('Failed to fetch device management data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     // ──── Device handlers ────
     const handleDeviceInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -73,17 +94,21 @@ const DeviceManagement = () => {
         });
     };
 
-    const handleDeviceSubmit = (e: React.FormEvent) => {
+    const handleDeviceSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newDevice.name && newDevice.brand && newDevice.basePrice) {
-            const device: DeviceModel = {
-                id: devices.length + 1, name: newDevice.name, brand: newDevice.brand,
-                category: newDevice.category as any, maintenanceInterval: newDevice.maintenanceInterval as any,
-                basePrice: Number(newDevice.basePrice), supportedVisitTypes: newDevice.supportedVisitTypes as any || [],
-            };
-            setDevices([...devices, device]);
-            setIsAddingDevice(false);
-            setNewDevice({ name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [] });
+            try {
+                await api.deviceModels.create({
+                    name: newDevice.name, brand: newDevice.brand,
+                    category: newDevice.category, maintenanceInterval: newDevice.maintenanceInterval,
+                    basePrice: Number(newDevice.basePrice), supportedVisitTypes: newDevice.supportedVisitTypes || [],
+                });
+                setIsAddingDevice(false);
+                setNewDevice({ name: '', brand: '', category: 'Residential', maintenanceInterval: '6 Months', basePrice: 0, supportedVisitTypes: [] });
+                await fetchData();
+            } catch (err) {
+                console.error('Failed to create device:', err);
+            }
         }
     };
 
@@ -106,24 +131,28 @@ const DeviceManagement = () => {
         });
     };
 
-    const handlePartSubmit = (e: React.FormEvent) => {
+    const handlePartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!partForm.name || !partForm.code) return;
-        if (editingPart) {
-            setParts(prev => prev.map(p => p.id === editingPart.id ? { ...editingPart, ...partForm } as SparePart : p));
-        } else {
-            const newPart: SparePart = {
-                id: Math.max(0, ...parts.map(p => p.id)) + 1,
+        try {
+            const partData = {
                 name: partForm.name!,
                 code: partForm.code!,
                 basePrice: Number(partForm.basePrice) || 0,
                 maintenanceType: partForm.maintenanceType as MaintenancePartType || 'Periodic',
                 compatibleDeviceIds: partForm.compatibleDeviceIds || [],
             };
-            setParts([...parts, newPart]);
+            if (editingPart) {
+                await api.spareParts.update(editingPart.id, partData);
+            } else {
+                await api.spareParts.create(partData);
+            }
+            setIsAddingPart(false);
+            setEditingPart(null);
+            await fetchData();
+        } catch (err) {
+            console.error('Failed to save spare part:', err);
         }
-        setIsAddingPart(false);
-        setEditingPart(null);
     };
 
     // ──── Columns ────
@@ -222,6 +251,17 @@ const DeviceManagement = () => {
         { id: 'devices', label: 'الأجهزة', icon: Package, count: devices.length },
         { id: 'parts', label: 'قطع الغيار', icon: Cog, count: parts.length },
     ];
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+                    <span className="text-sm text-gray-500">جاري تحميل البيانات...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>

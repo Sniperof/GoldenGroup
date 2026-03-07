@@ -1,25 +1,44 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, UserCheck, Route, MapPin, TrendingUp, Clock } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import type { Client, Route as RouteType } from '../lib/types';
-import { defaultEmployees } from '../lib/defaultData';
+import { api } from '../lib/api';
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
 
 export default function Dashboard() {
-    const [clients] = useState<Client[]>(() => StorageManager.load('clients', []));
-    const [routes] = useState<RouteType[]>(() => StorageManager.load('routes', []));
+    const [loading, setLoading] = useState(true);
+    const [dashboardData, setDashboardData] = useState<any>(null);
+    const [employees, setEmployees] = useState<any[]>([]);
+
+    useEffect(() => {
+        Promise.all([
+            api.dashboard.get(),
+            api.employees.list(),
+        ]).then(([dashboard, emps]) => {
+            setDashboardData(dashboard);
+            setEmployees(emps);
+        }).finally(() => setLoading(false));
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <p className="text-slate-500 text-lg">جاري التحميل...</p>
+            </div>
+        );
+    }
 
     const stats = [
-        { label: 'العملاء', value: clients.length, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
-        { label: 'الموظفون النشطون', value: defaultEmployees.filter(e => e.status === 'active').length, icon: UserCheck, color: 'from-emerald-500 to-teal-600', delta: '+3' },
-        { label: 'المسارات', value: routes.length, icon: Route, color: 'from-amber-500 to-orange-600', delta: `${routes.length}` },
-        { label: 'الأحياء المغطاة', value: routes.reduce((s, r) => s + r.points.length, 0), icon: MapPin, color: 'from-rose-500 to-pink-600', delta: 'محطة' },
+        { label: 'العملاء', value: dashboardData?.totalClients ?? 0, icon: Users, color: 'from-sky-500 to-blue-600', delta: '+12%' },
+        { label: 'الموظفون النشطون', value: dashboardData?.activeEmployees ?? 0, icon: UserCheck, color: 'from-emerald-500 to-teal-600', delta: '+3' },
+        { label: 'المسارات', value: dashboardData?.totalRoutes ?? 0, icon: Route, color: 'from-amber-500 to-orange-600', delta: `${dashboardData?.totalRoutes ?? 0}` },
+        { label: 'الأحياء المغطاة', value: dashboardData?.coveredNeighborhoods ?? 0, icon: MapPin, color: 'from-rose-500 to-pink-600', delta: 'محطة' },
     ];
 
-    const recentClients = clients.slice(-5).reverse();
+    const recentClients = dashboardData?.recentClients ?? [];
+    const activeSupervisors = employees.filter((e: any) => e.role === 'supervisor' && e.status === 'active').length;
+    const activeTechnicians = employees.filter((e: any) => e.role === 'technician' && e.status === 'active').length;
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
@@ -56,7 +75,7 @@ export default function Dashboard() {
                             <p className="text-center text-slate-400 py-6 text-sm">لا توجد بيانات بعد</p>
                         ) : (
                             <div className="space-y-3">
-                                {recentClients.map(c => (
+                                {recentClients.map((c: any) => (
                                     <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-sky-50 transition-colors cursor-pointer group">
                                         <div className="relative">
                                             <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}&background=0ea5e9&color=fff&size=32`} alt="" className="w-9 h-9 rounded-full border border-gray-100 group-hover:border-sky-200 transition-colors" />
@@ -84,19 +103,19 @@ export default function Dashboard() {
                     <div className="p-4 space-y-4">
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">المشرفون المتاحون</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{defaultEmployees.filter(e => e.role === 'supervisor' && e.status === 'active').length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{activeSupervisors}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">الفنيون المتاحون</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{defaultEmployees.filter(e => e.role === 'technician' && e.status === 'active').length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{activeTechnicians}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">المسارات المعرّفة</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{routes.length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{dashboardData?.totalRoutes ?? 0}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors">
                             <span className="text-sm text-slate-600 font-medium">العملاء الجدد</span>
-                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{clients.filter(c => c.isCandidate).length}</span>
+                            <span className="text-slate-900 font-bold bg-white px-2.5 py-0.5 rounded-md border border-gray-200 shadow-sm">{recentClients.length}</span>
                         </div>
                     </div>
                 </motion.div>

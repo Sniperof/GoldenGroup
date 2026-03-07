@@ -1,57 +1,106 @@
-import { useState, useCallback, useMemo } from 'react';
-import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, ArrowRight } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import { defaultGeoUnits } from '../lib/defaultData';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 import type { Client, GeoUnit, Visit, Contract } from '../lib/types';
 import ClientModal from '../components/ClientModal';
 import SmartTable from '../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../components/SmartTable';
 
 export default function Clients() {
-    const [clients, setClients] = useState<Client[]>(() => StorageManager.load('clients', []));
-    const [visits] = useState<Visit[]>(() => StorageManager.load('visits', []));
-    const [contracts] = useState<Contract[]>(() => StorageManager.load('contracts', []));
-    const [geoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
+    const [clients, setClients] = useState<Client[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const [activeTab, setActiveTab] = useState<'clients' | 'candidates'>('clients');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState<Client | null>(null);
 
-    // ─── Lifecycle Logic ───
+    const fetchClients = useCallback(async () => {
+        const data = await api.clients.list();
+        setClients(data);
+    }, []);
+
+    useEffect(() => {
+        const fetchAll = async () => {
+            try {
+                setLoading(true);
+                const [clientsData, visitsData, contractsData, geoUnitsData] = await Promise.all([
+                    api.clients.list(),
+                    api.visits.list(),
+                    api.contracts.list(),
+                    api.geoUnits.list(),
+                ]);
+                setClients(clientsData);
+                setVisits(visitsData);
+                setContracts(contractsData);
+                setGeoUnits(geoUnitsData);
+            } catch (err) {
+                console.error('Failed to fetch data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAll();
+    }, []);
+
     const getLifecycleStage = useCallback((client: Client) => {
         if (contracts.some(c => c.customerId === client.id)) return 'OP';
         if (visits.some(v => v.customerId === client.id)) return 'FOP';
         return 'Lead';
     }, [contracts, visits]);
 
-    // ─── Computed Lists ───
     const candidateList = useMemo(() => clients.filter(c => c.isCandidate), [clients]);
     const mainList = useMemo(() => clients.filter(c => !c.isCandidate).map(c => ({ ...c, lifecycleStage: getLifecycleStage(c) })), [clients, getLifecycleStage]);
 
-    const save = useCallback((c: Client[]) => { setClients(c); StorageManager.save('clients', c); }, []);
-
-    const convertToLead = (id: number) => {
+    const convertToLead = async (id: number) => {
         if (!confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) return;
-        save(clients.map(c => c.id === id ? { ...c, isCandidate: false } : c));
+        const client = clients.find(c => c.id === id);
+        if (!client) return;
+        try {
+            await api.clients.update(id, { ...client, isCandidate: false });
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to convert candidate:', err);
+        }
     };
 
-    const deleteClient = (id: number) => {
+    const deleteClient = async (id: number) => {
         if (!confirm('حذف هذا العميل؟')) return;
-        save(clients.filter(c => c.id !== id));
+        try {
+            await api.clients.delete(id);
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to delete client:', err);
+        }
     };
 
-    const handleSaveClient = (clientData: Client) => {
-        if (editingClient) {
-            save(clients.map(c => c.id === clientData.id ? { ...c, ...clientData } : c));
-        } else {
-            const newClient = {
-                ...clientData,
-                id: Math.max(0, ...clients.map(c => c.id)) + 1,
-                createdAt: new Date().toISOString(),
-                status: 'New',
-                isCandidate: activeTab === 'candidates' // Auto-flag based on active tab
-            } as Client;
-            save([...clients, newClient]);
+    const bulkDelete = async (items: { id: number }[]) => {
+        const ids = items.map(i => i.id);
+        try {
+            await api.clients.bulkDelete(ids);
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to bulk delete:', err);
+        }
+    };
+
+    const handleSaveClient = async (clientData: Client) => {
+        try {
+            if (editingClient) {
+                await api.clients.update(clientData.id, clientData);
+            } else {
+                await api.clients.create({
+                    ...clientData,
+                    createdAt: new Date().toISOString(),
+                    status: 'New',
+                    isCandidate: activeTab === 'candidates',
+                });
+            }
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to save client:', err);
         }
         setIsModalOpen(false);
         setEditingClient(null);
@@ -60,7 +109,6 @@ export default function Clients() {
     const openEditModal = (client: Client) => { setEditingClient(client); setIsModalOpen(true); };
     const getNeighborhoodName = (id: string) => geoUnits.find(u => u.id === parseInt(id))?.name || '--';
 
-    // ─── Columns ───
     const clientColumns: ColumnDef<Client & { lifecycleStage: string }>[] = [
         {
             key: 'name', label: 'العميل', sortable: true,
@@ -95,7 +143,6 @@ export default function Clients() {
         { key: 'createdAt', label: 'تاريخ الإضافة', sortable: true, render: (c) => <span className="text-sm text-slate-500">{c.createdAt?.slice(0, 10)}</span> },
     ];
 
-    // ─── Filters ───
     const clientFilters: FilterDef[] = [
         {
             key: 'lifecycleStage',
@@ -107,6 +154,14 @@ export default function Clients() {
             ]
         },
     ];
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -138,7 +193,7 @@ export default function Clients() {
                     getId={(c) => c.id}
                     onRowClick={openEditModal}
                     bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} عملاء؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} عملاء؟`)) bulkDelete(items); } },
                     ]}
                     actions={(c) => (
                         <button onClick={() => deleteClient(c.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-100">
@@ -166,7 +221,7 @@ export default function Clients() {
                     getId={(c) => c.id}
                     onRowClick={openEditModal}
                     bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} مرشحين؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} مرشحين؟`)) bulkDelete(items); } },
                     ]}
                     actions={(c) => (
                         <div className="flex items-center gap-1">

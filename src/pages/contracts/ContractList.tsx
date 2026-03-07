@@ -1,21 +1,10 @@
-import { useState } from 'react';
-import { FileText, Plus, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Plus, Eye, Loader2 } from 'lucide-react';
 import SmartTable from '../../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../../components/SmartTable';
 import type { Contract } from '../../lib/types';
 import { useNavigate } from 'react-router-dom';
-
-/* ------------------------------------------------------------------ */
-/*  Sample contracts                                                    */
-/* ------------------------------------------------------------------ */
-
-import { mockContracts } from '../../lib/mockData';
-
-/* ------------------------------------------------------------------ */
-/*  Sample contracts                                                    */
-/* ------------------------------------------------------------------ */
-
-const sampleContracts = mockContracts;
+import { api } from '../../lib/api';
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                              */
@@ -39,6 +28,15 @@ const formatPrice = (n: number) => n.toLocaleString('ar-IQ') + ' د.ع';
 
 export default function ContractList() {
     const navigate = useNavigate();
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.contracts.list()
+            .then(data => setContracts(data))
+            .catch(err => console.error('Failed to load contracts:', err))
+            .finally(() => setLoading(false));
+    }, []);
 
     const columns: ColumnDef<Contract>[] = [
         {
@@ -101,11 +99,19 @@ export default function ContractList() {
         },
     ];
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <SmartTable<Contract>
             title="إدارة العقود"
             icon={FileText}
-            data={sampleContracts}
+            data={contracts}
             columns={columns}
             filters={filters}
             searchKeys={['contractNumber', 'customerName', 'deviceModelName', 'serialNumber']}

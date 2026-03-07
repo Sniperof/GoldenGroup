@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Eye, Trash2, X, ArrowUp, ArrowDown, Route as RouteIcon, ChevronRight } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import { defaultGeoUnits, levelNames } from '../lib/defaultData';
+import { api } from '../lib/api';
+import { levelNames } from '../lib/defaultData';
 import type { Route, GeoUnit, RoutePoint } from '../lib/types';
 
 const levelColors: Record<number, { bg: string; text: string; border: string }> = {
@@ -13,20 +13,36 @@ const levelColors: Record<number, { bg: string; text: string; border: string }> 
 };
 
 export default function RouteManager() {
-    const [routes, setRoutes] = useState<Route[]>(() => StorageManager.load('routes', []));
-    const [geoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
+    const [routes, setRoutes] = useState<Route[]>([]);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [showBuilder, setShowBuilder] = useState(false);
     const [editRoute, setEditRoute] = useState<Route | null>(null);
 
-    // Builder state
     const [builderName, setBuilderName] = useState('');
     const [builderPoints, setBuilderPoints] = useState<RoutePoint[]>([]);
 
-    // Geo Tree picker state — selection at each level
     const [treeSel, setTreeSel] = useState<(number | null)[]>([null, null, null, null]);
 
-    const save = useCallback((r: Route[]) => { setRoutes(r); StorageManager.save('routes', r); }, []);
+    const fetchData = useCallback(async () => {
+        try {
+            const [routesData, geoUnitsData] = await Promise.all([
+                api.routes.list(),
+                api.geoUnits.list(),
+            ]);
+            setRoutes(routesData);
+            setGeoUnits(geoUnitsData);
+        } catch (e) {
+            console.error('Failed to fetch data', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const getChildren = useCallback((level: number, parentId: number | null) =>
         geoUnits.filter(u => u.level === level && u.parentId === parentId), [geoUnits]);
@@ -49,23 +65,18 @@ export default function RouteManager() {
         setShowBuilder(true);
     };
 
-    // Flexible endpoint logic: determine addable unit from current tree selection
     const addableUnit = useMemo(() => {
-        // Walk from the deepest selected level upward
         for (let lvl = 3; lvl >= 0; lvl--) {
             const selId = treeSel[lvl];
             if (selId !== null) {
-                const nextLevel = lvl + 2; // geo level = array index + 1, nextLevel is the child level
+                const nextLevel = lvl + 2;
                 if (nextLevel > 4) {
-                    // Selected a level-4 node (neighborhood) — it is always addable
                     return { id: selId, level: lvl + 1 };
                 }
                 const children = getChildren(nextLevel, selId);
                 if (children.length === 0) {
-                    // No children at the next level → this node is the flexible endpoint
                     return { id: selId, level: lvl + 1 };
                 }
-                // Has children: cannot add this node, must drill down
                 return null;
             }
         }
@@ -99,22 +110,38 @@ export default function RouteManager() {
         setBuilderPoints(next.map((p, i) => ({ ...p, order: i + 1 })));
     };
 
-    const saveRoute = () => {
+    const saveRoute = async () => {
         if (!builderName.trim() || builderPoints.length === 0) { alert('أدخل اسم المسار وأضف محطة واحدة على الأقل'); return; }
-        if (editRoute) {
-            const updated = routes.map(r => r.id === editRoute.id ? { ...r, name: builderName, points: builderPoints } : r);
-            save(updated);
-        } else {
-            const newId = Math.max(0, ...routes.map(r => r.id)) + 1;
-            save([...routes, { id: newId, name: builderName, points: builderPoints, status: 'active' }]);
+        try {
+            if (editRoute) {
+                await api.routes.update(editRoute.id, { name: builderName, points: builderPoints, status: editRoute.status });
+            } else {
+                await api.routes.create({ name: builderName, points: builderPoints, status: 'active' });
+            }
+            await fetchData();
+            setShowBuilder(false);
+        } catch (e) {
+            console.error('Failed to save route', e);
         }
-        setShowBuilder(false);
     };
 
-    const deleteRoute = (id: number) => {
+    const deleteRoute = async (id: number) => {
         if (!confirm('حذف هذا المسار؟')) return;
-        save(routes.filter(r => r.id !== id));
+        try {
+            await api.routes.delete(id);
+            await fetchData();
+        } catch (e) {
+            console.error('Failed to delete route', e);
+        }
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="text-slate-500 text-sm">جاري التحميل...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll relative">

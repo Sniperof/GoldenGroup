@@ -1,29 +1,47 @@
-import { useState } from 'react';
-import { Calendar, Search, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Search, Filter, Loader2 } from 'lucide-react';
 import TaskCard from '../../components/TaskCard';
-import { defaultTasks } from '../../lib/defaultData';
+import { api } from '../../lib/api';
+import type { Task } from '../../lib/types';
 
 const getToday = () => new Date().toISOString().split('T')[0];
 
 export default function TodaysTasks() {
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<string>('all');
+    const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.tasks.list()
+            .then(data => setAllTasks(data))
+            .catch(err => console.error('Failed to fetch tasks:', err))
+            .finally(() => setLoading(false));
+    }, []);
 
     const today = getToday();
-    let tasks = defaultTasks.filter(t => t.dueDate === today && t.customerName.includes(search));
+    let tasks = allTasks.filter(t => t.dueDate === today && t.customerName.includes(search));
 
     if (filterType !== 'all') {
         tasks = tasks.filter(t => t.type === filterType);
     }
 
     const stats = {
-        total: defaultTasks.filter(t => t.dueDate === today).length,
-        emergency: defaultTasks.filter(t => t.dueDate === today && t.type === 'emergency').length,
-        dues: defaultTasks.filter(t => t.dueDate === today && t.type === 'dues').length,
-        periodic: defaultTasks.filter(t => t.dueDate === today && t.type === 'periodic').length,
-        returns: defaultTasks.filter(t => t.dueDate === today && t.type === 'returns').length,
-        followup: defaultTasks.filter(t => t.dueDate === today && t.type === 'followup').length,
+        total: allTasks.filter(t => t.dueDate === today).length,
+        emergency: allTasks.filter(t => t.dueDate === today && t.type === 'emergency').length,
+        dues: allTasks.filter(t => t.dueDate === today && t.type === 'dues').length,
+        periodic: allTasks.filter(t => t.dueDate === today && t.type === 'periodic').length,
+        returns: allTasks.filter(t => t.dueDate === today && t.type === 'returns').length,
+        followup: allTasks.filter(t => t.dueDate === today && t.type === 'followup').length,
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-sky-600 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
