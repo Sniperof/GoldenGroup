@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
-import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List, ShieldCheck } from 'lucide-react';
+import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List, ShieldCheck, Edit } from 'lucide-react';
 import AddCandidateModal from '../../components/candidates/AddCandidateModal';
 import CreateReferralSheetModal from '../../components/candidates/CreateReferralSessionModal';
 import ImportCSVModal from '../../components/candidates/ImportCSVModal';
@@ -39,6 +40,7 @@ export default function CandidatesEntry() {
     const [activeCandidateForQualify, setActiveCandidateForQualify] = useState<Candidate | null>(null);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [clientInitialData, setClientInitialData] = useState<Client | null>(null);
+    const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
 
     // Derived State
     const filteredCandidates = candidates
@@ -101,6 +103,18 @@ export default function CandidatesEntry() {
         }
     };
 
+    const geoUnits = useMemo(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
+
+    const getNeighborhoodHierarchy = (id?: string) => {
+        if (!id) return '--';
+        const nId = parseInt(id);
+        const neighborhood = geoUnits.find(gu => gu.id === nId);
+        if (!neighborhood) return '--';
+        const subArea = geoUnits.find(gu => gu.id === neighborhood.parentId);
+        if (!subArea) return neighborhood.name;
+        return `${subArea.name} > ${neighborhood.name}`;
+    };
+
     return (
         <div className="flex flex-col h-full p-8 space-y-6 overflow-hidden" dir="rtl">
             {/* Error Message Modal */}
@@ -144,7 +158,7 @@ export default function CandidatesEntry() {
                         onClick={() => setActiveTab('sheets')}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'sheets' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        <LayoutGrid className="w-4 h-4" /> أرشيف الأوراق ({referralSheets.length})
+                        <LayoutGrid className="w-4 h-4" /> أوراق الترشيح ({referralSheets.length})
                     </button>
                 </div>
             </div>
@@ -170,44 +184,87 @@ export default function CandidatesEntry() {
                         <table className="w-full text-sm text-right border-collapse">
                             <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 shadow-sm">
                                 <tr className="text-slate-600 font-bold text-xs uppercase tracking-wider">
+                                    <th className="px-5 h-12">ID</th>
                                     <th className="px-5 h-12">الاسم المقترح</th>
-                                    <th className="px-5 h-12"> الوسيط</th>
+                                    <th className="px-5 h-12">أرقام التواصل</th>
+                                    <th className="px-5 h-12">اسم الوسيط</th>
+                                    <th className="px-5 h-12">نوع الترشيح</th>
+                                    <th className="px-5 h-12">العنوان</th>
+                                    <th className="px-5 h-12">المهنة</th>
                                     <th className="px-5 h-12">الحالة</th>
                                     <th className="px-5 h-12 text-center">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {paginatedCandidates.length === 0 ? (
-                                    <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 font-medium">لا توجد بيانات</td></tr>
+                                    <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-medium">لا توجد بيانات</td></tr>
                                 ) : (
                                     paginatedCandidates.map(c => {
-                                        const sheet = c.referralSheetId ? referralSheets.find(s => s.id === c.referralSheetId) : null;
+                                        const nameStr = c.firstName
+                                            ? `${c.firstName} ${c.lastName || ''} ${c.nickname ? `(${c.nickname})` : ''}`.trim()
+                                            : `${c.nickname || ''} ${c.lastName || ''}`.trim();
+
+                                        const primaryPhone = c.contacts?.find(con => con.isPrimary)?.number || c.contacts?.[0]?.number || c.mobile;
+                                        const extraCount = Math.max(0, (c.contacts?.length || 0) - 1);
+                                        const allPhones = c.contacts?.map(con => con.number).join('\n') || '';
+
                                         return (
                                             <tr key={c.id} className="hover:bg-slate-50 transition-colors h-12 group">
+                                                <td className="px-5 py-2 font-mono text-xs text-slate-500">#{c.id}</td>
                                                 <td className="px-5 py-2">
-                                                    <div className="font-bold text-slate-800 group-hover:text-sky-700 transition-colors">{c.firstName} {c.lastName}</div>
-                                                    <div className="text-[10px] font-mono text-slate-500" dir="ltr">{c.mobile}</div>
+                                                    <div className="font-bold text-slate-800">{nameStr}</div>
                                                 </td>
-                                                <td className="px-5 py-2">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-slate-700">{c.referralNameSnapshot}</span>
-                                                        <span className="text-[10px] text-slate-400">{c.referralOriginChannel}</span>
+                                                <td className="px-5 py-2 text-right" dir="ltr">
+                                                    <div className="flex items-center justify-end gap-1.5 font-mono text-xs text-slate-700">
+                                                        <span>{primaryPhone}</span>
+                                                        {extraCount > 0 && (
+                                                            <span className="bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded cursor-help font-bold" title={allPhones}>
+                                                                +{extraCount}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-2">
+                                                <td className="px-5 py-2 text-xs font-medium text-slate-700">
+                                                    {c.referralType === 'Client' && c.referralEntityId ? (
+                                                        <Link to={`/clients/${c.referralEntityId}`} className="text-sky-600 hover:text-sky-800 hover:underline">
+                                                            {c.referralNameSnapshot || 'زبون مجهول'}
+                                                        </Link>
+                                                    ) : (
+                                                        <span>{c.referralNameSnapshot || '--'}</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-2 text-xs">
+                                                    {c.referralSheetId ? (
+                                                        <button onClick={() => setSheetDetailsId(c.referralSheetId!)} className="text-sky-600 hover:underline font-medium">
+                                                            ورقة ترشيح #{c.referralSheetId}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-slate-600">ترشيح مباشر</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-2 text-xs text-slate-600 max-w-[150px] truncate" title={getNeighborhoodHierarchy(c.geoUnitId?.toString())}>
+                                                    {getNeighborhoodHierarchy(c.geoUnitId?.toString())}
+                                                </td>
+                                                <td className="px-5 py-2 text-xs text-slate-600">
+                                                    {c.occupation || '--'}
+                                                </td>
+                                                <td className="px-5 py-2 text-xs">
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${c.status === 'Suggested' ? 'bg-sky-50 text-sky-700 border-sky-100' : c.status === 'Qualified' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                                                         {c.status === 'Suggested' ? 'مقترح' : c.status === 'FollowUp' ? 'متابعة' : c.status === 'Qualified' ? (c.duplicateFlag ? 'تم الربط' : 'تم التحويل') : 'مرفوض'}
                                                     </span>
                                                 </td>
-                                                <td className="px-5 py-2 text-center">
-                                                    {(c.status === 'Suggested' || c.status === 'FollowUp') && (
-                                                        <button
-                                                            onClick={() => handleOpenQualify(c)}
-                                                            className="w-8 h-8 mx-auto flex items-center justify-center bg-sky-50 text-sky-600 hover:bg-sky-600 hover:text-white rounded-lg border border-sky-100 transition-all"
-                                                        >
-                                                            <ShieldCheck className="w-4 h-4" />
-                                                        </button>
-                                                    )}
+                                                <td className="px-5 py-2">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        {(c.status === 'Suggested' || c.status === 'FollowUp') && (
+                                                            <button
+                                                                onClick={() => handleOpenQualify(c)}
+                                                                className="w-8 h-8 flex items-center justify-center bg-sky-50 text-sky-600 hover:bg-sky-600 hover:text-white rounded-lg border border-sky-100 transition-all"
+                                                                title="تأهيل"
+                                                            >
+                                                                <ShieldCheck className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -322,7 +379,15 @@ export default function CandidatesEntry() {
             )}
 
             {/* Modals */}
-            <AddCandidateModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+            <AddCandidateModal
+                isOpen={isAddModalOpen}
+                onClose={() => {
+                    setIsAddModalOpen(false);
+                    setEditingCandidate(null);
+                }}
+                initialData={editingCandidate || undefined}
+                title="إضافة اسم مقترح جديد"
+            />
             <CreateReferralSheetModal isOpen={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} onSheetCreated={() => setActiveTab('sheets')} />
             <ImportCSVModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} />
             <ReferralSheetDetailsModal sheetId={sheetDetailsId} isOpen={sheetDetailsId !== null} onClose={() => setSheetDetailsId(null)} />
@@ -346,7 +411,7 @@ export default function CandidatesEntry() {
                 onClose={() => setIsClientModalOpen(false)}
                 onSave={handleSaveClient}
                 initialData={clientInitialData}
-                geoUnits={defaultGeoUnits}
+                geoUnits={geoUnits}
             />
         </div>
     );

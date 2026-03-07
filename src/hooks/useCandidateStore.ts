@@ -16,6 +16,7 @@ interface CandidateState {
     linkCandidateToClient: (candidateId: number, clientId: number) => void;
     markJunk: (candidateId: number) => void;
     markForFollowUp: (candidateId: number) => void;
+    updateCandidate: (candidateId: number, data: Partial<Candidate>) => void;
 
     // Stats Helpers
     updateSheetStats: (sheetId: number) => void;
@@ -90,7 +91,7 @@ const mockCandidates: Candidate[] = [
         referralDate: new Date().toISOString(),
         referralReason: 'تزكية مباشرة من فاطمة',
         referralType: 'Client',
-        referralOriginChannel: 'Visit',
+        referralOriginChannel: 'Acquaintance',
         referralNameSnapshot: 'فاطمة الزهراء',
         referralEntityId: 102, // Fatima
         referralConfirmationStatus: 'Pending',
@@ -198,7 +199,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
                     c.mobile === candidateData.mobile
                 );
                 if (sameContextDupe) {
-                    throw new Error(`رقم الهاتف ${candidateData.mobile} أدخل مسبقاً اليوم لك كاستقطاب مباشر!`);
+                    throw new Error(`رقم الهاتف ${candidateData.mobile} أدخل مسبقاً اليوم لك ترشيح مباشر!`);
                 }
             }
 
@@ -407,6 +408,57 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
         });
 
         // Update stats
+        const candidate = get().candidates.find(c => c.id === candidateId);
+        if (candidate?.referralSheetId) {
+            get().updateSheetStats(candidate.referralSheetId);
+        }
+    },
+
+    updateCandidate: (candidateId, data) => {
+        set((state) => {
+            const updatedCandidates = state.candidates.map(c =>
+                c.id === candidateId ? { ...c, ...data } : c
+            );
+
+            // Re-check duplicates if mobile changed
+            if (data.mobile) {
+                const clients = StorageManager.load<Client[]>('clients', []);
+                const finalCandidates = updatedCandidates.map(c => {
+                    if (c.id === candidateId) {
+                        const clientDupe = clients.find(cl => cl.mobile === c.mobile);
+                        const otherCandidateDupe = updatedCandidates.find(oc => oc.id !== candidateId && oc.mobile === c.mobile);
+
+                        let isDupe = false;
+                        let dupeType: Candidate['duplicateType'] = null;
+                        let refId: number | null = null;
+
+                        if (clientDupe) {
+                            isDupe = true;
+                            dupeType = 'Client';
+                            refId = clientDupe.id;
+                        } else if (otherCandidateDupe) {
+                            isDupe = true;
+                            dupeType = 'Candidate';
+                            refId = otherCandidateDupe.id;
+                        }
+
+                        return {
+                            ...c,
+                            duplicateFlag: isDupe,
+                            duplicateType: dupeType,
+                            duplicateReferenceId: refId
+                        };
+                    }
+                    return c;
+                });
+                StorageManager.save('candidates', finalCandidates);
+                return { candidates: finalCandidates };
+            }
+
+            StorageManager.save('candidates', updatedCandidates);
+            return { candidates: updatedCandidates };
+        });
+
         const candidate = get().candidates.find(c => c.id === candidateId);
         if (candidate?.referralSheetId) {
             get().updateSheetStats(candidate.referralSheetId);

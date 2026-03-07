@@ -41,63 +41,82 @@ export function calculateSimilarity(s1: string, s2: string): number {
 export type ConfidenceScore = 'High' | 'Medium' | 'Low';
 
 export interface SearchResult {
-    client: Client;
+    entity: Client | Candidate;
+    recordType: 'Client' | 'Candidate';
     confidence: ConfidenceScore;
     score: number;
 }
 
 /**
- * Performs a "Smart Search" on the clients array based on candidate details.
+ * Performs a "Smart Search" on both clients and candidates arrays.
  */
-export function performSmartSearch(candidate: Partial<Candidate>, clients: Client[]): SearchResult[] {
+export function performSmartSearch(searchTerms: Partial<Candidate>, clients: Client[], candidates: Candidate[] = []): SearchResult[] {
     const results: SearchResult[] = [];
     const SIMILARITY_THRESHOLD = 85;
 
-    const candidateMobile = candidate.mobile?.trim();
-    const candidateFirstName = candidate.firstName?.trim() || candidate.nickname?.trim() || '';
-    const candidateLastName = candidate.lastName?.trim() || '';
-    const candidateFullName = `${candidateFirstName} ${candidateLastName}`.trim();
-    const candidateNeighborhoodId = candidate.referralSheetId ? null : (candidate as any).locationSelection?.neighborhoodId; // Handle both types
+    const queryMobile = searchTerms.mobile?.trim();
+    const queryFirstName = searchTerms.firstName?.trim() || searchTerms.nickname?.trim() || '';
+    const queryLastName = searchTerms.lastName?.trim() || '';
+    const queryFullName = `${queryFirstName} ${queryLastName}`.trim();
 
+    // 1. Search in Clients
     for (const client of clients) {
         let confidence: ConfidenceScore | null = null;
         let score = 0;
 
-        // 1. High Confidence: Exact match on Primary Mobile or any Contact number
         const clientContacts = client.contacts || [];
-        const hasMobileMatch = (client.mobile?.trim() === candidateMobile) ||
-            clientContacts.some(c => c.number?.trim() === candidateMobile);
+        const hasMobileMatch = (client.mobile?.trim() === queryMobile) ||
+            clientContacts.some(c => c.number?.trim() === queryMobile);
 
-        if (candidateMobile && hasMobileMatch) {
+        if (queryMobile && hasMobileMatch) {
             confidence = 'High';
             score = 100;
         }
 
-        // 2. Medium Confidence: Fuzzy match on Full Name
-        if (!confidence && candidateFullName && client.name) {
-            const similarity = calculateSimilarity(candidateFullName, client.name);
+        if (!confidence && queryFullName && client.name) {
+            const similarity = calculateSimilarity(queryFullName, client.name);
             if (similarity >= SIMILARITY_THRESHOLD) {
                 confidence = 'Medium';
                 score = similarity;
             }
         }
 
-        // 3. Low Confidence: Fuzzy match on First Name + Exact match on City/Area (Neighborhood)
-        if (!confidence && candidateFirstName && client.name && candidateNeighborhoodId) {
-            const firstNameSimilarity = calculateSimilarity(candidateFirstName, client.name.split(' ')[0]);
-            const neighborhoodMatch = String(client.neighborhood) === String(candidateNeighborhoodId);
+        if (confidence) {
+            results.push({ entity: client, recordType: 'Client', confidence, score });
+        }
+    }
 
-            if (firstNameSimilarity >= SIMILARITY_THRESHOLD && neighborhoodMatch) {
-                confidence = 'Low';
-                score = firstNameSimilarity;
+    // 2. Search in Candidates
+    for (const cand of candidates) {
+        let confidence: ConfidenceScore | null = null;
+        let score = 0;
+
+        const candContacts = cand.contacts || [];
+        const candMobile = cand.mobile?.trim();
+        const candFirstName = cand.firstName?.trim() || cand.nickname?.trim() || '';
+        const candLastName = cand.lastName?.trim() || '';
+        const candFullName = `${candFirstName} ${candLastName}`.trim();
+
+        const hasMobileMatch = (candMobile === queryMobile) ||
+            candContacts.some(c => c.number?.trim() === queryMobile);
+
+        if (queryMobile && hasMobileMatch) {
+            confidence = 'High';
+            score = 100;
+        }
+
+        if (!confidence && queryFullName && candFullName) {
+            const similarity = calculateSimilarity(queryFullName, candFullName);
+            if (similarity >= SIMILARITY_THRESHOLD) {
+                confidence = 'Medium';
+                score = similarity;
             }
         }
 
         if (confidence) {
-            results.push({ client, confidence, score });
+            results.push({ entity: cand, recordType: 'Candidate', confidence, score });
         }
     }
 
-    // Sort by score and limit to 10
     return results.sort((a, b) => b.score - a.score).slice(0, 10);
 }

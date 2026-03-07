@@ -73,7 +73,7 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                 <Search className="w-5 h-5 text-sky-600" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">تأهيل وتحقق ذكي</h2>
+                                <h2 className="text-xl font-bold text-slate-800">تأهيل وتحقق </h2>
                                 <p className="text-xs text-slate-500">الاسم المقترح: {candidate.firstName} {candidate.nickname}</p>
                             </div>
                         </div>
@@ -182,7 +182,7 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
                                     <div className="text-base font-black text-slate-800 mb-3">{candidate.firstName} {candidate.lastName} {candidate.nickname ? `(${candidate.nickname})` : ''}</div>
 
                                     <div className="flex justify-between items-center pt-3 border-t border-slate-200/60 mb-1">
-                                        <span className="text-xs text-slate-500 font-bold">الوسيط / المصدر</span>
+                                        <span className="text-xs text-slate-500 font-bold">اسم الوسيط</span>
                                         <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">{candidate.referralType}</span>
                                     </div>
                                     <div className="text-sm font-bold text-slate-800">{candidate.referralNameSnapshot}</div>

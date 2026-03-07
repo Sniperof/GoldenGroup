@@ -8,6 +8,8 @@ import ClientModal from '../components/ClientModal';
 import SmartTable from '../components/SmartTable';
 import type { ColumnDef, FilterDef } from '../components/SmartTable';
 import ManualSearchModal from '../components/candidates/ManualSearchModal';
+import QualificationModal from '../components/candidates/QualificationModal';
+import AddCandidateModal from '../components/candidates/AddCandidateModal';
 import { useCandidateStore } from '../hooks/useCandidateStore';
 
 export default function Clients() {
@@ -19,8 +21,9 @@ export default function Clients() {
     const [activeTab, setActiveTab] = useState<'clients' | 'candidates'>('clients');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState<Client | null>(null);
-    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    const [isPreAddModalOpen, setIsPreAddModalOpen] = useState(false);
     const [activeCandidateForSearch, setActiveCandidateForSearch] = useState<any>(null);
+    const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
     const qualifyCandidate = useCandidateStore((state: any) => state.qualifyCandidate);
 
     const navigate = useNavigate();
@@ -112,16 +115,18 @@ export default function Clients() {
         if (editingClient) {
             save(clients.map(c => c.id === clientData.id ? { ...c, ...clientData } : c));
         } else {
+            const newId = clients.length > 0 ? Math.max(1000, ...clients.map(c => c.id)) + 1 : 1001;
             const newClient = {
                 ...clientData,
-                id: Math.max(1000, ...clients.map(c => c.id)) + 1,
+                id: newId,
                 createdAt: new Date().toISOString(),
                 status: 'Suggested',
-                isCandidate: false // Force false now that tabs are gone
+                isCandidate: false
             } as Client;
             save([...clients, newClient]);
         }
         setIsModalOpen(false);
+        setIsAddCandidateModalOpen(false);
         setEditingClient(null);
     };
 
@@ -205,11 +210,22 @@ export default function Clients() {
                     <p className="text-sm text-slate-500 font-medium">إدارة وتحليل بيانات الزبائن والشبكة</p>
                 </div>
                 <button
-                    onClick={() => { setEditingClient(null); setIsModalOpen(true); }}
+                    onClick={() => {
+                        setActiveCandidateForSearch({
+                            id: 0,
+                            firstName: '',
+                            lastName: '',
+                            nickname: '',
+                            mobile: '',
+                            referralType: 'Personal',
+                            referralNameSnapshot: 'المدير/المشرف المباشر'
+                        });
+                        setIsPreAddModalOpen(true);
+                    }}
                     className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-sky-500/20 transition-all active:scale-95"
                 >
                     <UserPlus className="w-4 h-4" />
-                    <span>إضافة اسم مرشح</span>
+                    <span>إضافة اسم مرشح جديد</span>
                 </button>
             </div>
 
@@ -320,12 +336,37 @@ export default function Clients() {
             </div >
 
             <ClientModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isModalOpen || isAddCandidateModalOpen}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setIsAddCandidateModalOpen(false);
+                }}
                 onSave={handleSaveClient}
                 initialData={editingClient}
                 geoUnits={geoUnits}
             />
+
+            <ManualSearchModal
+                isOpen={isPreAddModalOpen}
+                onClose={() => setIsPreAddModalOpen(false)}
+                candidate={activeCandidateForSearch || {}}
+                clients={clients}
+                candidates={candidates}
+                onLink={(entity, type) => {
+                    setIsPreAddModalOpen(false);
+                    if (type === 'Client') {
+                        navigate(`/clients/${entity.id}`);
+                    } else {
+                        navigate(`/candidates`);
+                    }
+                }}
+                onNoMatch={() => {
+                    setIsPreAddModalOpen(false);
+                    setIsAddCandidateModalOpen(true);
+                }}
+            />
+
+
         </div >
     );
 }
