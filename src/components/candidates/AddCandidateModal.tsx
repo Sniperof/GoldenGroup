@@ -4,10 +4,9 @@ import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { UserPlus, Calendar, PlusCircle, X, CheckCircle, AlertCircle, Save, MapPin, Trash2, MessageCircle, Plus } from 'lucide-react';
 import { CandidateStatus, ReferralType, ReferralOriginChannel, Client, ContactEntry, Candidate, ContactType, ContactStatus } from '../../lib/types';
 import CreateReferralSheetModal from './CreateReferralSessionModal';
-import { StorageManager } from '../../lib/storage';
 import GeoSmartSearch, { GeoSelection } from '../GeoSmartSearch';
-import { defaultGeoUnits } from '../../lib/defaultData';
-
+import { api } from '../../lib/api';
+import type { GeoUnit } from '../../lib/types';
 
 interface AddCandidateModalProps {
     isOpen: boolean;
@@ -48,22 +47,22 @@ const initialCandidateState = {
 };
 
 export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, initialData, title }: AddCandidateModalProps) {
-    const geoUnits = useMemo(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    useEffect(() => {
+        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+    }, []);
+
     const addCandidate = useCandidateStore((state: any) => state.addCandidate);
     const updateCandidate = useCandidateStore((state: any) => state.updateCandidate);
     const referralSheets = useCandidateStore((state: any) => state.referralSheets);
 
-    // Filter only active sheets (New or In-Progress)
     const activeSheets = useMemo(() => referralSheets.filter((s: any) => s.status !== 'Archived' && s.status !== 'Completed'), [referralSheets]);
 
-    // Mode Toggle
     const [isDirectMode, setIsDirectMode] = useState(initialDirectMode || false);
 
-    // Section A: Mode B (Sheet-based)
     const [selectedSheetId, setSelectedSheetId] = useState<number | ''>('');
     const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
 
-    // Section A: Mode A (Direct Referral)
     const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
     const [originChannel, setOriginChannel] = useState<ReferralOriginChannel>('Acquaintance');
@@ -80,11 +79,9 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
     const clientSearchRef = useRef<HTMLDivElement>(null);
     const isInitialSync = useRef(true);
 
-    // Section B: Candidate
     const [candidateData, setCandidateData] = useState(initialCandidateState);
     const [error, setError] = useState('');
 
-    // Sync state if prop changes
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
@@ -135,7 +132,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
         }
     }, [isOpen, initialData, initialDirectMode]);
 
-    // Secondary reactive logic (only when NOT syncing initial data)
     useEffect(() => {
         if (!isOpen || isInitialSync.current || !isDirectMode) return;
 
@@ -145,7 +141,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
         } else if (referralType === 'Unknown') {
             setReferralNameSnapshot('مجهول');
         } else {
-            // Reset fields for other types when changed AFTER initial load
             setReferralNameSnapshot('');
             setEmployeeIdInput('');
             setEmployeeFound(null);
@@ -157,7 +152,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
 
 
     useEffect(() => {
-        // Handle clicking outside of client suggestions
         function handleClickOutside(event: MouseEvent) {
             if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
                 setClientSuggestions([]);
@@ -169,37 +163,47 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
 
 
 
-    const handleEmployeeBlur = () => {
+    const handleEmployeeBlur = async () => {
         if (!employeeIdInput.trim()) {
             setEmployeeFound(null);
             setEmployeeSearchError('');
             return;
         }
-        const employees = StorageManager.load<any[]>('employees', []);
-        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
-        if (emp) {
-            setEmployeeFound({ name: emp.name, id: emp.id });
-            setReferralNameSnapshot(emp.name);
-            setEmployeeSearchError('');
-        } else {
+        try {
+            const employees = await api.employees.list();
+            const emp = employees.find((e: any) => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+            if (emp) {
+                setEmployeeFound({ name: emp.name, id: emp.id });
+                setReferralNameSnapshot(emp.name);
+                setEmployeeSearchError('');
+            } else {
+                setEmployeeFound(null);
+                setReferralNameSnapshot('');
+                setEmployeeSearchError('لم يتم العثور على الموظف');
+            }
+        } catch {
             setEmployeeFound(null);
             setReferralNameSnapshot('');
-            setEmployeeSearchError('لم يتم العثور على الموظف');
+            setEmployeeSearchError('خطأ في البحث عن الموظف');
         }
     };
 
-    const handleClientSearch = (text: string) => {
+    const handleClientSearch = async (text: string) => {
         setClientSearch(text);
         if (text.trim().length < 2) {
             setClientSuggestions([]);
             return;
         }
-        const clients = StorageManager.load<Client[]>('clients', []);
-        const matches = clients.filter(c =>
-            c.name.includes(text) ||
-            c.contacts.some(con => con.number.includes(text))
-        ).slice(0, 5);
-        setClientSuggestions(matches);
+        try {
+            const clients = await api.clients.list();
+            const matches = clients.filter((c: any) =>
+                c.name.includes(text) ||
+                c.contacts?.some((con: any) => con.number.includes(text))
+            ).slice(0, 5);
+            setClientSuggestions(matches);
+        } catch {
+            setClientSuggestions([]);
+        }
     };
 
     const handleSelectClient = (client: Client) => {
@@ -212,7 +216,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
 
 
     const candidatesList = useCandidateStore((state: any) => state.candidates);
-    const clientsList = useMemo(() => StorageManager.load<Client[]>('clients', []), []);
 
     const validateForm = () => {
         if (!isDirectMode && !selectedSheetId) {
@@ -235,7 +238,7 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
         return true;
     };
 
-    const handleSave = (addAnother: boolean) => {
+    const handleSave = async (addAnother: boolean) => {
         if (!validateForm()) return;
 
         const candidateUnitId = candidateData.locationSelection.neighborhoodId || candidateData.locationSelection.subId || candidateData.locationSelection.regionId || candidateData.locationSelection.govId;
@@ -250,7 +253,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
             const neighborhood = candidateAddressText;
             const detailedAddress = candidateData.addressText;
 
-            // Mode A: Direct
             let entityId: number | null = null;
             if (referralType === 'Employee' && employeeFound) {
                 entityId = employeeFound.id;
@@ -266,19 +268,19 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                 contacts,
                 addressText: detailedAddress || neighborhood,
                 geoUnitId: Number(candidateUnitId) || null,
-                referralSheetId: null,
+                referralSheetId: isDirectMode ? null : (selectedSheetId as number),
                 referralType: referralType,
                 referralOriginChannel: originChannel,
                 referralNameSnapshot: referralNameSnapshot,
                 referralEntityId: entityId,
                 referralDate: new Date(referralDate).toISOString(),
-                referralReason: 'Direct Referral',
+                referralReason: isDirectMode ? 'Direct Referral' : 'Part of Sheet',
                 occupation: candidateData.occupation,
                 candidateNotes: candidateData.candidateNotes,
                 ownerUserId: 1,
                 createdBy: 1
             };
-            addCandidate(newC as any);
+            await addCandidate(newC as any);
             if (addAnother) {
                 setCandidateData(initialCandidateState);
                 setError('');
@@ -486,7 +488,6 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                                             />
                                         </div>
                                     )}
-                                    {/* Geo Removed */}
                                 </div>
                             )}
                         </div>

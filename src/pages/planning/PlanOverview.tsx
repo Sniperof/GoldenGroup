@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, ChevronRight, Calendar, Users, User, Route as RouteIcon,
-    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye, PhoneCall
+    AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye, PhoneCall, Loader2
 } from 'lucide-react';
-import { StorageManager } from '../../lib/storage';
-import { defaultGeoUnits, defaultEmployees, levelNames } from '../../lib/defaultData';
+import { api } from '../../lib/api';
+import { levelNames } from '../../lib/defaultData';
 import type { Route, GeoUnit, DaySchedule, RouteAssignmentData, Contract, Visit } from '../../lib/types';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { useClientStore } from '../../hooks/useClientStore';
@@ -45,21 +45,20 @@ const getToday = () => new Date().toISOString().split('T')[0];
 export default function PlanOverview() {
     const navigate = useNavigate();
     const [date, setDate] = useState(getToday);
+    const [loading, setLoading] = useState(true);
 
-    const geoUnits = useMemo<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
-    const savedRoutes = useMemo<Route[]>(() => StorageManager.load('routes', []), []);
-    const schedules = useMemo<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}), []);
-    const routeAssignments = useMemo<Record<string, RouteAssignmentData>>(() => StorageManager.load('routeAssignments', {}), []);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [savedRoutes, setSavedRoutes] = useState<Route[]>([]);
+    const [currentSchedule, setCurrentSchedule] = useState<DaySchedule>({ teams: [], solos: [] });
+    const [routeAssignments, setRouteAssignments] = useState<Record<string, RouteAssignmentData>>({});
+    const [clients, setClients] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
 
     const candidates = useCandidateStore(state => state.candidates);
-    const { clients, loadClients, getLeads } = useClientStore();
+    const { getLeads } = useClientStore();
     const generateTaskList = useTelemarketingStore(state => state.generateTaskList);
-
-    const [contracts] = useState<Contract[]>(() => StorageManager.load('contracts', []));
-    const [visits] = useState<Visit[]>(() => StorageManager.load('visits', []));
-
-    // Only load clients on mount if needed, but since it's zustand we can just ensure it logic
-    const activeLeads = useMemo(() => getLeads(contracts, visits), [getLeads, contracts, visits, clients]);
 
     const [selectedModalTeam, setSelectedModalTeam] = useState<{
         key: string;
@@ -68,9 +67,42 @@ export default function PlanOverview() {
         leads: any[];
     } | null>(null);
 
-    const employees = defaultEmployees;
+    useEffect(() => {
+        let cancelled = false;
+        const loadAll = async () => {
+            setLoading(true);
+            try {
+                const [geo, routes, schedule, assignments, cls, emps, cts, vis] = await Promise.all([
+                    api.geoUnits.list(),
+                    api.routes.list(),
+                    api.schedules.get(date),
+                    api.routeAssignments.list(),
+                    api.clients.list(),
+                    api.employees.list(),
+                    api.contracts.list(),
+                    api.visits.list(),
+                ]);
+                if (cancelled) return;
+                setGeoUnits(geo);
+                setSavedRoutes(routes);
+                setCurrentSchedule(schedule || { teams: [], solos: [] });
+                setRouteAssignments(assignments || {});
+                setClients(cls);
+                setEmployees(emps);
+                setContracts(cts);
+                setVisits(vis);
+            } catch (err) {
+                console.error('Failed to load plan overview data:', err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        loadAll();
+        return () => { cancelled = true; };
+    }, [date]);
 
-    const currentSchedule: DaySchedule = schedules[date] || { teams: [], solos: [] };
+    const activeLeads = useMemo(() => getLeads(contracts, visits), [getLeads, contracts, visits, clients]);
+
     const isToday = date === getToday();
 
     const getEmp = (id: number | null) => employees.find(e => e.id === id) || null;
@@ -91,7 +123,7 @@ export default function PlanOverview() {
             assignment: RouteAssignmentData | null;
         }[] = [];
 
-        currentSchedule.teams.forEach((t, idx) => {
+        (currentSchedule.teams || []).forEach((t, idx) => {
             const teamKey = `team_${idx}`;
             const assignmentKey = `${date}_${teamKey}`;
             const sup = getEmp(t.supervisor);
@@ -106,7 +138,7 @@ export default function PlanOverview() {
             });
         });
 
-        currentSchedule.solos.forEach((s, idx) => {
+        (currentSchedule.solos || []).forEach((s, idx) => {
             const soloKey = `solo_${idx}`;
             const assignmentKey = `${date}_${soloKey}`;
             const tech = getEmp(s.technician);
@@ -207,6 +239,17 @@ export default function PlanOverview() {
     const assignedTeams = teamCards.filter(c => c.assignment && c.assignment.routes.length > 0).length;
     const unassignedTeams = totalTeams - assignedTeams;
 
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-sky-600 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">جاري تحميل البيانات...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="h-full overflow-y-auto p-8 custom-scroll">
             {/* Header */}
@@ -296,7 +339,7 @@ export default function PlanOverview() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 py-16 text-center">
                     <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-400" />
                     <p className="text-slate-700 text-lg font-medium mb-2">لا يوجد جدول لهذا اليوم</p>
-                    <p className="text-slate-500 text-sm mb-6">انتقل إلى \"جدولة الفرق\" لإنشاء جدول يومي أولاً.</p>
+                    <p className="text-slate-500 text-sm mb-6">انتقل إلى "جدولة الفرق" لإنشاء جدول يومي أولاً.</p>
                     <button
                         onClick={() => navigate('/planning/schedule')}
                         className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-all"

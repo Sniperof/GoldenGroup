@@ -1,18 +1,16 @@
 import { create } from 'zustand';
-import { StorageManager } from '../lib/storage';
-import { mockContracts } from '../lib/mockData';
+import { api } from '../lib/api';
 import { Due, Contract } from '../lib/types';
 
 interface CollectionState {
     contracts: Contract[];
-    dues: (Due & { customerName: string; customerId: number; mobile: string })[]; // Flattened for grid
+    dues: (Due & { customerName: string; customerId: number; mobile: string })[];
 
-    // Actions
-    updateDue: (dueId: number, updates: Partial<Due>) => void;
-    assignAgent: (dueIds: number[], agentId: number) => void;
-    logCollection: (dueId: number, updates: { remainingBalance?: number; adjustedDate?: string; status?: Due['status'] }) => void;
+    fetchData: () => Promise<void>;
+    updateDue: (dueId: number, updates: Partial<Due>) => Promise<void>;
+    assignAgent: (dueIds: number[], agentId: number) => Promise<void>;
+    logCollection: (dueId: number, updates: { remainingBalance?: number; adjustedDate?: string; status?: Due['status'] }) => Promise<void>;
 
-    // Selectors helper
     getKPIs: () => {
         totalRemaining: number;
         overdueRate: number;
@@ -20,65 +18,40 @@ interface CollectionState {
     };
 }
 
-// Helper to flatten dues from contracts
 const flattenDues = (contracts: Contract[]) => {
     return contracts.flatMap(c =>
         c.dues.map(d => ({
             ...d,
             customerName: c.customerName,
             customerId: c.customerId,
-            mobile: '07701234567' // Mock mobile for now, ideally joined from Customer table
+            mobile: '07701234567'
         }))
     );
 };
 
 export const useCollectionStore = create<CollectionState>((set, get) => ({
-    contracts: StorageManager.load<Contract[]>('contracts', mockContracts),
-    dues: flattenDues(StorageManager.load<Contract[]>('contracts', mockContracts)),
+    contracts: [],
+    dues: [],
 
-    updateDue: (dueId, updates) => set((state) => {
-        const newContracts = state.contracts.map(c => ({
-            ...c,
-            dues: c.dues.map(d => d.id === dueId ? { ...d, ...updates } : d)
-        }));
-        StorageManager.save('contracts', newContracts);
-        return {
-            contracts: newContracts,
-            dues: flattenDues(newContracts)
-        };
-    }),
+    fetchData: async () => {
+        const contracts = await api.contracts.list();
+        set({ contracts, dues: flattenDues(contracts) });
+    },
 
-    assignAgent: (dueIds, agentId) => set((state) => {
-        const newContracts = state.contracts.map(c => ({
-            ...c,
-            dues: c.dues.map(d => dueIds.includes(d.id) ? { ...d, assignedTelemarketerId: agentId } : d)
-        }));
-        StorageManager.save('contracts', newContracts);
-        return {
-            contracts: newContracts,
-            dues: flattenDues(newContracts)
-        };
-    }),
+    updateDue: async (dueId, updates) => {
+        await api.dues.update(dueId, updates);
+        await get().fetchData();
+    },
 
-    logCollection: (dueId, { remainingBalance, adjustedDate, status }) => set((state) => {
-        const newContracts = state.contracts.map(c => ({
-            ...c,
-            dues: c.dues.map(d => {
-                if (d.id !== dueId) return d;
-                return {
-                    ...d,
-                    remainingBalance: remainingBalance ?? d.remainingBalance,
-                    adjustedDate: adjustedDate ?? d.adjustedDate,
-                    status: status ?? d.status
-                };
-            })
-        }));
-        StorageManager.save('contracts', newContracts);
-        return {
-            contracts: newContracts,
-            dues: flattenDues(newContracts)
-        };
-    }),
+    assignAgent: async (dueIds, agentId) => {
+        await Promise.all(dueIds.map(id => api.dues.update(id, { assignedTelemarketerId: agentId })));
+        await get().fetchData();
+    },
+
+    logCollection: async (dueId, updates) => {
+        await api.dues.update(dueId, updates);
+        await get().fetchData();
+    },
 
     getKPIs: () => {
         const dues = get().dues;

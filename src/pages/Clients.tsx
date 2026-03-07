@@ -1,8 +1,7 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb, Pencil, MapPin } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import { defaultGeoUnits } from '../lib/defaultData';
+import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb, Pencil, MapPin, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 import type { Client, GeoUnit, Visit, Contract } from '../lib/types';
 import ClientModal from '../components/ClientModal';
 import SmartTable from '../components/SmartTable';
@@ -13,10 +12,11 @@ import AddCandidateModal from '../components/candidates/AddCandidateModal';
 import { useCandidateStore } from '../hooks/useCandidateStore';
 
 export default function Clients() {
-    const [clients, setClients] = useState<Client[]>(() => StorageManager.load('clients', []));
-    const [visits] = useState<Visit[]>(() => StorageManager.load('visits', []));
-    const [contracts] = useState<Contract[]>(() => StorageManager.load('contracts', []));
-    const [geoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
+    const [clients, setClients] = useState<Client[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const [activeTab, setActiveTab] = useState<'clients' | 'candidates'>('clients');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,7 +34,34 @@ export default function Clients() {
     const [filterArea, setFilterArea] = useState('all');
     const [filterMediator, setFilterMediator] = useState('all');
 
-    // ─── Lifecycle Logic ───
+    const fetchClients = useCallback(async () => {
+        const data = await api.clients.list();
+        setClients(data);
+    }, []);
+
+    useEffect(() => {
+        const fetchAll = async () => {
+            try {
+                setLoading(true);
+                const [clientsData, visitsData, contractsData, geoUnitsData] = await Promise.all([
+                    api.clients.list(),
+                    api.visits.list(),
+                    api.contracts.list(),
+                    api.geoUnits.list(),
+                ]);
+                setClients(clientsData);
+                setVisits(visitsData);
+                setContracts(contractsData);
+                setGeoUnits(geoUnitsData);
+            } catch (err) {
+                console.error('Failed to fetch data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAll();
+    }, []);
+
     const getLifecycleStage = useCallback((client: Client) => {
         if (contracts.some(c => c.customerId === client.id)) return 'OP';
         if (visits.some(v => v.customerId === client.id)) return 'FOP';
@@ -50,7 +77,6 @@ export default function Clients() {
                 lifecycleStage: getLifecycleStage(c)
             }));
 
-        // Search name, phone, id, mediator
         if (searchTerm) {
             const q = searchTerm.toLowerCase();
             list = list.filter(c => {
@@ -63,14 +89,13 @@ export default function Clients() {
             });
         }
 
-        // Filters
         if (filterClass !== 'all') list = list.filter(c => c.lifecycleStage === filterClass);
         if (filterMediator !== 'all') list = list.filter(c => c.referrerType === filterMediator);
         if (filterArea !== 'all') list = list.filter(c => {
             const nId = parseInt(c.neighborhood);
             const n = geoUnits.find(g => g.id === nId);
             const gov = geoUnits.find(g => g.id === n?.parentId);
-            const district = geoUnits.find(g => g.id === gov?.parentId); // Adjusting for hierarchy
+            const district = geoUnits.find(g => g.id === gov?.parentId);
             return n?.parentId === parseInt(filterArea) || gov?.id === parseInt(filterArea);
         });
 
@@ -83,17 +108,15 @@ export default function Clients() {
     const kpis = useMemo(() => {
         const total = mainList.length;
 
-        // Top Area
         const areaCounts: Record<string, number> = {};
         mainList.forEach(c => {
             const nId = parseInt(c.neighborhood);
             const n = geoUnits.find(g => g.id === nId);
-            const subArea = geoUnits.find(g => g.id === n?.parentId); // District/SubArea
+            const subArea = geoUnits.find(g => g.id === n?.parentId);
             if (subArea) areaCounts[subArea.name] = (areaCounts[subArea.name] || 0) + 1;
         });
         const topArea = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '--';
 
-        // Conversion Rates
         const leadsCount = mainList.filter(c => c.lifecycleStage === 'Lead').length;
         const fopsCount = mainList.filter(c => c.lifecycleStage === 'FOP').length;
         const opsCount = mainList.filter(c => c.lifecycleStage === 'OP').length;
@@ -104,26 +127,53 @@ export default function Clients() {
         return { total, topArea, leadToFop, fopToOp };
     }, [mainList, geoUnits]);
 
-    const save = useCallback((c: Client[]) => { setClients(c); StorageManager.save('clients', c); }, []);
-
-    const deleteClient = (id: number) => {
-        if (!confirm('حذف هذا الزبون؟')) return;
-        save(clients.filter(c => c.id !== id));
+    const convertToLead = async (id: number) => {
+        if (!confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) return;
+        const client = clients.find(c => c.id === id);
+        if (!client) return;
+        try {
+            await api.clients.update(id, { ...client, isCandidate: false });
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to convert candidate:', err);
+        }
     };
 
-    const handleSaveClient = (clientData: Client) => {
-        if (editingClient) {
-            save(clients.map(c => c.id === clientData.id ? { ...c, ...clientData } : c));
-        } else {
-            const newId = clients.length > 0 ? Math.max(1000, ...clients.map(c => c.id)) + 1 : 1001;
-            const newClient = {
-                ...clientData,
-                id: newId,
-                createdAt: new Date().toISOString(),
-                status: 'Suggested',
-                isCandidate: false
-            } as Client;
-            save([...clients, newClient]);
+    const deleteClient = async (id: number) => {
+        if (!confirm('حذف هذا العميل؟')) return;
+        try {
+            await api.clients.delete(id);
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to delete client:', err);
+        }
+    };
+
+    const bulkDelete = async (items: { id: number }[]) => {
+        const ids = items.map(i => i.id);
+        try {
+            await api.clients.bulkDelete(ids);
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to bulk delete:', err);
+        }
+    };
+
+    const handleSaveClient = async (clientData: Client) => {
+        try {
+            if (editingClient) {
+                await api.clients.update(clientData.id, clientData);
+            } else {
+                await api.clients.create({
+                    ...clientData,
+                    createdAt: new Date().toISOString(),
+                    status: 'New',
+                    isCandidate: activeTab === 'candidates',
+                });
+            }
+            await fetchClients();
+        } catch (err) {
+            console.error('Failed to save client:', err);
         }
         setIsModalOpen(false);
         setIsAddCandidateModalOpen(false);
@@ -141,7 +191,6 @@ export default function Clients() {
         return neighborhood.name;
     };
 
-    // ─── Columns ───
     const clientColumns: ColumnDef<Client & { lifecycleStage: string }>[] = [
         { key: 'id', label: 'ID', sortable: true, render: (c) => <span className="text-sm text-slate-500 font-mono">#{c.id}</span> },
         {
@@ -200,6 +249,21 @@ export default function Clients() {
         },
         { key: 'referrerName', label: 'اسم الوسيط', sortable: true, render: (c) => <span className="text-sm font-medium text-slate-700">{c.referrerName || '--'}</span> },
     ];
+
+    const candidateColumns: ColumnDef<Client>[] = [
+        { key: 'name', label: 'الاسم المرشح', sortable: true, render: (c) => <span className="font-semibold text-slate-700">{c.name}</span> },
+        { key: 'mobile', label: 'رقم الهاتف', sortable: true, render: (c) => <span className="font-mono text-slate-600">{c.mobile}</span> },
+        { key: 'sourceChannel', label: 'المصدر', sortable: true, render: (c) => <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">{c.sourceChannel || 'N/A'}</span> },
+        { key: 'createdAt', label: 'تاريخ الإضافة', sortable: true, render: (c) => <span className="text-sm text-slate-500">{c.createdAt?.slice(0, 10)}</span> },
+    ];
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full p-8 space-y-6 overflow-hidden">
@@ -318,7 +382,7 @@ export default function Clients() {
                     getId={(c) => c.id}
                     onRowClick={(c) => navigate(`/clients/${c.id}`)}
                     bulkActions={[
-                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} سجلاً؟`)) save(clients.filter(c => !items.some(i => i.id === c.id))); } },
+                        { label: 'حذف', icon: Trash2, variant: 'danger', onClick: (items) => { if (confirm(`حذف ${items.length} عملاء؟`)) bulkDelete(items); } },
                     ]}
                     actions={(c) => (
                         <div className="flex items-center gap-1">
@@ -351,7 +415,7 @@ export default function Clients() {
                 onClose={() => setIsPreAddModalOpen(false)}
                 candidate={activeCandidateForSearch || {}}
                 clients={clients}
-                candidates={candidates}
+                candidates={candidateList}
                 onLink={(entity, type) => {
                     setIsPreAddModalOpen(false);
                     if (type === 'Client') {
