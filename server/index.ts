@@ -22,6 +22,10 @@ import visitsRouter from './routes/visits.js';
 import schedulesRouter from './routes/schedules.js';
 import routeAssignmentsRouter from './routes/routeAssignments.js';
 import dashboardRouter from './routes/dashboard.js';
+import vacanciesRouter from './routes/vacancies.js';
+import publicVacanciesRouter from './routes/publicVacancies.js';
+import publicApplicationsRouter from './routes/publicApplications.js';
+import adminApplicationsRouter from './routes/adminApplications.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -45,6 +49,10 @@ app.use('/api/visits', visitsRouter);
 app.use('/api/schedules', schedulesRouter);
 app.use('/api/route-assignments', routeAssignmentsRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/admin/vacancies', vacanciesRouter);
+app.use('/api/public/vacancies', publicVacanciesRouter);
+app.use('/api/public/applications', publicApplicationsRouter);
+app.use('/api/admin/applications', adminApplicationsRouter);
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));

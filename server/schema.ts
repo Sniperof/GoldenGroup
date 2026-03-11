@@ -206,6 +206,85 @@ export async function createSchema() {
       routes JSONB DEFAULT '[]',
       extra_zones JSONB DEFAULT '[]'
     );
+
+    CREATE TABLE IF NOT EXISTS job_vacancies (
+      id SERIAL PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      branch VARCHAR(255),
+      work_type VARCHAR(100),
+      required_gender VARCHAR(20),
+      required_age_min INTEGER,
+      required_age_max INTEGER,
+      required_qualification VARCHAR(255),
+      required_experience_years INTEGER,
+      required_skills TEXT,
+      responsibilities TEXT,
+      driving_license_required BOOLEAN DEFAULT FALSE,
+      vacancy_count INTEGER NOT NULL CHECK (vacancy_count >= 0),
+      start_date DATE,
+      end_date DATE,
+      status VARCHAR(20) NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Closed', 'Archived')),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS applicants (
+      id SERIAL PRIMARY KEY,
+      first_name VARCHAR(255) NOT NULL,
+      last_name VARCHAR(255),
+      dob DATE,
+      gender VARCHAR(20),
+      marital_status VARCHAR(50),
+      email VARCHAR(255),
+      mobile_number VARCHAR(20) NOT NULL,
+      governorate VARCHAR(255),
+      city VARCHAR(255),
+      sub_area VARCHAR(255),
+      neighborhood VARCHAR(255),
+      detailed_address TEXT,
+      cv_url TEXT,
+      photo_url TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS referrers (
+      id SERIAL PRIMARY KEY,
+      type VARCHAR(20) NOT NULL CHECK (type IN ('Employee', 'Customer')),
+      employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+      full_name VARCHAR(255),
+      mobile_number VARCHAR(20),
+      governorate VARCHAR(255),
+      city VARCHAR(255),
+      profession VARCHAR(255),
+      notes TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS job_applications (
+      id SERIAL PRIMARY KEY,
+      job_vacancy_id INTEGER NOT NULL REFERENCES job_vacancies(id) ON DELETE CASCADE,
+      applicant_id INTEGER NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+      referrer_id INTEGER REFERENCES referrers(id) ON DELETE SET NULL,
+      submission_type VARCHAR(20) NOT NULL CHECK (submission_type IN ('Self', 'On-Behalf')),
+      source VARCHAR(20) NOT NULL DEFAULT 'Website' CHECK (source IN ('Mobile App', 'Website', 'External', 'Manual')),
+      current_stage VARCHAR(30) NOT NULL DEFAULT 'Submitted' CHECK (current_stage IN ('Submitted', 'Shortlisted', 'HR Interview', 'Training', 'Final Decision')),
+      application_status VARCHAR(30) NOT NULL DEFAULT 'New' CHECK (application_status IN ('New', 'In Review', 'Qualified', 'Rejected', 'Interview Scheduled', 'Interview Completed', 'Interview Failed', 'Approved', 'Training Scheduled', 'Training Started', 'Training Completed', 'Retraining', 'Passed', 'Failed', 'Hired', 'Withdrawn')),
+      duplicate_flag BOOLEAN DEFAULT FALSE,
+      internal_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id SERIAL PRIMARY KEY,
+      application_id INTEGER REFERENCES job_applications(id) ON DELETE CASCADE,
+      action_type VARCHAR(100) NOT NULL,
+      performed_by_role VARCHAR(50),
+      performed_by_user_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+      old_value TEXT,
+      new_value TEXT,
+      internal_reason TEXT,
+      timestamp TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }
 

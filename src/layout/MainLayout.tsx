@@ -9,7 +9,7 @@ import {
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
     FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon,
-    ChevronLeft, ChevronRight, Target
+    ChevronLeft, ChevronRight, Target, BadgeCheck
 } from 'lucide-react';
 
 const navItems = [
@@ -43,6 +43,12 @@ const planningChildren = [
     { path: '/planning/assign', label: 'تعيين المسارات', icon: MapPinned },
 ];
 
+const jobsChildren = [
+    { path: '/jobs/vacancies', label: 'إدارة الشواغر', icon: Briefcase },
+    { path: '/jobs/applications', label: 'طلبات التوظيف', icon: ClipboardList },
+    { path: '/jobs/public', label: 'الوظائف المتاحة (عام)', icon: BadgeCheck },
+];
+
 export default function MainLayout() {
     const location = useLocation();
     const isPlanningActive = location.pathname.startsWith('/planning');
@@ -51,6 +57,7 @@ export default function MainLayout() {
     const isGeoActive = location.pathname === '/geo' || location.pathname === '/routes';
     const isRecordsActive = ['/clients', '/candidates', '/employees'].some(p => location.pathname.startsWith(p));
     const isAppointmentsActive = location.pathname.startsWith('/telemarketer');
+    const isJobsActive = location.pathname.startsWith('/jobs');
 
     const [planningOpen, setPlanningOpen] = useState(isPlanningActive);
     const [operationsOpen, setOperationsOpen] = useState(isOperationsActive);
@@ -58,6 +65,7 @@ export default function MainLayout() {
     const [recordsOpen, setRecordsOpen] = useState(isRecordsActive);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [jobsOpen, setJobsOpen] = useState(isJobsActive);
 
     const toggleSidebar = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleCollapse = () => setIsCollapsed(!isCollapsed);
@@ -235,6 +243,51 @@ export default function MainLayout() {
                         <Gem className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة الأجهزة وقطع الغيار</span>
                     </NavLink>
+
+                    {/* Jobs Section */}
+                    <div className={isCollapsed ? 'lg:hidden' : 'block'}>
+                        <button
+                            onClick={() => setJobsOpen(o => !o)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isJobsActive
+                                ? 'bg-sky-50 text-sky-600 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                        >
+                            <BadgeCheck className="w-5 h-5" />
+                            <span className="flex-1">إدارة التوظيف</span>
+                            <motion.div animate={{ rotate: jobsOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.div>
+                        </button>
+
+                        <AnimatePresence initial={false}>
+                            {jobsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                >
+                                    {jobsChildren.map(child => (
+                                        <NavLink
+                                            key={child.path}
+                                            to={child.path}
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className={({ isActive }: { isActive: boolean }) =>
+                                                `w-full flex items-center gap-3 pr-12 pl-4 py-2.5 rounded-lg transition-all text-right text-sm ${isActive
+                                                    ? 'text-sky-600 bg-sky-50 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`
+                                            }
+                                        >
+                                            <child.icon className="w-4 h-4" />
+                                            <span>{child.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
 
                     {/* 5. Branch Operations (formerly Planning) */}
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>

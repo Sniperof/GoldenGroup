@@ -389,3 +389,111 @@ export interface EmergencyTicket {
     assignedTechnicianId: number | null;
     createdAt: string;
 }
+
+// --- Job Applications Epic ---
+export type VacancyStatus = 'Open' | 'Closed' | 'Archived';
+export type SubmissionType = 'Self' | 'On-Behalf';
+export type ApplicationSource = 'Mobile App' | 'Website' | 'External' | 'Manual';
+export type ApplicationStage = 'Submitted' | 'Shortlisted' | 'HR Interview' | 'Training' | 'Final Decision';
+export type ApplicationStatus =
+  | 'New' | 'In Review' | 'Qualified' | 'Rejected'
+  | 'Interview Scheduled' | 'Interview Completed' | 'Interview Failed'
+  | 'Approved'
+  | 'Training Scheduled' | 'Training Started' | 'Training Completed' | 'Retraining'
+  | 'Passed' | 'Failed' | 'Hired' | 'Withdrawn';
+export type ReferrerType = 'Employee' | 'Customer';
+
+export interface JobVacancy {
+  id: number;
+  title: string;
+  branch: string;
+  workType: string;
+  requiredGender: string;
+  requiredAgeMin: number | null;
+  requiredAgeMax: number | null;
+  requiredQualification: string;
+  requiredExperienceYears: number | null;
+  requiredSkills: string;
+  responsibilities: string;
+  drivingLicenseRequired: boolean;
+  vacancyCount: number;
+  startDate: string;
+  endDate: string;
+  status: VacancyStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Applicant {
+  id: number;
+  firstName: string;
+  lastName: string;
+  dob: string;
+  gender: string;
+  maritalStatus: string;
+  email: string;
+  mobileNumber: string;
+  governorate: string;
+  city: string;
+  subArea: string;
+  neighborhood: string;
+  detailedAddress: string;
+  cvUrl: string;
+  photoUrl: string;
+  createdAt: string;
+}
+
+export interface JobReferrer {
+  id: number;
+  type: ReferrerType;
+  employeeId: number | null;
+  fullName: string;
+  mobileNumber: string;
+  governorate: string;
+  city: string;
+  profession: string;
+  notes: string;
+}
+
+export interface JobApplication {
+  id: number;
+  jobVacancyId: number;
+  applicantId: number;
+  referrerId: number | null;
+  submissionType: SubmissionType;
+  source: ApplicationSource;
+  currentStage: ApplicationStage;
+  applicationStatus: ApplicationStatus;
+  duplicateFlag: boolean;
+  internalNotes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditLog {
+  id: number;
+  applicationId: number;
+  actionType: string;
+  performedByRole: string;
+  performedByUserId: number | null;
+  oldValue: string;
+  newValue: string;
+  internalReason: string;
+  timestamp: string;
+}
+
+// Extended type for joined application data used in listing/detail views
+export interface JobApplicationListItem extends JobApplication {
+  applicantFirstName: string;
+  applicantLastName: string;
+  applicantMobile: string;
+  applicantGender: string;
+  vacancyTitle: string;
+  vacancyBranch: string;
+}
+
+export interface JobApplicationDetail extends JobApplication {
+  applicant: Applicant;
+  vacancy: JobVacancy;
+  referrer: JobReferrer | null;
+}

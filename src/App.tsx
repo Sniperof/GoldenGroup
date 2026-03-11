@@ -26,6 +26,10 @@ import TelemarketerWorkspace from './pages/TelemarketerWorkspace';
 import TeamTasksDetail from './pages/planning/TeamTasksDetail';
 import MarketingOperations from './pages/tasks/MarketingOperations';
 import SystemSettings from './pages/SystemSettings';
+import Vacancies from './pages/jobs/Vacancies';
+import PublicJobs from './pages/jobs/PublicJobs';
+import Applications from './pages/jobs/Applications';
+import ApplicationDetail from './pages/jobs/ApplicationDetail';
 
 
 export default function App() {
@@ -62,6 +66,12 @@ export default function App() {
 
                         <Route path="/telemarketer" element={<TelemarketerWorkspace />} />
                         <Route path="/settings" element={<SystemSettings />} />
+
+                        {/* Job Applications Epic */}
+                        <Route path="/jobs/vacancies" element={<Vacancies />} />
+                        <Route path="/jobs/public" element={<PublicJobs />} />
+                        <Route path="/jobs/applications" element={<Applications />} />
+                        <Route path="/jobs/applications/:id" element={<ApplicationDetail />} />
                     </Route>
                 </Routes>
             </ErrorBoundary>
