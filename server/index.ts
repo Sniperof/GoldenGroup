@@ -26,6 +26,9 @@ import vacanciesRouter from './routes/vacancies.js';
 import publicVacanciesRouter from './routes/publicVacancies.js';
 import publicApplicationsRouter from './routes/publicApplications.js';
 import adminApplicationsRouter from './routes/adminApplications.js';
+import interviewsRouter from './routes/interviews.js';
+import trainingCoursesRouter from './routes/trainingCourses.js';
+import trainingAttendanceRouter from './routes/trainingAttendance.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -53,6 +56,9 @@ app.use('/api/admin/vacancies', vacanciesRouter);
 app.use('/api/public/vacancies', publicVacanciesRouter);
 app.use('/api/public/applications', publicApplicationsRouter);
 app.use('/api/admin/applications', adminApplicationsRouter);
+app.use('/api/admin/interviews', interviewsRouter);
+app.use('/api/admin/training-courses', trainingCoursesRouter);
+app.use('/api/admin/training-attendance', trainingAttendanceRouter);
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));

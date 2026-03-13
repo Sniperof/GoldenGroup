@@ -9,7 +9,7 @@ import {
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
     FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon,
-    ChevronLeft, ChevronRight, Target, BadgeCheck
+    ChevronLeft, ChevronRight, Target, BadgeCheck, GraduationCap, Mic2
 } from 'lucide-react';
 
 const navItems = [
@@ -46,6 +46,8 @@ const planningChildren = [
 const jobsChildren = [
     { path: '/jobs/vacancies', label: 'إدارة الشواغر', icon: Briefcase },
     { path: '/jobs/applications', label: 'طلبات التوظيف', icon: ClipboardList },
+    { path: '/jobs/interviews', label: 'المقابلات', icon: Mic2 },
+    { path: '/jobs/training-courses', label: 'الدورات التدريبية', icon: GraduationCap },
     { path: '/jobs/public', label: 'الوظائف المتاحة (عام)', icon: BadgeCheck },
 ];
 

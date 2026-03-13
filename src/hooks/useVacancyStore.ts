@@ -19,8 +19,8 @@ interface VacancyStore {
   resetFilters: () => void;
   fetchVacancies: () => Promise<void>;
   createVacancy: (data: Partial<JobVacancy>) => Promise<JobVacancy>;
-  updateVacancy: (id: number, data: Partial<JobVacancy>) => Promise<JobVacancy>;
-  updateVacancyStatus: (id: number, status: 'Closed' | 'Archived') => Promise<void>;
+  updateVacancy: (id: number, data: Partial<JobVacancy>) => Promise<JobVacancy & { editTier: number }>;
+  updateVacancyStatus: (id: number, status: 'Open' | 'Closed' | 'Archived') => Promise<void>;
 }
 
 const defaultFilters: VacancyFilters = { status: '', branch: '', search: '' };

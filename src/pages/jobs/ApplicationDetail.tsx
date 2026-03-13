@@ -4,13 +4,13 @@ import type { JobApplicationDetail, AuditLog, ApplicationStage } from '../../lib
 import {
   ArrowRight, User, Briefcase, MapPin, Phone, Mail, Calendar, Users, GraduationCap,
   FileText, Clock, CheckCircle, XCircle, UserPlus, AlertTriangle, Award,
-  ChevronDown, ChevronUp, ArrowRightLeft
+  ChevronDown, ChevronUp, ArrowRightLeft, Car, Monitor, Globe, DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const STAGE_LABELS: Record<ApplicationStage, string> = {
   'Submitted': 'مقدّم', 'Shortlisted': 'القائمة القصيرة',
-  'HR Interview': 'مقابلة HR', 'Training': 'تدريب', 'Final Decision': 'القرار النهائي',
+  'Interview': 'مقابلة', 'Training': 'تدريب', 'Final Decision': 'القرار النهائي',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -19,12 +19,13 @@ const STATUS_LABELS: Record<string, string> = {
   'Interview Failed': 'فشل المقابلة', 'Approved': 'موافق عليه',
   'Training Scheduled': 'تدريب مجدول', 'Training Started': 'تدريب بدأ',
   'Training Completed': 'تدريب مكتمل', 'Retraining': 'إعادة تدريب',
-  'Passed': 'ناجح', 'Failed': 'فاشل', 'Hired': 'تم التوظيف', 'Withdrawn': 'منسحب',
+  'Passed': 'ناجح', 'Final Hired': 'تم التوظيف', 'Final Rejected': 'مرفوض نهائياً', 'Retreated': 'منسحب',
 };
 
-const STAGES_ORDER: ApplicationStage[] = ['Submitted', 'Shortlisted', 'HR Interview', 'Training', 'Final Decision'];
+const STAGES_ORDER: ApplicationStage[] = ['Submitted', 'Shortlisted', 'Interview', 'Training', 'Final Decision'];
 
-// Stage-specific actions
+const TERMINAL_STATUSES = ['Rejected', 'Interview Failed', 'Final Hired', 'Final Rejected', 'Retreated'];
+
 function getStageActions(stage: ApplicationStage, status: string): { label: string; newStage: string; newStatus: string; variant: 'primary' | 'success' | 'danger' | 'warning'; requiresReason?: boolean }[] {
   switch (stage) {
     case 'Submitted':
@@ -38,17 +39,17 @@ function getStageActions(stage: ApplicationStage, status: string): { label: stri
       return [];
     case 'Shortlisted':
       if (status === 'Qualified') return [
-        { label: 'جدولة المقابلة', newStage: 'HR Interview', newStatus: 'Interview Scheduled', variant: 'primary' },
+        { label: 'جدولة المقابلة', newStage: 'Interview', newStatus: 'Interview Scheduled', variant: 'primary' },
         { label: 'رفض', newStage: 'Shortlisted', newStatus: 'Rejected', variant: 'danger', requiresReason: true },
       ];
       return [];
-    case 'HR Interview':
+    case 'Interview':
       if (status === 'Interview Scheduled') return [
-        { label: 'إكمال المقابلة', newStage: 'HR Interview', newStatus: 'Interview Completed', variant: 'primary' },
+        { label: 'إكمال المقابلة', newStage: 'Interview', newStatus: 'Interview Completed', variant: 'primary' },
       ];
       if (status === 'Interview Completed') return [
         { label: 'موافقة وتحويل للتدريب', newStage: 'Training', newStatus: 'Approved', variant: 'success' },
-        { label: 'فشل المقابلة', newStage: 'HR Interview', newStatus: 'Interview Failed', variant: 'danger', requiresReason: true },
+        { label: 'فشل المقابلة', newStage: 'Interview', newStatus: 'Interview Failed', variant: 'danger', requiresReason: true },
       ];
       return [];
     case 'Training':
@@ -61,14 +62,13 @@ function getStageActions(stage: ApplicationStage, status: string): { label: stri
       if (status === 'Training Started') return [
         { label: 'إكمال التدريب', newStage: 'Training', newStatus: 'Training Completed', variant: 'success' },
         { label: 'إعادة تدريب', newStage: 'Training', newStatus: 'Retraining', variant: 'warning' },
-        { label: 'فشل', newStage: 'Training', newStatus: 'Failed', variant: 'danger', requiresReason: true },
       ];
       if (status === 'Training Completed') return [
         { label: 'ناجح - تحويل للقرار النهائي', newStage: 'Final Decision', newStatus: 'Passed', variant: 'success' },
       ];
       return [];
     case 'Final Decision':
-      return []; // Handled separately by hire/reject/withdraw buttons
+      return []; // handled by dedicated hire/finalReject/retreat buttons
     default: return [];
   }
 }
@@ -86,7 +86,7 @@ export default function ApplicationDetail() {
   const [detail, setDetail] = useState<JobApplicationDetail | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'details' | 'audit'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'interviews' | 'audit'>('details');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [rejectReason, setRejectReason] = useState('');
@@ -155,12 +155,12 @@ export default function ApplicationDetail() {
     }
   };
 
-  const handleReject = async () => {
-    await handleStageAction(detail!.currentStage, 'Rejected', rejectReason || 'مرفوض');
+  const handleFinalReject = () => {
+    setShowReasonModal({ newStage: 'Final Decision', newStatus: 'Final Rejected' });
   };
 
-  const handleWithdraw = async () => {
-    await handleStageAction(detail!.currentStage, 'Withdrawn', 'انسحاب');
+  const handleRetreat = () => {
+    handleStageAction(detail!.currentStage, 'Retreated', 'انسحاب');
   };
 
   if (loading) {
@@ -182,7 +182,7 @@ export default function ApplicationDetail() {
   const currentStageIdx = STAGES_ORDER.indexOf(detail.currentStage);
   const actions = getStageActions(detail.currentStage, detail.applicationStatus);
   const isFinalDecision = detail.currentStage === 'Final Decision';
-  const isTerminal = ['Hired', 'Rejected', 'Withdrawn', 'Failed'].includes(detail.applicationStatus);
+  const isTerminal = TERMINAL_STATUSES.includes(detail.applicationStatus);
 
   return (
     <div className="h-full overflow-y-auto p-6" dir="rtl">
@@ -241,6 +241,12 @@ export default function ApplicationDetail() {
           <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> التفاصيل</span>
         </button>
         <button
+          onClick={() => setActiveTab('interviews')}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'interviews' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          <span className="flex items-center gap-2"><Users className="w-4 h-4" /> المقابلات ({detail.interviews?.length || 0})</span>
+        </button>
+        <button
           onClick={() => setActiveTab('audit')}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'audit' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
@@ -263,10 +269,18 @@ export default function ApplicationDetail() {
                 <InfoRow label="الجنس" value={detail.applicant?.gender || '—'} />
                 <InfoRow label="الحالة الاجتماعية" value={detail.applicant?.maritalStatus || '—'} />
                 <InfoRow label="الهاتف" value={detail.applicant?.mobileNumber || '—'} icon={<Phone className="w-3.5 h-3.5" />} />
+                <InfoRow label="هاتف بديل" value={detail.applicant?.secondaryMobile || '—'} icon={<Phone className="w-3.5 h-3.5" />} />
                 <InfoRow label="البريد الإلكتروني" value={detail.applicant?.email || '—'} icon={<Mail className="w-3.5 h-3.5" />} />
+                <InfoRow label="المؤهل الدراسي" value={detail.applicant?.academicQualification || '—'} icon={<GraduationCap className="w-3.5 h-3.5" />} />
+                <InfoRow label="سنوات الخبرة" value={detail.applicant?.yearsOfExperience?.toString() || '—'} />
+                <InfoRow label="جهة العمل السابقة" value={detail.applicant?.previousEmployment || '—'} />
+                <InfoRow label="مهارات الحاسب" value={detail.applicant?.computerSkills || '—'} icon={<Monitor className="w-3.5 h-3.5" />} />
+                <InfoRow label="اللغات الأجنبية" value={detail.applicant?.foreignLanguages || '—'} icon={<Globe className="w-3.5 h-3.5" />} />
+                <InfoRow label="رخصة القيادة" value={detail.applicant?.drivingLicense || '—'} icon={<Car className="w-3.5 h-3.5" />} />
+                <InfoRow label="الراتب المتوقع" value={detail.applicant?.expectedSalary ? `${detail.applicant.expectedSalary} د.ع` : '—'} icon={<DollarSign className="w-3.5 h-3.5" />} />
                 <InfoRow label="المحافظة" value={detail.applicant?.governorate || '—'} />
-                <InfoRow label="المدينة" value={detail.applicant?.city || '—'} />
-                <InfoRow label="العنوان" value={detail.applicant?.detailedAddress || '—'} icon={<MapPin className="w-3.5 h-3.5" />} className="col-span-2" />
+                <InfoRow label="المدينة / المنطقة" value={detail.applicant?.cityOrArea || '—'} />
+                <InfoRow label="العنوان التفصيلي" value={detail.applicant?.detailedAddress || '—'} icon={<MapPin className="w-3.5 h-3.5" />} className="col-span-2" />
               </div>
             </div>
 
@@ -279,9 +293,13 @@ export default function ApplicationDetail() {
                 <InfoRow label="عنوان الوظيفة" value={detail.vacancy?.title || '—'} />
                 <InfoRow label="الفرع" value={detail.vacancy?.branch || '—'} icon={<MapPin className="w-3.5 h-3.5" />} />
                 <InfoRow label="المؤهل المطلوب" value={detail.vacancy?.requiredQualification || '—'} icon={<GraduationCap className="w-3.5 h-3.5" />} />
+                <InfoRow label="التخصص المطلوب" value={detail.vacancy?.requiredSpecialization || '—'} />
                 <InfoRow label="سنوات الخبرة" value={detail.vacancy?.requiredExperienceYears?.toString() || '—'} />
                 <InfoRow label="الشواغر المتبقية" value={detail.vacancy?.vacancyCount?.toString() || '—'} icon={<Users className="w-3.5 h-3.5" />} />
-                <InfoRow label="الفترة" value={`${detail.vacancy?.startDate ? new Date(detail.vacancy.startDate).toLocaleDateString('ar-IQ') : '—'} → ${detail.vacancy?.endDate ? new Date(detail.vacancy.endDate).toLocaleDateString('ar-IQ') : '—'}`} icon={<Calendar className="w-3.5 h-3.5" />} />
+                <InfoRow label="الحد الأقصى للإعادة" value={detail.vacancy?.maxRetrainingCount?.toString() || '—'} />
+                <InfoRow label="الفترة"
+                  value={`${detail.vacancy?.startDate ? new Date(detail.vacancy.startDate).toLocaleDateString('ar-IQ') : '—'} → ${detail.vacancy?.endDate ? new Date(detail.vacancy.endDate).toLocaleDateString('ar-IQ') : '—'}`}
+                  icon={<Calendar className="w-3.5 h-3.5" />} />
               </div>
             </div>
 
@@ -293,9 +311,14 @@ export default function ApplicationDetail() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <InfoRow label="النوع" value={detail.referrer.type === 'Employee' ? 'موظف' : 'زبون'} />
-                  <InfoRow label="الاسم" value={detail.referrer.fullName || '—'} />
+                  <InfoRow label="الاسم" value={`${detail.referrer.fullName || ''} ${detail.referrer.lastName || ''}`} />
                   <InfoRow label="الهاتف" value={detail.referrer.mobileNumber || '—'} icon={<Phone className="w-3.5 h-3.5" />} />
-                  <InfoRow label="المهنة" value={detail.referrer.profession || '—'} />
+                  <InfoRow label="المهنة" value={detail.referrer.referrerWork || '—'} />
+                  <InfoRow label="المحافظة" value={detail.referrer.governorate || '—'} />
+                  <InfoRow label="المدينة / المنطقة" value={detail.referrer.cityOrArea || '—'} />
+                  {detail.referrer.referrerNotes && (
+                    <InfoRow label="ملاحظات" value={detail.referrer.referrerNotes} className="col-span-2" />
+                  )}
                 </div>
               </div>
             )}
@@ -319,8 +342,20 @@ export default function ApplicationDetail() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">نوع التقديم</span>
-                  <span className="text-slate-700">{detail.submissionType === 'Self' ? 'شخصي' : 'نيابة'}</span>
+                  <span className="text-slate-700">
+                    {detail.submissionType === 'Apply' ? 'شخصي' : 'نيابة عن مرشح'}
+                  </span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">مصدر الطلب</span>
+                  <span className="text-slate-700">{detail.applicationSource || '—'}</span>
+                </div>
+                {detail.isEscalated && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    مُصعَّد للإدارة العليا
+                  </div>
+                )}
                 {detail.duplicateFlag && (
                   <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 rounded-lg p-2">
                     <AlertTriangle className="w-4 h-4" />
@@ -350,29 +385,37 @@ export default function ApplicationDetail() {
                   ))}
 
                   {/* Final Decision Buttons */}
-                  {isFinalDecision && !isTerminal && (
+                  {isFinalDecision && (
                     <>
                       <button onClick={handleHire} disabled={actionLoading}
                         className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                        <Award className="w-4 h-4" /> توظيف
+                        <Award className="w-4 h-4" /> توظيف نهائي
                       </button>
-                      <button onClick={() => setShowReasonModal({ newStage: detail.currentStage, newStatus: 'Rejected' })} disabled={actionLoading}
+                      <button onClick={handleFinalReject} disabled={actionLoading}
                         className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25 transition-all disabled:opacity-50">
-                        رفض
+                        رفض نهائي
                       </button>
-                      <button onClick={handleWithdraw} disabled={actionLoading}
+                      <button onClick={handleRetreat} disabled={actionLoading}
                         className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-slate-400 hover:bg-slate-500 text-white shadow-lg shadow-slate-400/25 transition-all disabled:opacity-50">
                         انسحاب
                       </button>
                     </>
+                  )}
+
+                  {/* Retreat button available from any non-terminal state */}
+                  {!isFinalDecision && (
+                    <button onClick={handleRetreat} disabled={actionLoading}
+                      className="w-full py-2 px-4 rounded-xl text-xs font-medium border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all disabled:opacity-50">
+                      انسحاب المتقدم
+                    </button>
                   )}
                 </div>
               )}
 
               {isTerminal && (
                 <div className={`mt-4 p-3 rounded-xl text-center text-sm font-bold ${
-                  detail.applicationStatus === 'Hired' ? 'bg-emerald-50 text-emerald-700' :
-                  detail.applicationStatus === 'Withdrawn' ? 'bg-slate-50 text-slate-500' :
+                  detail.applicationStatus === 'Final Hired' ? 'bg-emerald-50 text-emerald-700' :
+                  detail.applicationStatus === 'Retreated' ? 'bg-slate-50 text-slate-500' :
                   'bg-red-50 text-red-700'
                 }`}>
                   {STATUS_LABELS[detail.applicationStatus] || detail.applicationStatus}
@@ -388,6 +431,45 @@ export default function ApplicationDetail() {
               </div>
             )}
           </div>
+        </div>
+      ) : activeTab === 'interviews' ? (
+        /* Interviews Tab */
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+            <Users className="w-4 h-4 text-sky-500" /> المقابلات
+          </h3>
+          {!detail.interviews || detail.interviews.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">لا توجد مقابلات مسجلة</p>
+          ) : (
+            <div className="space-y-3">
+              {detail.interviews.map((interview) => (
+                <div key={interview.id} className="border border-slate-100 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-slate-700">{interview.interviewerName}</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                      interview.interviewStatus === 'Interview Completed' ? 'bg-teal-100 text-teal-700' :
+                      interview.interviewStatus === 'Interview Failed' ? 'bg-red-100 text-red-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {interview.interviewStatus === 'Interview Scheduled' ? 'مجدولة' :
+                       interview.interviewStatus === 'Interview Completed' ? 'مكتملة' : 'فشلت'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 flex items-center gap-4">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {interview.interviewDate ? new Date(interview.interviewDate).toLocaleDateString('ar-IQ') : '—'}
+                      {interview.interviewTime && ` — ${interview.interviewTime}`}
+                    </span>
+                    <span>{interview.interviewType === 'HR Interview' ? 'مقابلة HR' : 'مقابلة تقنية'}</span>
+                  </div>
+                  {interview.internalNotes && (
+                    <p className="text-xs text-slate-600 mt-2 bg-slate-50 rounded-lg p-2">{interview.internalNotes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         /* Audit Log Tab */
@@ -410,6 +492,9 @@ export default function ApplicationDetail() {
                   </div>
                   <div className="flex items-center gap-4 text-xs text-slate-500">
                     {log.performedByRole && <span>الدور: {log.performedByRole}</span>}
+                    {log.entityType && log.entityType !== 'application' && (
+                      <span className="text-sky-600">النوع: {log.entityType} #{log.entityId}</span>
+                    )}
                     {log.internalReason && <span>السبب: {log.internalReason}</span>}
                   </div>
                   {(log.oldValue || log.newValue) && (
@@ -448,7 +533,7 @@ export default function ApplicationDetail() {
         </div>
       )}
 
-      {/* Rejection Reason Modal */}
+      {/* Reason Modal */}
       <AnimatePresence>
         {showReasonModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

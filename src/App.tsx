@@ -30,6 +30,9 @@ import Vacancies from './pages/jobs/Vacancies';
 import PublicJobs from './pages/jobs/PublicJobs';
 import Applications from './pages/jobs/Applications';
 import ApplicationDetail from './pages/jobs/ApplicationDetail';
+import Interviews from './pages/jobs/Interviews';
+import TrainingCourses from './pages/jobs/TrainingCourses';
+import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
 
 
 export default function App() {
@@ -72,6 +75,9 @@ export default function App() {
                         <Route path="/jobs/public" element={<PublicJobs />} />
                         <Route path="/jobs/applications" element={<Applications />} />
                         <Route path="/jobs/applications/:id" element={<ApplicationDetail />} />
+                        <Route path="/jobs/interviews" element={<Interviews />} />
+                        <Route path="/jobs/training-courses" element={<TrainingCourses />} />
+                        <Route path="/jobs/training-courses/:id" element={<TrainingCourseDetail />} />
                     </Route>
                 </Routes>
             </ErrorBoundary>

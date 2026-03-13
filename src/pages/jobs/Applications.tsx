@@ -9,14 +9,14 @@ import {
 const STAGE_COLORS: Record<ApplicationStage, string> = {
   'Submitted': 'bg-blue-100 text-blue-700',
   'Shortlisted': 'bg-purple-100 text-purple-700',
-  'HR Interview': 'bg-amber-100 text-amber-700',
+  'Interview': 'bg-amber-100 text-amber-700',
   'Training': 'bg-cyan-100 text-cyan-700',
   'Final Decision': 'bg-emerald-100 text-emerald-700',
 };
 const STAGE_LABELS: Record<ApplicationStage, string> = {
   'Submitted': 'مقدّم',
   'Shortlisted': 'القائمة القصيرة',
-  'HR Interview': 'مقابلة HR',
+  'Interview': 'مقابلة',
   'Training': 'تدريب',
   'Final Decision': 'القرار النهائي',
 };
@@ -28,8 +28,10 @@ const STATUS_COLORS: Record<string, string> = {
   'Interview Failed': 'bg-red-50 text-red-600', 'Approved': 'bg-green-50 text-green-600',
   'Training Scheduled': 'bg-cyan-50 text-cyan-600', 'Training Started': 'bg-sky-50 text-sky-600',
   'Training Completed': 'bg-emerald-50 text-emerald-600', 'Retraining': 'bg-orange-50 text-orange-600',
-  'Passed': 'bg-green-50 text-green-600', 'Failed': 'bg-red-50 text-red-600',
-  'Hired': 'bg-emerald-100 text-emerald-700', 'Withdrawn': 'bg-slate-100 text-slate-500',
+  'Passed': 'bg-green-50 text-green-600',
+  'Final Hired': 'bg-emerald-100 text-emerald-700',
+  'Final Rejected': 'bg-red-100 text-red-700',
+  'Retreated': 'bg-slate-100 text-slate-500',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -38,14 +40,14 @@ const STATUS_LABELS: Record<string, string> = {
   'Interview Failed': 'فشل المقابلة', 'Approved': 'موافق عليه',
   'Training Scheduled': 'تدريب مجدول', 'Training Started': 'تدريب بدأ',
   'Training Completed': 'تدريب مكتمل', 'Retraining': 'إعادة تدريب',
-  'Passed': 'ناجح', 'Failed': 'فاشل', 'Hired': 'تم التوظيف', 'Withdrawn': 'منسحب',
+  'Passed': 'ناجح', 'Final Hired': 'تم التوظيف', 'Final Rejected': 'مرفوض نهائياً', 'Retreated': 'منسحب',
 };
 
-const ALL_STAGES: ApplicationStage[] = ['Submitted', 'Shortlisted', 'HR Interview', 'Training', 'Final Decision'];
+const ALL_STAGES: ApplicationStage[] = ['Submitted', 'Shortlisted', 'Interview', 'Training', 'Final Decision'];
 const ALL_STATUSES: ApplicationStatus[] = [
   'New', 'In Review', 'Qualified', 'Rejected', 'Interview Scheduled', 'Interview Completed',
   'Interview Failed', 'Approved', 'Training Scheduled', 'Training Started', 'Training Completed',
-  'Retraining', 'Passed', 'Failed', 'Hired', 'Withdrawn',
+  'Retraining', 'Passed', 'Final Hired', 'Final Rejected', 'Retreated',
 ];
 
 export default function Applications() {

@@ -206,86 +206,287 @@ export async function createSchema() {
       routes JSONB DEFAULT '[]',
       extra_zones JSONB DEFAULT '[]'
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS job_vacancies (
+  await migrateJobTables();
+  await fixSchemaConstraints();
+}
+
+async function migrateJobTables() {
+  // Check if new job schema is already in place by looking for the application_source column
+  const { rows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'job_applications' AND column_name = 'application_source'
+  `);
+  if (rows.length > 0) return; // Already migrated
+
+  console.log('Running job tables migration...');
+
+  // Drop old job tables in dependency order
+  await pool.query(`
+    DROP TABLE IF EXISTS training_attendance CASCADE;
+    DROP TABLE IF EXISTS audit_logs CASCADE;
+    DROP TABLE IF EXISTS interviews CASCADE;
+    DROP TABLE IF EXISTS job_applications CASCADE;
+    DROP TABLE IF EXISTS applicants CASCADE;
+    DROP TABLE IF EXISTS referrers CASCADE;
+    DROP TABLE IF EXISTS training_courses CASCADE;
+    DROP TABLE IF EXISTS job_vacancies CASCADE;
+  `);
+
+  // Create job_vacancies
+  await pool.query(`
+    CREATE TABLE job_vacancies (
       id SERIAL PRIMARY KEY,
       title VARCHAR(255) NOT NULL,
-      branch VARCHAR(255),
+      branch VARCHAR(255) NOT NULL,
+      governorate VARCHAR(255),
+      city_or_area VARCHAR(255),
+      sub_area VARCHAR(255),
+      neighborhood VARCHAR(255),
+      detailed_address TEXT,
       work_type VARCHAR(100),
       required_gender VARCHAR(20),
       required_age_min INTEGER,
       required_age_max INTEGER,
+      email VARCHAR(255),
       required_qualification VARCHAR(255),
+      required_specialization VARCHAR(255),
       required_experience_years INTEGER,
       required_skills TEXT,
       responsibilities TEXT,
       driving_license_required BOOLEAN DEFAULT FALSE,
-      vacancy_count INTEGER NOT NULL CHECK (vacancy_count >= 0),
-      start_date DATE,
-      end_date DATE,
-      status VARCHAR(20) NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Closed', 'Archived')),
+      vacancy_count INTEGER NOT NULL CHECK (vacancy_count > 0),
+      max_retraining_count INTEGER DEFAULT 1,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      status VARCHAR(20) DEFAULT 'Open' CHECK (status IN ('Open', 'Closed', 'Archived')),
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT chk_vacancy_dates CHECK (start_date <= end_date)
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS applicants (
+  // Create applicants
+  await pool.query(`
+    CREATE TABLE applicants (
       id SERIAL PRIMARY KEY,
       first_name VARCHAR(255) NOT NULL,
-      last_name VARCHAR(255),
-      dob DATE,
-      gender VARCHAR(20),
-      marital_status VARCHAR(50),
+      last_name VARCHAR(255) NOT NULL,
+      dob DATE NOT NULL,
+      gender VARCHAR(20) NOT NULL,
+      marital_status VARCHAR(50) NOT NULL,
       email VARCHAR(255),
       mobile_number VARCHAR(20) NOT NULL,
-      governorate VARCHAR(255),
-      city VARCHAR(255),
+      secondary_mobile VARCHAR(20),
+      governorate VARCHAR(255) NOT NULL,
+      city_or_area VARCHAR(255),
       sub_area VARCHAR(255),
       neighborhood VARCHAR(255),
       detailed_address TEXT,
+      academic_qualification VARCHAR(255),
+      previous_employment VARCHAR(255),
+      driving_license VARCHAR(10) DEFAULT NULL,
+      expected_salary INTEGER,
+      computer_skills TEXT,
+      foreign_languages TEXT,
+      years_of_experience INTEGER,
       cv_url TEXT,
       photo_url TEXT,
+      applicant_segment VARCHAR(100),
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS referrers (
+  // Create referrers
+  await pool.query(`
+    CREATE TABLE referrers (
       id SERIAL PRIMARY KEY,
       type VARCHAR(20) NOT NULL CHECK (type IN ('Employee', 'Customer')),
-      employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
-      full_name VARCHAR(255),
-      mobile_number VARCHAR(20),
+      employee_id INTEGER REFERENCES employees(id),
+      full_name VARCHAR(255) NOT NULL,
+      last_name VARCHAR(255),
+      mobile_number VARCHAR(20) NOT NULL,
       governorate VARCHAR(255),
-      city VARCHAR(255),
-      profession VARCHAR(255),
-      notes TEXT
+      city_or_area VARCHAR(255),
+      sub_area VARCHAR(255),
+      neighborhood VARCHAR(255),
+      detailed_address TEXT,
+      referrer_work VARCHAR(255),
+      referrer_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS job_applications (
+  // Create training_courses
+  await pool.query(`
+    CREATE TABLE training_courses (
       id SERIAL PRIMARY KEY,
-      job_vacancy_id INTEGER NOT NULL REFERENCES job_vacancies(id) ON DELETE CASCADE,
-      applicant_id INTEGER NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
-      referrer_id INTEGER REFERENCES referrers(id) ON DELETE SET NULL,
-      submission_type VARCHAR(20) NOT NULL CHECK (submission_type IN ('Self', 'On-Behalf')),
-      source VARCHAR(20) NOT NULL DEFAULT 'Website' CHECK (source IN ('Mobile App', 'Website', 'External', 'Manual')),
-      current_stage VARCHAR(30) NOT NULL DEFAULT 'Submitted' CHECK (current_stage IN ('Submitted', 'Shortlisted', 'HR Interview', 'Training', 'Final Decision')),
-      application_status VARCHAR(30) NOT NULL DEFAULT 'New' CHECK (application_status IN ('New', 'In Review', 'Qualified', 'Rejected', 'Interview Scheduled', 'Interview Completed', 'Interview Failed', 'Approved', 'Training Scheduled', 'Training Started', 'Training Completed', 'Retraining', 'Passed', 'Failed', 'Hired', 'Withdrawn')),
+      training_name VARCHAR(255) NOT NULL,
+      branch VARCHAR(255),
+      device_name VARCHAR(255),
+      trainer VARCHAR(255) NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      training_status VARCHAR(30) DEFAULT 'Training Scheduled' CHECK (training_status IN ('Training Scheduled', 'Training Started', 'Training Completed')),
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Create job_applications
+  await pool.query(`
+    CREATE TABLE job_applications (
+      id SERIAL PRIMARY KEY,
+      job_vacancy_id INTEGER NOT NULL REFERENCES job_vacancies(id),
+      applicant_id INTEGER NOT NULL REFERENCES applicants(id),
+      referrer_id INTEGER REFERENCES referrers(id),
+      submission_type VARCHAR(30) NOT NULL CHECK (submission_type IN ('Apply', 'Refer a Candidate')),
+      application_source VARCHAR(30) NOT NULL CHECK (application_source IN ('Mobile App', 'Website', 'External Platforms', 'Internal')),
+      entered_by_user_id INTEGER REFERENCES employees(id),
+      entered_by_name VARCHAR(255),
+      current_stage VARCHAR(30) NOT NULL DEFAULT 'Submitted' CHECK (current_stage IN ('Submitted', 'Shortlisted', 'Interview', 'Training', 'Final Decision')),
+      application_status VARCHAR(30) NOT NULL DEFAULT 'New' CHECK (application_status IN (
+        'New', 'In Review', 'Qualified', 'Rejected',
+        'Interview Scheduled', 'Interview Completed', 'Interview Failed',
+        'Approved',
+        'Training Scheduled', 'Training Started', 'Training Completed', 'Retraining',
+        'Passed',
+        'Final Hired', 'Final Rejected', 'Retreated'
+      )),
       duplicate_flag BOOLEAN DEFAULT FALSE,
+      is_escalated BOOLEAN DEFAULT FALSE,
+      escalated_at TIMESTAMPTZ,
       internal_notes TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS audit_logs (
+  // Create audit_logs
+  await pool.query(`
+    CREATE TABLE audit_logs (
       id SERIAL PRIMARY KEY,
-      application_id INTEGER REFERENCES job_applications(id) ON DELETE CASCADE,
+      entity_type VARCHAR(50) NOT NULL,
+      entity_id INTEGER NOT NULL,
+      application_id INTEGER,
       action_type VARCHAR(100) NOT NULL,
       performed_by_role VARCHAR(50),
-      performed_by_user_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+      performed_by_user_id INTEGER REFERENCES employees(id),
       old_value TEXT,
       new_value TEXT,
       internal_reason TEXT,
       timestamp TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  // Create interviews
+  await pool.query(`
+    CREATE TABLE interviews (
+      id SERIAL PRIMARY KEY,
+      application_id INTEGER NOT NULL REFERENCES job_applications(id),
+      interview_type VARCHAR(30) NOT NULL CHECK (interview_type IN ('HR Interview', 'Technical Interview')),
+      interview_number VARCHAR(30) NOT NULL CHECK (interview_number IN ('First Interview', 'Second Interview')),
+      interviewer_name VARCHAR(255) NOT NULL,
+      interview_date DATE NOT NULL,
+      interview_time TIME NOT NULL,
+      interview_status VARCHAR(30) DEFAULT 'Interview Scheduled' CHECK (interview_status IN ('Interview Scheduled', 'Interview Completed', 'Interview Failed')),
+      internal_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Create training_attendance
+  await pool.query(`
+    CREATE TABLE training_attendance (
+      id SERIAL PRIMARY KEY,
+      training_course_id INTEGER NOT NULL REFERENCES training_courses(id),
+      application_id INTEGER NOT NULL REFERENCES job_applications(id),
+      attendance_date DATE NOT NULL,
+      status VARCHAR(20) NOT NULL CHECK (status IN ('Present', 'Absent')),
+      UNIQUE(training_course_id, application_id, attendance_date)
+    );
+  `);
+
+  console.log('Job tables migration completed.');
+}
+
+async function fixSchemaConstraints() {
+  // Drop FK on audit_logs.application_id (should be a soft reference, not a FK)
+  try {
+    await pool.query(`
+      ALTER TABLE audit_logs
+        DROP CONSTRAINT IF EXISTS audit_logs_application_id_fkey
+    `);
+  } catch { /* table may not exist on first run */ }
+
+  // Relax NOT NULL / CHECK constraints on applicants that are optional in the form
+  try {
+    await pool.query(`
+      ALTER TABLE applicants
+        ALTER COLUMN city_or_area DROP NOT NULL,
+        ALTER COLUMN sub_area DROP NOT NULL,
+        ALTER COLUMN neighborhood DROP NOT NULL,
+        ALTER COLUMN detailed_address DROP NOT NULL,
+        ALTER COLUMN academic_qualification DROP NOT NULL,
+        ALTER COLUMN previous_employment DROP NOT NULL,
+        ALTER COLUMN years_of_experience DROP NOT NULL
+    `);
+  } catch { /* columns may not exist or already nullable */ }
+
+  // Migrate driving_license from BOOLEAN to VARCHAR(10) if needed
+  try {
+    const { rows: dlType } = await pool.query(`
+      SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'applicants' AND column_name = 'driving_license'
+    `);
+    if (dlType.length > 0 && dlType[0].data_type === 'boolean') {
+      await pool.query(`
+        ALTER TABLE applicants
+          ALTER COLUMN driving_license TYPE VARCHAR(10) USING NULL
+      `);
+    }
+  } catch { /* ignore */ }
+
+  // Remove restrictive CHECK on applicant_segment if it exists
+  try {
+    await pool.query(`
+      ALTER TABLE applicants
+        DROP CONSTRAINT IF EXISTS applicants_applicant_segment_check
+    `);
+    await pool.query(`
+      ALTER TABLE applicants
+        ALTER COLUMN applicant_segment TYPE VARCHAR(100)
+    `);
+  } catch { /* ignore */ }
+
+  // Add new columns to training_courses (added for training module v2)
+  try {
+    await pool.query(`ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS job_vacancy_id INTEGER REFERENCES job_vacancies(id)`);
+    await pool.query(`ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES employees(id)`);
+    await pool.query(`ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+  } catch { /* ignore */ }
+
+  // Add recorded_by_user_id to training_attendance
+  try {
+    await pool.query(`ALTER TABLE training_attendance ADD COLUMN IF NOT EXISTS recorded_by_user_id INTEGER REFERENCES employees(id)`);
+  } catch { /* ignore */ }
+
+  // Create training_course_trainees junction table
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS training_course_trainees (
+        id SERIAL PRIMARY KEY,
+        training_course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+        application_id INTEGER NOT NULL REFERENCES job_applications(id),
+        result VARCHAR(30) CHECK (result IN ('Passed', 'Retraining', 'Rejected', 'Retreated')),
+        result_recorded_at TIMESTAMPTZ,
+        result_recorded_by INTEGER REFERENCES employees(id),
+        added_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(training_course_id, application_id)
+      )
+    `);
+  } catch { /* ignore */ }
 }
 
 export async function seedData() {

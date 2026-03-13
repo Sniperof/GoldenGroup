@@ -24,34 +24,25 @@ export type ReferralType = 'Personal' | 'Client' | 'Employee' | 'Unknown';
 export type ReferralOriginChannel = 'App' | 'Campaign' | 'Acquaintance';
 export type ClientRating = 'Committed' | 'NotCommitted' | 'Undefined';
 
-// --- Referral Sheet (Previously Session) ---
 export interface ReferralSheetStats {
     totalCandidates: number;
-    qualityPercentage: number; // e.g. 85% valid numbers
-    conversionPercentage: number; // e.g. 10% became Leads
+    qualityPercentage: number;
+    conversionPercentage: number;
 }
 
 export interface ReferralSheet {
     id: number;
     referralType: ReferralType;
     referralEntityId: number | null;
-    referralNameSnapshot: string; // "Mediator Name"
+    referralNameSnapshot: string;
     referralAddressText: string;
     referralOriginChannel: ReferralOriginChannel;
     referralNotes?: string;
-
-    // Core Timing
-    referralDate: string; // The "Sheet Date" (Manual)
-
-    // Ownership
-    ownerUserId: number; // The Supervisor/User who owns this sheet
-
+    referralDate: string;
+    ownerUserId: number;
     status: 'New' | 'In-Progress' | 'Completed' | 'Archived';
-
-    // Stats
     stats: ReferralSheetStats;
-
-    createdAt: string; // System Timestamp
+    createdAt: string;
     createdBy: number;
 }
 
@@ -61,7 +52,6 @@ export type DuplicateType = 'Candidate' | 'Client' | 'Both';
 
 export interface Candidate {
     id: number;
-    // Constraint: At least one of firstName or nickname must be filled
     firstName: string | null;
     lastName?: string;
     nickname: string | null;
@@ -72,24 +62,18 @@ export interface Candidate {
     geoUnitId: number | null;
     ownerUserId: number;
     status: CandidateStatus;
-
-    // Referral Data (Lineage)
-    referralSheetId: number | null; // Renamed from Session
+    referralSheetId: number | null;
     referralDate: string;
     referralReason: string;
     referralType: ReferralType;
     referralOriginChannel: ReferralOriginChannel;
     referralNameSnapshot: string;
     referralEntityId: number | null;
-
-    referralConfirmationStatus: ReferralConfirmationStatus; // Deprecated but kept for compatibility
+    referralConfirmationStatus: ReferralConfirmationStatus;
     candidateNotes?: string;
-
-    // Duplication Tracking
     duplicateFlag: boolean;
     duplicateType: DuplicateType | null;
     duplicateReferenceId: number | null;
-
     convertedToLeadId: number | null;
     createdAt: string;
     createdBy: number;
@@ -111,8 +95,8 @@ export interface ContactEntry {
     id: string;
     type: ContactType;
     number: string;
-    areaCode?: string;    // 3-digit province code for landlines
-    label: string;        // e.g. "Personal", "Wife", "Son"
+    areaCode?: string;
+    label: string;
     hasWhatsApp: boolean;
     isPrimary: boolean;
     status: ContactStatus;
@@ -130,13 +114,12 @@ export interface ClientReferrer {
 }
 
 export interface Client {
-
     id: number;
     firstName: string;
     fatherName: string;
     lastName: string;
     nickname?: string;
-    name: string; // Computed or legacy? keeping for now
+    name: string;
     mobile: string;
     contacts: ContactEntry[];
     governorate: string;
@@ -148,25 +131,22 @@ export interface Client {
     waterSource?: string;
     notes?: string;
     rating?: ClientRating;
-
-    // Lineage fields
     sourceChannel?: string;
     referrerType?: string;
-    referrerId?: number; // legacy
+    referrerId?: number;
     referrerName?: string;
     referralEntityId?: number | null;
     referralDate?: string;
     referralReason?: string;
-    referralSheetId?: number | null; // Renamed
+    referralSheetId?: number | null;
     referralAddressText?: string;
-
-    referrers?: ClientReferrer[]; // To hold multiple brokers/referrers for this client
-
+    referrers?: ClientReferrer[];
     createdAt: string;
     isCandidate?: boolean;
     targetClient?: string;
     candidateStatus?: string;
 }
+
 export interface Visit {
     id: string;
     date: string;
@@ -208,9 +188,9 @@ export interface Task {
     id: number;
     type: 'emergency' | 'dues' | 'periodic' | 'returns' | 'followup';
     customerName: string;
-    context: string; // Device name, Contract #, etc.
+    context: string;
     location: string;
-    dueDate: string; // ISO date
+    dueDate: string;
     status: 'pending' | 'in-progress' | 'completed';
     priority?: 'high' | 'medium' | 'low';
 }
@@ -236,8 +216,8 @@ export interface Due {
     id: number;
     contractId: number;
     type: DueType;
-    scheduledDate: string; // Original legal date
-    adjustedDate: string; // Active operational date
+    scheduledDate: string;
+    adjustedDate: string;
     originalAmount: number;
     remainingBalance: number;
     assignedTelemarketerId: number | null;
@@ -257,11 +237,11 @@ export interface Contract {
     serialNumber: string;
     maintenancePlan: MaintenancePlan;
     basePrice: number;
-    finalPrice: number; // Represents TotalAmount
+    finalPrice: number;
     paymentType: PaymentType;
     downPayment: number;
     installmentsCount: number;
-    dues: Due[]; // Renamed from installments
+    dues: Due[];
     deliveryDate: string;
     installationDate: string;
     status: ContractStatus;
@@ -273,10 +253,10 @@ export type MaintenancePartType = 'Periodic' | 'Emergency' | 'Accessory';
 export interface SparePart {
     id: number;
     name: string;
-    code: string;          // SKU
+    code: string;
     basePrice: number;
     maintenanceType: MaintenancePartType;
-    compatibleDeviceIds: number[];  // FK → DeviceModel.id
+    compatibleDeviceIds: number[];
 }
 
 export interface DevicePartCompatibility {
@@ -288,9 +268,9 @@ export interface MaintenanceRequest {
     id: number;
     requestDate: string;
     customerId: number;
-    customerName: string; // denormalized for easier display
-    contractId: number; // Represents DeviceID (Instance)
-    deviceModelName: string; // denormalized
+    customerName: string;
+    contractId: number;
+    deviceModelName: string;
     priority: 'Critical' | 'High' | 'Normal';
     problemDescription: string;
     technicianId?: number;
@@ -298,7 +278,7 @@ export interface MaintenanceRequest {
     lastFollowUpDate?: string;
     resolutionStatus: 'Completed' | 'Pending' | 'Postponed' | 'Solved Remote';
     visitType: 'Periodic' | 'Emergency';
-    location: string; // denormalized
+    location: string;
     notes?: string;
     technicalReport?: {
         water: { sourceType: string; inputPressure: number; tdsBefore: number; tdsAfter: number };
@@ -309,7 +289,6 @@ export interface MaintenanceRequest {
     };
 }
 
-// --- Telemarketing Engine ---
 export type CallOutcome = 'no_answer' | 'busy' | 'rejected' | 'booked';
 
 export interface TaskListItem {
@@ -368,7 +347,6 @@ export interface Appointment {
 
 export const WORKING_HOURS = { start: 9, end: 17, slotMinutes: 60 };
 
-// --- Emergency Triage & Dispatch ---
 export type EmergencyTicketStatus = 'New' | 'Assigned' | 'In Progress' | 'Completed' | 'Cancelled';
 export type EmergencyTicketPriority = 'Critical' | 'High' | 'Normal';
 
@@ -390,33 +368,47 @@ export interface EmergencyTicket {
     createdAt: string;
 }
 
-// --- Job Applications Epic ---
+// ─────────────────────────────────────────
+// Job Applications Epic
+// ─────────────────────────────────────────
+
 export type VacancyStatus = 'Open' | 'Closed' | 'Archived';
-export type SubmissionType = 'Self' | 'On-Behalf';
-export type ApplicationSource = 'Mobile App' | 'Website' | 'External' | 'Manual';
-export type ApplicationStage = 'Submitted' | 'Shortlisted' | 'HR Interview' | 'Training' | 'Final Decision';
+export type SubmissionType = 'Apply' | 'Refer a Candidate';
+export type ApplicationSource = 'Mobile App' | 'Website' | 'External Platforms' | 'Internal';
+export type ApplicationStage = 'Submitted' | 'Shortlisted' | 'Interview' | 'Training' | 'Final Decision';
 export type ApplicationStatus =
   | 'New' | 'In Review' | 'Qualified' | 'Rejected'
   | 'Interview Scheduled' | 'Interview Completed' | 'Interview Failed'
   | 'Approved'
   | 'Training Scheduled' | 'Training Started' | 'Training Completed' | 'Retraining'
-  | 'Passed' | 'Failed' | 'Hired' | 'Withdrawn';
+  | 'Passed'
+  | 'Final Hired' | 'Final Rejected' | 'Retreated';
+
 export type ReferrerType = 'Employee' | 'Customer';
+export type ApplicantSegment = 'OP' | 'FOP' | 'Lead' | 'Visitor';
 
 export interface JobVacancy {
   id: number;
   title: string;
   branch: string;
-  workType: string;
-  requiredGender: string;
+  governorate: string | null;
+  cityOrArea: string | null;
+  subArea: string | null;
+  neighborhood: string | null;
+  detailedAddress: string | null;
+  workType: string | null;
+  requiredGender: string | null;
   requiredAgeMin: number | null;
   requiredAgeMax: number | null;
-  requiredQualification: string;
+  email: string | null;
+  requiredQualification: string | null;
+  requiredSpecialization: string | null;
   requiredExperienceYears: number | null;
-  requiredSkills: string;
-  responsibilities: string;
+  requiredSkills: string | null;
+  responsibilities: string | null;
   drivingLicenseRequired: boolean;
   vacancyCount: number;
+  maxRetrainingCount: number;
   startDate: string;
   endDate: string;
   status: VacancyStatus;
@@ -431,15 +423,24 @@ export interface Applicant {
   dob: string;
   gender: string;
   maritalStatus: string;
-  email: string;
+  email: string | null;
   mobileNumber: string;
+  secondaryMobile: string | null;
   governorate: string;
-  city: string;
+  cityOrArea: string;
   subArea: string;
   neighborhood: string;
   detailedAddress: string;
-  cvUrl: string;
-  photoUrl: string;
+  academicQualification: string;
+  previousEmployment: string;
+  drivingLicense: boolean;
+  expectedSalary: number | null;
+  computerSkills: string | null;
+  foreignLanguages: string | null;
+  yearsOfExperience: number;
+  cvUrl: string | null;
+  photoUrl: string | null;
+  applicantSegment: ApplicantSegment | null;
   createdAt: string;
 }
 
@@ -448,11 +449,15 @@ export interface JobReferrer {
   type: ReferrerType;
   employeeId: number | null;
   fullName: string;
+  lastName: string | null;
   mobileNumber: string;
-  governorate: string;
-  city: string;
-  profession: string;
-  notes: string;
+  governorate: string | null;
+  cityOrArea: string | null;
+  subArea: string | null;
+  neighborhood: string | null;
+  detailedAddress: string | null;
+  referrerWork: string | null;
+  referrerNotes: string | null;
 }
 
 export interface JobApplication {
@@ -461,28 +466,117 @@ export interface JobApplication {
   applicantId: number;
   referrerId: number | null;
   submissionType: SubmissionType;
-  source: ApplicationSource;
+  applicationSource: ApplicationSource;
+  enteredByUserId: number | null;
+  enteredByName: string | null;
   currentStage: ApplicationStage;
   applicationStatus: ApplicationStatus;
   duplicateFlag: boolean;
-  internalNotes: string;
+  isEscalated: boolean;
+  escalatedAt: string | null;
+  internalNotes: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface AuditLog {
   id: number;
-  applicationId: number;
+  entityType: string;
+  entityId: number;
+  applicationId: number | null;
   actionType: string;
-  performedByRole: string;
+  performedByRole: string | null;
   performedByUserId: number | null;
-  oldValue: string;
-  newValue: string;
-  internalReason: string;
+  oldValue: string | null;
+  newValue: string | null;
+  internalReason: string | null;
   timestamp: string;
 }
 
-// Extended type for joined application data used in listing/detail views
+export interface Interview {
+  id: number;
+  applicationId: number;
+  interviewType: 'HR Interview' | 'Technical Interview';
+  interviewNumber: 'First Interview' | 'Second Interview';
+  interviewerName: string;
+  interviewDate: string;
+  interviewTime: string;
+  interviewStatus: 'Interview Scheduled' | 'Interview Completed' | 'Interview Failed';
+  internalNotes: string | null;
+  createdAt: string;
+}
+
+export interface TrainingCourse {
+  id: number;
+  trainingName: string;
+  jobVacancyId: number;
+  branch: string;
+  deviceName: string | null;
+  trainer: string;
+  startDate: string;
+  endDate: string;
+  trainingStatus: 'Training Scheduled' | 'Training Started' | 'Training Completed';
+  notes: string | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingCourseListItem extends TrainingCourse {
+  registeredTraineesCount: number;
+  graduatedTraineesCount: number;
+}
+
+export interface TrainingCourseTrainee {
+  id: number;
+  trainingCourseId: number;
+  applicationId: number;
+  firstName: string;
+  lastName: string;
+  applicationStatus: string;
+  result: 'Passed' | 'Retraining' | 'Rejected' | 'Retreated' | null;
+  resultRecordedAt: string | null;
+  addedAt: string;
+}
+
+export interface TrainingAttendance {
+  id: number;
+  trainingCourseId: number;
+  applicationId: number;
+  attendanceDate: string;
+  status: 'Present' | 'Absent';
+  recordedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface TrainingCourseDetail extends TrainingCourse {
+  vacancy: { id: number; title: string; branch: string } | null;
+  trainees: TrainingCourseTrainee[];
+  attendance: { applicationId: number; attendanceDate: string; status: 'Present' | 'Absent' }[];
+}
+
+export interface CreateTrainingCourseRequest {
+  training_name: string;
+  job_vacancy_id: number;
+  branch: string;
+  device_name?: string;
+  trainer: string;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+  trainee_application_ids: number[];
+}
+
+export interface RecordAttendanceRequest {
+  attendance: Array<{ application_id: number; status: 'Present' | 'Absent' }>;
+  attendance_date: string;
+}
+
+export interface RecordTraineeResultRequest {
+  result: 'Passed' | 'Retraining' | 'Rejected' | 'Retreated';
+}
+
+// Extended types for joined queries
 export interface JobApplicationListItem extends JobApplication {
   applicantFirstName: string;
   applicantLastName: string;
@@ -496,4 +590,5 @@ export interface JobApplicationDetail extends JobApplication {
   applicant: Applicant;
   vacancy: JobVacancy;
   referrer: JobReferrer | null;
+  interviews: Interview[];
 }
