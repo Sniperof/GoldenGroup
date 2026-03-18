@@ -32,4 +32,33 @@ router.get('/', async (_req, res) => {
   }
 });
 
+// GET /api/public/vacancies/:id — single open vacancy within its active date range
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+        id, title, branch,
+        governorate, city_or_area AS "cityOrArea", sub_area AS "subArea",
+        neighborhood, detailed_address AS "detailedAddress",
+        work_type AS "workType", required_gender AS "requiredGender",
+        required_age_min AS "requiredAgeMin", required_age_max AS "requiredAgeMax",
+        email,
+        required_qualification AS "requiredQualification",
+        required_specialization AS "requiredSpecialization",
+        required_experience_years AS "requiredExperienceYears",
+        required_skills AS "requiredSkills", responsibilities,
+        driving_license_required AS "drivingLicenseRequired",
+        start_date AS "startDate", end_date AS "endDate", status
+      FROM job_vacancies
+      WHERE id = $1 AND status = 'Open' AND CURRENT_DATE BETWEEN start_date AND end_date`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'الوظيفة غير متاحة' });
+    res.json(rows[0]);
+  } catch (err: any) {
+    console.error('Error fetching public vacancy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

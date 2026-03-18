@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { JobApplicationListItem, ApplicationStage, ApplicationStatus } from '../lib/types';
+import { authFetch } from '../lib/authFetch';
 
 const API_BASE = '/api/admin/applications';
 
@@ -10,6 +11,8 @@ interface ApplicationFilters {
   stage: ApplicationStage | '';
   status: ApplicationStatus | '';
   search: string;
+  applicationSource: string;
+  isArchived: string;
 }
 
 interface ApplicationListStore {
@@ -25,6 +28,7 @@ interface ApplicationListStore {
 
 const defaultFilters: ApplicationFilters = {
   vacancyId: '', branch: '', gender: '', stage: '', status: '', search: '',
+  applicationSource: '', isArchived: 'false',
 };
 
 export const useApplicationListStore = create<ApplicationListStore>((set, get) => ({
@@ -50,8 +54,10 @@ export const useApplicationListStore = create<ApplicationListStore>((set, get) =
       if (f.stage) params.set('stage', f.stage);
       if (f.status) params.set('status', f.status);
       if (f.search) params.set('search', f.search);
+      if (f.applicationSource) params.set('applicationSource', f.applicationSource);
+      params.set('isArchived', f.isArchived);
       const qs = params.toString();
-      const res = await fetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
+      const res = await authFetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
       if (!res.ok) throw new Error('Failed to fetch applications');
       const data = await res.json();
       set({ applications: data, loading: false });

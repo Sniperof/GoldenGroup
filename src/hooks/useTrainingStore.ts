@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { TrainingCourseListItem, TrainingCourseDetail, CreateTrainingCourseRequest } from '../lib/types';
+import { authFetch } from '../lib/authFetch';
 
 const API = '/api/admin/training-courses';
 
@@ -94,7 +95,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
       if (filters.job_vacancy_id) params.set('job_vacancy_id', filters.job_vacancy_id);
       if (filters.search) params.set('search', filters.search);
 
-      const res = await fetch(`${API}?${params}`);
+      const res = await authFetch(`${API}?${params}`);
       if (!res.ok) throw new Error('فشل تحميل الدورات التدريبية');
       const data = await res.json();
       set({ courses: data.courses, totalCount: data.totalCount, loading: false });
@@ -106,7 +107,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   fetchCourseDetail: async (id) => {
     set({ detailLoading: true, detailError: null });
     try {
-      const res = await fetch(`${API}/${id}`);
+      const res = await authFetch(`${API}/${id}`);
       if (!res.ok) throw new Error('فشل تحميل تفاصيل الدورة');
       const data = await res.json();
       set({ selectedCourse: data, detailLoading: false });
@@ -116,7 +117,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   createCourse: async (data) => {
-    const res = await fetch(API, {
+    const res = await authFetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -128,7 +129,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   startCourse: async (id, opts = {}) => {
-    const res = await fetch(`${API}/${id}/start`, {
+    const res = await authFetch(`${API}/${id}/start`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(opts),
@@ -140,7 +141,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   completeCourse: async (id, opts = {}) => {
-    const res = await fetch(`${API}/${id}/complete`, {
+    const res = await authFetch(`${API}/${id}/complete`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(opts),
@@ -152,7 +153,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   recordAttendance: async (courseId, attendance_date, attendance, opts = {}) => {
-    const res = await fetch(`${API}/${courseId}/attendance`, {
+    const res = await authFetch(`${API}/${courseId}/attendance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ attendance_date, attendance, ...opts }),
@@ -163,7 +164,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   recordTraineeResult: async (courseId, applicationId, result, opts = {}) => {
-    const res = await fetch(`${API}/${courseId}/trainees/${applicationId}/result`, {
+    const res = await authFetch(`${API}/${courseId}/trainees/${applicationId}/result`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ result, ...opts }),
@@ -174,7 +175,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   addTrainees: async (courseId, application_ids, opts = {}) => {
-    const res = await fetch(`${API}/${courseId}/trainees`, {
+    const res = await authFetch(`${API}/${courseId}/trainees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ application_ids, ...opts }),
@@ -185,7 +186,7 @@ export const useTrainingStore = create<TrainingStore>((set, get) => ({
   },
 
   fetchEligibleTrainees: async (jobVacancyId) => {
-    const res = await fetch(`${API}/eligible/${jobVacancyId}`);
+    const res = await authFetch(`${API}/eligible/${jobVacancyId}`);
     if (!res.ok) throw new Error('فشل تحميل المرشحين المؤهلين');
     return res.json();
   },

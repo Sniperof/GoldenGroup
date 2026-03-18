@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import type { Interview } from '../lib/types';
+import { authFetch } from '../lib/authFetch';
 
 const API_BASE = '/api/admin/interviews';
 
 interface InterviewFilters {
   applicationId: string;
-  vacancyId: string;
+  jobVacancyId: string;
   interviewerName: string;
   date: string;
 }
@@ -24,7 +25,7 @@ interface InterviewStore {
 }
 
 const defaultFilters: InterviewFilters = {
-  applicationId: '', vacancyId: '', interviewerName: '', date: '',
+  applicationId: '', jobVacancyId: '', interviewerName: '', date: '',
 };
 
 export const useInterviewStore = create<InterviewStore>((set, get) => ({
@@ -42,11 +43,11 @@ export const useInterviewStore = create<InterviewStore>((set, get) => ({
       const f = get().filters;
       const params = new URLSearchParams();
       if (f.applicationId) params.set('applicationId', f.applicationId);
-      if (f.vacancyId) params.set('vacancyId', f.vacancyId);
+      if (f.jobVacancyId) params.set('jobVacancyId', f.jobVacancyId);
       if (f.interviewerName) params.set('interviewerName', f.interviewerName);
       if (f.date) params.set('date', f.date);
       const qs = params.toString();
-      const res = await fetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
+      const res = await authFetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
       if (!res.ok) throw new Error('Failed to fetch interviews');
       set({ interviews: await res.json(), loading: false });
     } catch (err: any) {
@@ -55,7 +56,7 @@ export const useInterviewStore = create<InterviewStore>((set, get) => ({
   },
 
   scheduleInterview: async (data) => {
-    const res = await fetch(API_BASE, {
+    const res = await authFetch(API_BASE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -70,7 +71,7 @@ export const useInterviewStore = create<InterviewStore>((set, get) => ({
   },
 
   recordResult: async (id, interviewStatus, internalNotes) => {
-    const res = await fetch(`${API_BASE}/${id}`, {
+    const res = await authFetch(`${API_BASE}/${id}/result`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ interviewStatus, internalNotes }),

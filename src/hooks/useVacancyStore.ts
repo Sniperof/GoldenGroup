@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { JobVacancy, VacancyStatus } from '../lib/types';
+import { authFetch } from '../lib/authFetch';
 
 const API_BASE = '/api/admin/vacancies';
 
@@ -46,7 +47,7 @@ export const useVacancyStore = create<VacancyStore>((set, get) => ({
       if (branch) params.set('branch', branch);
       if (search) params.set('search', search);
       const qs = params.toString();
-      const res = await fetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
+      const res = await authFetch(`${API_BASE}${qs ? `?${qs}` : ''}`);
       if (!res.ok) throw new Error('Failed to fetch vacancies');
       const data = await res.json();
       set({ vacancies: data, loading: false });
@@ -56,7 +57,7 @@ export const useVacancyStore = create<VacancyStore>((set, get) => ({
   },
 
   createVacancy: async (data) => {
-    const res = await fetch(API_BASE, {
+    const res = await authFetch(API_BASE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -71,7 +72,7 @@ export const useVacancyStore = create<VacancyStore>((set, get) => ({
   },
 
   updateVacancy: async (id, data) => {
-    const res = await fetch(`${API_BASE}/${id}`, {
+    const res = await authFetch(`${API_BASE}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -88,7 +89,7 @@ export const useVacancyStore = create<VacancyStore>((set, get) => ({
   },
 
   updateVacancyStatus: async (id, status) => {
-    const res = await fetch(`${API_BASE}/${id}/status`, {
+    const res = await authFetch(`${API_BASE}/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),

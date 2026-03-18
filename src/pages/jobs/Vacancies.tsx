@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useVacancyStore } from '../../hooks/useVacancyStore';
 import type { JobVacancy, VacancyStatus } from '../../lib/types';
 import {
   Plus, Search, Filter, Edit, Archive, XCircle, Briefcase, Calendar,
-  MapPin, GraduationCap, Users, ChevronDown, X, RotateCcw, Lock
+  MapPin, GraduationCap, Users, ChevronDown, X, RotateCcw, Lock, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -28,6 +29,7 @@ const emptyVacancy: Partial<JobVacancy> = {
 };
 
 export default function Vacancies() {
+  const navigate = useNavigate();
   const {
     vacancies, filters, loading,
     fetchVacancies, setFilter, resetFilters,
@@ -183,12 +185,14 @@ export default function Vacancies() {
                   <th className="px-4 py-3 text-right font-semibold text-slate-600">المؤهل المطلوب</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">الشواغر</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">الحالة</th>
+                  <th className="px-4 py-3 text-center font-semibold text-slate-600">عرض</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {vacancies.map((v, idx) => (
-                  <tr key={v.id} className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                  <tr key={v.id} className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
+                    onClick={() => navigate(`/jobs/vacancies/${v.id}`)}>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{v.id}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">{v.title}</td>
                     <td className="px-4 py-3 text-slate-600">
@@ -213,7 +217,13 @@ export default function Vacancies() {
                     <td className="px-4 py-3 text-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => navigate(`/jobs/vacancies/${v.id}`)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="عرض التفاصيل">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         {v.status !== 'Archived' && (
                           <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="تعديل">

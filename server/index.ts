@@ -28,7 +28,8 @@ import publicApplicationsRouter from './routes/publicApplications.js';
 import adminApplicationsRouter from './routes/adminApplications.js';
 import interviewsRouter from './routes/interviews.js';
 import trainingCoursesRouter from './routes/trainingCourses.js';
-import trainingAttendanceRouter from './routes/trainingAttendance.js';
+import publicAreasRouter from './routes/publicAreas.js';
+import authRouter from './routes/auth.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -36,6 +37,7 @@ const PORT = parseInt(process.env.PORT || '3000');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+app.use('/api/auth', authRouter);
 app.use('/api/geo-units', geoUnitsRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/clients', clientsRouter);
@@ -58,7 +60,7 @@ app.use('/api/public/applications', publicApplicationsRouter);
 app.use('/api/admin/applications', adminApplicationsRouter);
 app.use('/api/admin/interviews', interviewsRouter);
 app.use('/api/admin/training-courses', trainingCoursesRouter);
-app.use('/api/admin/training-attendance', trainingAttendanceRouter);
+app.use('/api/public/areas', publicAreasRouter);
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApplicationListStore } from '../../hooks/useApplicationListStore';
 import type { ApplicationStage, ApplicationStatus } from '../../lib/types';
 import {
-  ClipboardList, Search, Filter, ChevronDown, Eye, AlertTriangle, Calendar
+  ClipboardList, Search, Filter, ChevronDown, Eye, AlertTriangle, Calendar, Archive, Plus
 } from 'lucide-react';
 
 const STAGE_COLORS: Record<ApplicationStage, string> = {
@@ -60,17 +60,25 @@ export default function Applications() {
   useEffect(() => { fetchApplications(); }, [
     filters.vacancyId, filters.branch, filters.gender,
     filters.stage, filters.status, filters.search,
+    filters.applicationSource, filters.isArchived,
   ]);
 
   return (
     <div className="h-full overflow-y-auto p-6" dir="rtl">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-          <ClipboardList className="w-7 h-7 text-sky-500" />
-          طلبات التوظيف
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">عرض وإدارة جميع طلبات التوظيف المقدمة</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <ClipboardList className="w-7 h-7 text-sky-500" />
+            طلبات التوظيف
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">عرض وإدارة جميع طلبات التوظيف المقدمة</p>
+        </div>
+        <button
+          onClick={() => navigate('/jobs/applications/new')}
+          className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold shadow-lg shadow-sky-500/25 transition-all text-sm">
+          <Plus className="w-4 h-4" /> إدخال طلب يدوي
+        </button>
       </div>
 
       {/* Filters */}
@@ -113,6 +121,20 @@ export default function Applications() {
           </select>
           <ChevronDown className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
+        <div className="relative">
+          <select
+            value={filters.applicationSource}
+            onChange={e => setFilter('applicationSource', e.target.value)}
+            className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500"
+          >
+            <option value="">كل المصادر</option>
+            <option value="Mobile App">Mobile App</option>
+            <option value="Website">Website</option>
+            <option value="External Platforms">External Platforms</option>
+            <option value="Internal">Internal</option>
+          </select>
+          <ChevronDown className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -123,11 +145,25 @@ export default function Applications() {
             className="w-full bg-slate-50 border border-slate-200 rounded-lg pr-10 pl-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500"
           />
         </div>
-        {(filters.stage || filters.status || filters.gender || filters.search || filters.branch || filters.vacancyId) && (
+        {(filters.stage || filters.status || filters.gender || filters.search || filters.branch || filters.vacancyId || filters.applicationSource || filters.isArchived === 'true') && (
           <button onClick={resetFilters} className="text-xs text-slate-500 hover:text-red-500 transition-colors">
             مسح الفلاتر
           </button>
         )}
+      </div>
+
+      {/* Archived toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={filters.isArchived === 'true'}
+            onChange={e => setFilter('isArchived', e.target.checked ? 'true' : 'false')}
+            className="rounded border-slate-300 text-sky-500 focus:ring-sky-500"
+          />
+          <Archive className="w-3.5 h-3.5 text-slate-400" />
+          عرض المؤرشفة فقط
+        </label>
       </div>
 
       {/* Table */}
@@ -155,6 +191,7 @@ export default function Applications() {
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">المرحلة</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">الحالة</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">تكرار</th>
+                  <th className="px-4 py-3 text-center font-semibold text-slate-600">أرشيف</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">عرض</th>
                 </tr>
               </thead>
@@ -192,6 +229,14 @@ export default function Applications() {
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-bold">
                           <AlertTriangle className="w-3 h-3" />
                           تكرار
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {app.isArchived && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold">
+                          <Archive className="w-3 h-3" />
+                          مؤرشف
                         </span>
                       )}
                     </td>

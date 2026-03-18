@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ const VACANCY_COLS = `
 `;
 
 // GET /api/admin/vacancies
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const { status, branch, search } = req.query;
     const conditions: string[] = [];
@@ -50,7 +51,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/admin/vacancies
-router.post('/', async (req, res) => {
+router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const v = req.body;
@@ -92,8 +93,8 @@ router.post('/', async (req, res) => {
       entityType: 'job_vacancy',
       entityId: rows[0].id,
       actionType: 'Job Vacancy Created',
-      performedByRole: v.performedByRole || 'HR_MANAGER',
-      performedByUserId: v.performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       newValue: JSON.stringify({ title: v.title, branch: v.branch }),
     });
 
@@ -108,8 +109,39 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/admin/vacancies/:id
+router.get('/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${VACANCY_COLS} FROM job_vacancies WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'الشاغر غير موجود' });
+
+    const { rows: counts } = await pool.query(
+      `SELECT
+        COUNT(*) AS applications_count,
+        COUNT(*) FILTER (WHERE application_status = 'Final Hired') AS hired_count
+       FROM job_applications WHERE job_vacancy_id = $1`,
+      [req.params.id]
+    );
+    const applicationsCount = parseInt(counts[0].applications_count);
+    const hiredCount = parseInt(counts[0].hired_count);
+
+    res.json({
+      ...rows[0],
+      applicationsCount,
+      hiredCount,
+      remainingSlots: rows[0].vacancyCount - hiredCount,
+    });
+  } catch (err: any) {
+    console.error('Error fetching vacancy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PUT /api/admin/vacancies/:id — 3-tier edit
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const v = req.body;
@@ -203,8 +235,8 @@ router.put('/:id', async (req, res) => {
       entityType: 'job_vacancy',
       entityId: parseInt(vacancyId),
       actionType: 'Job Vacancy Updated',
-      performedByRole: v.performedByRole || 'HR_MANAGER',
-      performedByUserId: v.performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       newValue: JSON.stringify({ editTier }),
     });
 
@@ -220,10 +252,10 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH /api/admin/vacancies/:id/status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { status, performedByRole, performedByUserId } = req.body;
+    const { status } = req.body;
     if (!['Open', 'Closed', 'Archived'].includes(status)) {
       return res.status(400).json({ error: 'الحالة يجب أن تكون Open أو Closed أو Archived' });
     }
@@ -261,8 +293,8 @@ router.patch('/:id/status', async (req, res) => {
       entityType: 'job_vacancy',
       entityId: parseInt(req.params.id),
       actionType: 'Vacancy Status Changed',
-      performedByRole: performedByRole || 'HR_MANAGER',
-      performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       oldValue: from,
       newValue: status,
     });

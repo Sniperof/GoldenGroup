@@ -210,6 +210,7 @@ export async function createSchema() {
 
   await migrateJobTables();
   await fixSchemaConstraints();
+  await createHrUsers();
 }
 
 async function migrateJobTables() {
@@ -256,7 +257,7 @@ async function migrateJobTables() {
       required_skills TEXT,
       responsibilities TEXT,
       driving_license_required BOOLEAN DEFAULT FALSE,
-      vacancy_count INTEGER NOT NULL CHECK (vacancy_count > 0),
+      vacancy_count INTEGER NOT NULL CHECK (vacancy_count >= 0),
       max_retraining_count INTEGER DEFAULT 1,
       start_date DATE NOT NULL,
       end_date DATE NOT NULL,
@@ -472,6 +473,15 @@ async function fixSchemaConstraints() {
     await pool.query(`ALTER TABLE training_attendance ADD COLUMN IF NOT EXISTS recorded_by_user_id INTEGER REFERENCES employees(id)`);
   } catch { /* ignore */ }
 
+  // Add is_archived / archived_at to job_applications
+  try {
+    await pool.query(`
+      ALTER TABLE job_applications
+        ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ
+    `);
+  } catch { /* ignore */ }
+
   // Create training_course_trainees junction table
   try {
     await pool.query(`
@@ -487,9 +497,67 @@ async function fixSchemaConstraints() {
       )
     `);
   } catch { /* ignore */ }
+
+  // Fix vacancy_count constraint: allow 0 (last slot hired)
+  try {
+    await pool.query(`
+      ALTER TABLE job_vacancies
+        DROP CONSTRAINT IF EXISTS job_vacancies_vacancy_count_check,
+        ADD CONSTRAINT job_vacancies_vacancy_count_check CHECK (vacancy_count >= 0)
+    `);
+  } catch { /* ignore — constraint may already be correct */ }
+}
+
+async function createHrUsers() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hr_users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      username VARCHAR(100) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(50) NOT NULL CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT')),
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Drop FK from audit_logs.performed_by_user_id (was referencing employees)
+  try {
+    await pool.query(`ALTER TABLE audit_logs DROP CONSTRAINT IF EXISTS audit_logs_performed_by_user_id_fkey`);
+  } catch { /* ignore */ }
+  // Drop FK from job_applications.entered_by_user_id
+  try {
+    await pool.query(`ALTER TABLE job_applications DROP CONSTRAINT IF EXISTS job_applications_entered_by_user_id_fkey`);
+  } catch { /* ignore */ }
+  // Drop FK from training_courses.created_by_user_id
+  try {
+    await pool.query(`ALTER TABLE training_courses DROP CONSTRAINT IF EXISTS training_courses_created_by_user_id_fkey`);
+  } catch { /* ignore */ }
+  // Drop FK from training_course_trainees.result_recorded_by
+  try {
+    await pool.query(`ALTER TABLE training_course_trainees DROP CONSTRAINT IF EXISTS training_course_trainees_result_recorded_by_fkey`);
+  } catch { /* ignore */ }
+  // Drop FK from training_attendance.recorded_by_user_id
+  try {
+    await pool.query(`ALTER TABLE training_attendance DROP CONSTRAINT IF EXISTS training_attendance_recorded_by_user_id_fkey`);
+  } catch { /* ignore */ }
 }
 
 export async function seedData() {
+  // Seed default HR users (idempotent)
+  const { rows: hrRows } = await pool.query('SELECT COUNT(*) FROM hr_users');
+  if (parseInt(hrRows[0].count) === 0) {
+    const bcrypt = await import('bcryptjs');
+    const managerHash = await bcrypt.default.hash('manager123', 10);
+    const assistantHash = await bcrypt.default.hash('assistant123', 10);
+    await pool.query(`
+      INSERT INTO hr_users (name, username, password_hash, role) VALUES
+        ('مدير الموارد البشرية', 'hr_manager', $1, 'HR_MANAGER'),
+        ('مساعد الموارد البشرية', 'hr_assistant', $2, 'HR_ASSISTANT')
+    `, [managerHash, assistantHash]);
+    console.log('Default HR users seeded.');
+  }
+
   const { rows } = await pool.query('SELECT COUNT(*) FROM employees');
   if (parseInt(rows[0].count) > 0) return;
 

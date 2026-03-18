@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { seedSystem } from './lib/seed';
+import { useAuthStore } from './hooks/useAuthStore';
+import Login from './pages/auth/Login';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MainLayout from './layout/MainLayout';
 import Dashboard from './pages/Dashboard';
@@ -27,13 +29,22 @@ import TeamTasksDetail from './pages/planning/TeamTasksDetail';
 import MarketingOperations from './pages/tasks/MarketingOperations';
 import SystemSettings from './pages/SystemSettings';
 import Vacancies from './pages/jobs/Vacancies';
+import VacancyDetail from './pages/jobs/VacancyDetail';
 import PublicJobs from './pages/jobs/PublicJobs';
 import Applications from './pages/jobs/Applications';
 import ApplicationDetail from './pages/jobs/ApplicationDetail';
+import ManualApplicationEntry from './pages/jobs/ManualApplicationEntry';
 import Interviews from './pages/jobs/Interviews';
+import InterviewDetail from './pages/jobs/InterviewDetail';
 import TrainingCourses from './pages/jobs/TrainingCourses';
 import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
 
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+    const token = useAuthStore((s) => s.token);
+    if (!token) return <Navigate to="/login" replace />;
+    return <>{children}</>;
+}
 
 export default function App() {
     useEffect(() => {
@@ -44,7 +55,8 @@ export default function App() {
         <BrowserRouter>
             <ErrorBoundary>
                 <Routes>
-                    <Route element={<MainLayout />}>
+                    <Route path="/login" element={<Login />} />
+                    <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/devices" element={<DeviceManagement />} />
                         <Route path="/geo" element={<GeoSettings />} />
@@ -72,10 +84,13 @@ export default function App() {
 
                         {/* Job Applications Epic */}
                         <Route path="/jobs/vacancies" element={<Vacancies />} />
+                        <Route path="/jobs/vacancies/:id" element={<VacancyDetail />} />
                         <Route path="/jobs/public" element={<PublicJobs />} />
                         <Route path="/jobs/applications" element={<Applications />} />
+                        <Route path="/jobs/applications/new" element={<ManualApplicationEntry />} />
                         <Route path="/jobs/applications/:id" element={<ApplicationDetail />} />
                         <Route path="/jobs/interviews" element={<Interviews />} />
+                        <Route path="/jobs/interviews/:id" element={<InterviewDetail />} />
                         <Route path="/jobs/training-courses" element={<TrainingCourses />} />
                         <Route path="/jobs/training-courses/:id" element={<TrainingCourseDetail />} />
                     </Route>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../hooks/useAuthStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import FloatingActionButton from '../components/FloatingActionButton';
 import NewEmergencyTicketModal from '../components/NewEmergencyTicketModal';
@@ -9,7 +10,7 @@ import {
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
     FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon,
-    ChevronLeft, ChevronRight, Target, BadgeCheck, GraduationCap, Mic2
+    ChevronLeft, ChevronRight, Target, BadgeCheck, GraduationCap, Mic2, LogOut
 } from 'lucide-react';
 
 const navItems = [
@@ -46,6 +47,7 @@ const planningChildren = [
 const jobsChildren = [
     { path: '/jobs/vacancies', label: 'إدارة الشواغر', icon: Briefcase },
     { path: '/jobs/applications', label: 'طلبات التوظيف', icon: ClipboardList },
+    { path: '/jobs/applications/new', label: 'إدخال طلب يدوي', icon: FilePlus2 },
     { path: '/jobs/interviews', label: 'المقابلات', icon: Mic2 },
     { path: '/jobs/training-courses', label: 'الدورات التدريبية', icon: GraduationCap },
     { path: '/jobs/public', label: 'الوظائف المتاحة (عام)', icon: BadgeCheck },
@@ -53,6 +55,13 @@ const jobsChildren = [
 
 export default function MainLayout() {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { user: authUser, logout } = useAuthStore();
+
+    function handleLogout() {
+        logout();
+        navigate('/login');
+    }
     const isPlanningActive = location.pathname.startsWith('/planning');
     const isOperationsActive = location.pathname.startsWith('/tasks');
     const isContractsActive = location.pathname.startsWith('/contracts');
@@ -449,16 +458,25 @@ export default function MainLayout() {
                     <div className={`flex items-center gap-3 p-2 rounded-lg ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}>
                         <div className="relative">
                             <img
-                                src="https://ui-avatars.com/api/?name=Ibrahim+Obaid&background=0ea5e9&color=fff"
+                                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(authUser?.name || 'HR')}&background=0ea5e9&color=fff`}
                                 alt="User"
                                 className="w-10 h-10 rounded-full border border-slate-200"
                             />
                             <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
                         </div>
                         <div className={`flex-1 min-w-0 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
-                            <p className="text-sm font-semibold text-slate-700 truncate">إبراهيم عبيد</p>
-                            <p className="text-xs text-slate-500 truncate">مدير النظام</p>
+                            <p className="text-sm font-semibold text-slate-700 truncate">{authUser?.name || '—'}</p>
+                            <p className="text-xs text-slate-500 truncate">
+                                {authUser?.role === 'HR_MANAGER' ? 'مدير الموارد البشرية' : 'مساعد الموارد البشرية'}
+                            </p>
                         </div>
+                        <button
+                            onClick={handleLogout}
+                            title="تسجيل الخروج"
+                            className={`p-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors ${isCollapsed ? 'lg:hidden' : ''}`}
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
             </aside>

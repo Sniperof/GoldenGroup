@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
+import { sanitizeText } from '../utils/sanitize.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -23,7 +25,7 @@ function mapCourse(row: any) {
 }
 
 // ── GET /eligible/:jobVacancyId — eligible trainee picker (must be before /:id) ──
-router.get('/eligible/:jobVacancyId', async (req, res) => {
+router.get('/eligible/:jobVacancyId', requireAuth, async (req, res) => {
   try {
     const { jobVacancyId } = req.params;
     const { rows } = await pool.query(
@@ -52,13 +54,12 @@ router.get('/eligible/:jobVacancyId', async (req, res) => {
 });
 
 // ── POST / — Create Training Course ─────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const {
       training_name, job_vacancy_id, branch, device_name, trainer,
       start_date, end_date, notes, trainee_application_ids,
-      performedByRole, performedByUserId,
     } = req.body;
 
     if (!training_name?.trim()) return res.status(400).json({ error: 'اسم الدورة مطلوب' });
@@ -114,8 +115,10 @@ router.post('/', async (req, res) => {
         (training_name, job_vacancy_id, branch, device_name, trainer, start_date, end_date, notes, created_by_user_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING *`,
-      [training_name.trim(), job_vacancy_id, branch.trim(), device_name || null,
-       trainer.trim(), start_date, end_date, notes || null, performedByUserId || null]
+      [sanitizeText(training_name.trim()), job_vacancy_id, sanitizeText(branch.trim()),
+       device_name ? sanitizeText(device_name) : null,
+       sanitizeText(trainer.trim()), start_date, end_date,
+       notes ? sanitizeText(notes) : null, req.user!.id]
     );
     const course = courseRows[0];
 
@@ -134,8 +137,8 @@ router.post('/', async (req, res) => {
       await insertAuditLog(client, {
         entityType: 'TrainingCourse', entityId: course.id, applicationId: appId,
         actionType: 'Training Scheduled',
-        performedByRole: performedByRole || 'HR_ASSISTANT',
-        performedByUserId: performedByUserId || null,
+        performedByRole: req.user!.role,
+        performedByUserId: req.user!.id,
         oldValue: oldRows[0]?.application_status, newValue: 'Training Scheduled',
       });
     }
@@ -162,7 +165,7 @@ router.post('/', async (req, res) => {
 });
 
 // ── GET / — List Training Courses ────────────────────────────────────────────
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const {
       branch, start_date, end_date, trainer, device_name,
@@ -225,7 +228,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── GET /:id — Course Detail ──────────────────────────────────────────────────
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { rows: courseRows } = await pool.query(`SELECT * FROM training_courses WHERE id = $1`, [req.params.id]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });
@@ -270,10 +273,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── PATCH /:id/start ──────────────────────────────────────────────────────────
-router.patch('/:id/start', async (req, res) => {
+router.patch('/:id/start', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { performedByRole, performedByUserId } = req.body;
     const courseId = req.params.id;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
@@ -307,7 +309,7 @@ router.patch('/:id/start', async (req, res) => {
       await insertAuditLog(client, {
         entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: application_id,
         actionType: 'Training Started',
-        performedByRole: performedByRole || 'HR_MANAGER', performedByUserId: performedByUserId || null,
+        performedByRole: req.user!.role, performedByUserId: req.user!.id,
         oldValue: 'Training Scheduled', newValue: 'Training Started',
       });
     }
@@ -325,10 +327,10 @@ router.patch('/:id/start', async (req, res) => {
 });
 
 // ── POST /:id/attendance ──────────────────────────────────────────────────────
-router.post('/:id/attendance', async (req, res) => {
+router.post('/:id/attendance', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { attendance, attendance_date, performedByRole, performedByUserId } = req.body;
+    const { attendance, attendance_date } = req.body;
     const courseId = req.params.id;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
@@ -377,13 +379,13 @@ router.post('/:id/attendance', async (req, res) => {
          ON CONFLICT (training_course_id, application_id, attendance_date)
          DO UPDATE SET status = EXCLUDED.status, recorded_by_user_id = EXCLUDED.recorded_by_user_id
          RETURNING *`,
-        [courseId, entry.application_id, attendance_date, entry.status, performedByUserId || null]
+        [courseId, entry.application_id, attendance_date, entry.status, req.user!.id]
       );
       results.push(rows[0]);
       await insertAuditLog(client, {
         entityType: 'TrainingAttendance', entityId: parseInt(courseId), applicationId: entry.application_id,
         actionType: 'Attendance Recorded',
-        performedByRole: performedByRole || 'HR_MANAGER', performedByUserId: performedByUserId || null,
+        performedByRole: req.user!.role, performedByUserId: req.user!.id,
         newValue: JSON.stringify({ date: attendance_date, status: entry.status }),
       });
     }
@@ -399,10 +401,9 @@ router.post('/:id/attendance', async (req, res) => {
 });
 
 // ── PATCH /:id/complete ───────────────────────────────────────────────────────
-router.patch('/:id/complete', async (req, res) => {
+router.patch('/:id/complete', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { performedByRole, performedByUserId } = req.body;
     const courseId = req.params.id;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
@@ -457,7 +458,7 @@ router.patch('/:id/complete', async (req, res) => {
         await insertAuditLog(client, {
           entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: application_id,
           actionType: 'Training Completed',
-          performedByRole: performedByRole || 'HR_MANAGER', performedByUserId: performedByUserId || null,
+          performedByRole: req.user!.role, performedByUserId: req.user!.id,
           oldValue: 'Training Started', newValue: 'Training Completed',
         });
       }
@@ -476,10 +477,10 @@ router.patch('/:id/complete', async (req, res) => {
 });
 
 // ── PATCH /:id/trainees/:applicationId/result ─────────────────────────────────
-router.patch('/:id/trainees/:applicationId/result', async (req, res) => {
+router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { result, performedByRole, performedByUserId } = req.body;
+    const { result } = req.body;
     const courseId = req.params.id;
     const appId = parseInt(req.params.applicationId);
 
@@ -529,7 +530,7 @@ router.patch('/:id/trainees/:applicationId/result', async (req, res) => {
       `UPDATE training_course_trainees
        SET result = $1, result_recorded_at = NOW(), result_recorded_by = $2
        WHERE training_course_id = $3 AND application_id = $4`,
-      [result, performedByUserId || null, courseId, appId]
+      [result, req.user!.id, courseId, appId]
     );
     await client.query(
       `UPDATE job_applications SET current_stage = $1, application_status = $2, updated_at = NOW() WHERE id = $3`,
@@ -538,7 +539,7 @@ router.patch('/:id/trainees/:applicationId/result', async (req, res) => {
     await insertAuditLog(client, {
       entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: appId,
       actionType: 'Training Result Recorded',
-      performedByRole: performedByRole || 'HR_MANAGER', performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role, performedByUserId: req.user!.id,
       oldValue: 'Training Completed', newValue: result,
     });
     await client.query('COMMIT');
@@ -553,10 +554,10 @@ router.patch('/:id/trainees/:applicationId/result', async (req, res) => {
 });
 
 // ── POST /:id/trainees — Add more trainees ────────────────────────────────────
-router.post('/:id/trainees', async (req, res) => {
+router.post('/:id/trainees', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { application_ids, performedByRole, performedByUserId } = req.body;
+    const { application_ids } = req.body;
     const courseId = req.params.id;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
@@ -614,7 +615,7 @@ router.post('/:id/trainees', async (req, res) => {
       await insertAuditLog(client, {
         entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: appId,
         actionType: 'Training Scheduled',
-        performedByRole: performedByRole || 'HR_ASSISTANT', performedByUserId: performedByUserId || null,
+        performedByRole: req.user!.role, performedByUserId: req.user!.id,
         oldValue: oldRows[0]?.application_status, newValue: 'Training Scheduled',
       });
       added.push(appId);

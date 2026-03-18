@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { JobApplicationDetail, AuditLog, ApplicationStage } from '../../lib/types';
+import { authFetch } from '../../lib/authFetch';
 import {
   ArrowRight, User, Briefcase, MapPin, Phone, Mail, Calendar, Users, GraduationCap,
   FileText, Clock, CheckCircle, XCircle, UserPlus, AlertTriangle, Award,
-  ChevronDown, ChevronUp, ArrowRightLeft, Car, Monitor, Globe, DollarSign
+  ChevronDown, ChevronUp, ArrowRightLeft, Car, Monitor, Globe, DollarSign, Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -96,8 +97,8 @@ export default function ApplicationDetail() {
   const fetchDetail = () => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/admin/applications/${id}`).then(r => r.json()),
-      fetch(`/api/admin/applications/${id}/audit-logs`).then(r => r.json()),
+      authFetch(`/api/admin/applications/${id}`).then(r => r.json()),
+      authFetch(`/api/admin/applications/${id}/audit-logs`).then(r => r.json()),
     ]).then(([app, logs]) => {
       setDetail(app);
       setAuditLogs(logs);
@@ -111,7 +112,7 @@ export default function ApplicationDetail() {
     setActionLoading(true);
     setActionError('');
     try {
-      const res = await fetch(`/api/admin/applications/${id}/stage`, {
+      const res = await authFetch(`/api/admin/applications/${id}/stage`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +139,7 @@ export default function ApplicationDetail() {
     setActionLoading(true);
     setActionError('');
     try {
-      const res = await fetch(`/api/admin/applications/${id}/hire`, {
+      const res = await authFetch(`/api/admin/applications/${id}/hire`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ performedByRole: 'HR_MANAGER' }),
@@ -161,6 +162,29 @@ export default function ApplicationDetail() {
 
   const handleRetreat = () => {
     handleStageAction(detail!.currentStage, 'Retreated', 'انسحاب');
+  };
+
+  const ARCHIVABLE_STATUSES = ['Final Hired', 'Final Rejected', 'Retreated'];
+
+  const handleArchive = async () => {
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const res = await authFetch(`/api/admin/applications/${id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ performedByRole: 'HR_MANAGER' }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      fetchDetail();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -419,6 +443,24 @@ export default function ApplicationDetail() {
                   'bg-red-50 text-red-700'
                 }`}>
                   {STATUS_LABELS[detail.applicationStatus] || detail.applicationStatus}
+                </div>
+              )}
+
+              {/* Archive button — only for archivable terminal statuses */}
+              {ARCHIVABLE_STATUSES.includes(detail.applicationStatus) && !detail.isArchived && (
+                <button
+                  onClick={handleArchive}
+                  disabled={actionLoading}
+                  className="w-full mt-3 py-2 px-4 rounded-xl text-xs font-medium border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  أرشفة الطلب
+                </button>
+              )}
+              {detail.isArchived && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-xl p-2.5 justify-center">
+                  <Archive className="w-3.5 h-3.5" />
+                  تمت الأرشفة{detail.archivedAt ? ` — ${new Date(detail.archivedAt).toLocaleDateString('ar-IQ')}` : ''}
                 </div>
               )}
             </div>

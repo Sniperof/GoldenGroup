@@ -433,7 +433,7 @@ export interface Applicant {
   detailedAddress: string;
   academicQualification: string;
   previousEmployment: string;
-  drivingLicense: boolean;
+  drivingLicense: string | null;
   expectedSalary: number | null;
   computerSkills: string | null;
   foreignLanguages: string | null;
@@ -475,6 +475,8 @@ export interface JobApplication {
   isEscalated: boolean;
   escalatedAt: string | null;
   internalNotes: string | null;
+  isArchived: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

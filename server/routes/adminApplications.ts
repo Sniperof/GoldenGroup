@@ -2,6 +2,9 @@ import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
 import { validateStageTransition, isTerminalStatus, isTrainingManagedStage } from '../utils/stageEngine.js';
+import { checkVacancyCapacity, checkDuplicate } from '../utils/applicationHelpers.js';
+import { sanitizeText } from '../utils/sanitize.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -20,13 +23,15 @@ const APP_COLS = `
   ja.escalated_at AS "escalatedAt",
   ja.internal_notes AS "internalNotes",
   ja.created_at AS "createdAt",
-  ja.updated_at AS "updatedAt"
+  ja.updated_at AS "updatedAt",
+  ja.is_archived AS "isArchived",
+  ja.archived_at AS "archivedAt"
 `;
 
 // GET /api/admin/applications
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const { vacancyId, branch, gender, stage, status, search } = req.query;
+    const { vacancyId, branch, gender, stage, status, search, applicationSource, isArchived } = req.query;
     const conditions: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -36,6 +41,7 @@ router.get('/', async (req, res) => {
     if (gender) { conditions.push(`a.gender = $${idx++}`); params.push(gender); }
     if (stage) { conditions.push(`ja.current_stage = $${idx++}`); params.push(stage); }
     if (status) { conditions.push(`ja.application_status = $${idx++}`); params.push(status); }
+    if (applicationSource) { conditions.push(`ja.application_source = $${idx++}`); params.push(applicationSource); }
     if (search) {
       conditions.push(`(
         CAST(ja.id AS TEXT) LIKE $${idx}
@@ -45,6 +51,12 @@ router.get('/', async (req, res) => {
       )`);
       params.push(`%${search}%`);
       idx++;
+    }
+    // M4.2: archived filter — default to non-archived
+    if (isArchived === 'true') {
+      conditions.push(`ja.is_archived = TRUE`);
+    } else {
+      conditions.push(`(ja.is_archived = FALSE OR ja.is_archived IS NULL)`);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -70,8 +82,158 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/admin/applications — manual admin entry (Internal / External Platforms)
+router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const body = req.body;
+    const a = body.applicant || {};
+
+    if (!a.firstName?.trim()) return res.status(400).json({ error: 'الاسم الأول مطلوب' });
+    if (!a.lastName?.trim()) return res.status(400).json({ error: 'اسم العائلة مطلوب' });
+    if (!a.mobileNumber?.trim()) return res.status(400).json({ error: 'رقم الهاتف مطلوب' });
+    if (!/^\d{10,11}$/.test(a.mobileNumber)) return res.status(400).json({ error: 'رقم الهاتف يجب أن يكون 10-11 رقم' });
+    if (a.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email)) return res.status(400).json({ error: 'صيغة البريد الإلكتروني غير صحيحة' });
+    if (!a.dob) return res.status(400).json({ error: 'تاريخ الميلاد مطلوب' });
+    if (!a.gender) return res.status(400).json({ error: 'الجنس مطلوب' });
+    if (!a.maritalStatus) return res.status(400).json({ error: 'الحالة الاجتماعية مطلوبة' });
+    if (!a.governorate?.trim()) return res.status(400).json({ error: 'المحافظة مطلوبة' });
+    if (!body.jobVacancyId) return res.status(400).json({ error: 'معرّف الشاغر الوظيفي مطلوب' });
+
+    const submissionType = body.submissionType;
+    if (!['Apply', 'Refer a Candidate'].includes(submissionType)) {
+      return res.status(400).json({ error: 'نوع التقديم غير صالح' });
+    }
+    const applicationSource = body.applicationSource;
+    if (!['Internal', 'External Platforms'].includes(applicationSource)) {
+      return res.status(400).json({ error: 'مصدر الطلب يجب أن يكون Internal أو External Platforms' });
+    }
+    // enteredByUserId now comes from auth context
+    if (submissionType === 'Refer a Candidate' && !body.referrer?.fullName?.trim()) {
+      return res.status(400).json({ error: 'اسم المُعرّف مطلوب عند التقديم نيابة عن مرشح' });
+    }
+
+    await client.query('BEGIN');
+
+    // Vacancy: must be Open and within date range
+    const { rows: vacRows } = await client.query(
+      `SELECT id, status FROM job_vacancies
+       WHERE id = $1 AND status = 'Open' AND CURRENT_DATE BETWEEN start_date AND end_date`,
+      [body.jobVacancyId]
+    );
+    if (vacRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'الشاغر غير موجود أو غير مفتوح للتقديم أو خارج الفترة المحددة' });
+    }
+
+    // Duplicate check
+    const dupResult = await checkDuplicate(client, a.mobileNumber, body.jobVacancyId);
+    if (dupResult.blocked) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'يوجد طلب نشط بالفعل لهذا الرقم والشاغر الوظيفي',
+        duplicateApplicationId: dupResult.duplicateApplicationId,
+      });
+    }
+    const duplicateFlag = dupResult.duplicateFlag;
+
+    // Insert applicant
+    const { rows: applicantRows } = await client.query(
+      `INSERT INTO applicants (
+        first_name, last_name, dob, gender, marital_status, email,
+        mobile_number, secondary_mobile, governorate, city_or_area,
+        sub_area, neighborhood, detailed_address,
+        academic_qualification, previous_employment, driving_license,
+        expected_salary, computer_skills, foreign_languages,
+        years_of_experience, cv_url, photo_url, applicant_segment
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+      RETURNING id`,
+      [
+        a.firstName, a.lastName, a.dob, a.gender, a.maritalStatus, a.email || null,
+        a.mobileNumber, a.secondaryMobile || null,
+        a.governorate, a.cityOrArea || null, a.subArea || null, a.neighborhood || null, a.detailedAddress || null,
+        a.academicQualification || null, a.previousEmployment || null,
+        a.drivingLicense || null, a.expectedSalary ? parseInt(a.expectedSalary) : null,
+        a.computerSkills || null, a.foreignLanguages || null,
+        a.yearsOfExperience ? parseInt(a.yearsOfExperience) : null,
+        a.cvUrl || null, a.photoUrl || null, a.applicantSegment || null,
+      ]
+    );
+    const applicantId = applicantRows[0].id;
+    const enteredByUserId = req.user!.id;
+
+    // Insert referrer if 'Refer a Candidate'
+    let referrerId: number | null = null;
+    if (submissionType === 'Refer a Candidate' && body.referrer) {
+      const r = body.referrer;
+      const { rows: refRows } = await client.query(
+        `INSERT INTO referrers (
+          type, employee_id, full_name, last_name, mobile_number,
+          governorate, city_or_area, sub_area, neighborhood,
+          detailed_address, referrer_work, referrer_notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id`,
+        [
+          r.type || 'Customer', r.employeeId || null,
+          sanitizeText(r.fullName), r.lastName ? sanitizeText(r.lastName) : null, r.mobileNumber || null,
+          r.governorate ? sanitizeText(r.governorate) : null, r.cityOrArea ? sanitizeText(r.cityOrArea) : null,
+          r.subArea ? sanitizeText(r.subArea) : null, r.neighborhood ? sanitizeText(r.neighborhood) : null,
+          r.detailedAddress ? sanitizeText(r.detailedAddress) : null,
+          r.referrerWork ? sanitizeText(r.referrerWork) : null,
+          r.referrerNotes ? sanitizeText(r.referrerNotes) : null,
+        ]
+      );
+      referrerId = refRows[0].id;
+    }
+
+    // Insert application
+    const { rows: appRows } = await client.query(
+      `INSERT INTO job_applications (
+        job_vacancy_id, applicant_id, referrer_id, submission_type,
+        application_source, entered_by_user_id, entered_by_name,
+        current_stage, application_status, duplicate_flag
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'Submitted','New',$8)
+      RETURNING id, job_vacancy_id AS "jobVacancyId", applicant_id AS "applicantId",
+        referrer_id AS "referrerId", submission_type AS "submissionType",
+        application_source AS "applicationSource",
+        entered_by_user_id AS "enteredByUserId", entered_by_name AS "enteredByName",
+        current_stage AS "currentStage", application_status AS "applicationStatus",
+        duplicate_flag AS "duplicateFlag", created_at AS "createdAt"`,
+      [
+        body.jobVacancyId, applicantId, referrerId,
+        submissionType, applicationSource,
+        enteredByUserId, body.enteredByName || null,
+        duplicateFlag,
+      ]
+    );
+
+    await insertAuditLog(client, {
+      entityType: 'job_application',
+      entityId: appRows[0].id,
+      applicationId: appRows[0].id,
+      actionType: 'Application Submitted (Admin)',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+      newValue: JSON.stringify({
+        applicantId, referrerId,
+        jobVacancyId: body.jobVacancyId,
+        submissionType, applicationSource, duplicateFlag,
+      }),
+    });
+
+    await client.query('COMMIT');
+    res.status(201).json(appRows[0]);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error creating admin application:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // GET /api/admin/applications/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { rows: appRows } = await pool.query(
       `SELECT ${APP_COLS} FROM job_applications ja WHERE ja.id = $1`,
@@ -166,10 +328,10 @@ router.get('/:id', async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/stage
-router.patch('/:id/stage', async (req, res) => {
+router.patch('/:id/stage', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { stage, status, internalNotes, performedByRole, performedByUserId } = req.body;
+    const { stage, status, internalNotes } = req.body;
     const appId = req.params.id;
 
     const { rows: currentRows } = await client.query(
@@ -227,8 +389,8 @@ router.patch('/:id/stage', async (req, res) => {
       entityId: parseInt(appId),
       applicationId: parseInt(appId),
       actionType: 'Stage Transition',
-      performedByRole: performedByRole || 'HR_MANAGER',
-      performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       oldValue: JSON.stringify({ stage: current.current_stage, status: current.application_status }),
       newValue: JSON.stringify({ stage, status }),
       internalReason: internalNotes || null,
@@ -246,21 +408,19 @@ router.patch('/:id/stage', async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/hire — Final Hired (no override allowed)
-router.patch('/:id/hire', async (req, res) => {
+router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const appId = req.params.id;
-    const { performedByRole, performedByUserId } = req.body;
 
     await client.query('BEGIN');
 
     const { rows: appRows } = await client.query(
       `SELECT ja.id, ja.job_vacancy_id, ja.current_stage, ja.application_status,
-        jv.vacancy_count, jv.id AS vacancy_id
+        jv.id AS vacancy_id
       FROM job_applications ja
       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
-      WHERE ja.id = $1
-      FOR UPDATE`,
+      WHERE ja.id = $1`,
       [appId]
     );
     if (appRows.length === 0) {
@@ -277,12 +437,13 @@ router.patch('/:id/hire', async (req, res) => {
       });
     }
 
-    // Capacity check — no override allowed
-    if (app.vacancy_count <= 0) {
+    // Capacity check — no override allowed (FOR UPDATE lock is inside checkVacancyCapacity)
+    const capacity = await checkVacancyCapacity(client, app.vacancy_id);
+    if (!capacity.sufficient) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'لا توجد شواغر متبقية. لا يمكن التوظيف.',
-        vacancyCount: app.vacancy_count,
+        vacancyCount: capacity.vacancyCount,
       });
     }
 
@@ -309,8 +470,8 @@ router.patch('/:id/hire', async (req, res) => {
       entityId: parseInt(appId),
       applicationId: parseInt(appId),
       actionType: 'Final Hired',
-      performedByRole: performedByRole || 'HR_MANAGER',
-      performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       oldValue: JSON.stringify({ stage: app.current_stage, status: app.application_status }),
       newValue: JSON.stringify({
         stage: 'Final Decision', status: 'Final Hired',
@@ -336,11 +497,10 @@ router.patch('/:id/hire', async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/escalate
-router.patch('/:id/escalate', async (req, res) => {
+router.patch('/:id/escalate', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const appId = req.params.id;
-    const { performedByRole, performedByUserId } = req.body;
 
     await client.query('BEGIN');
 
@@ -363,8 +523,8 @@ router.patch('/:id/escalate', async (req, res) => {
       entityId: parseInt(appId),
       applicationId: parseInt(appId),
       actionType: 'Escalated',
-      performedByRole: performedByRole || 'HR_MANAGER',
-      performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
     });
 
     await client.query('COMMIT');
@@ -379,14 +539,14 @@ router.patch('/:id/escalate', async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/notes
-router.patch('/:id/notes', async (req, res) => {
+router.patch('/:id/notes', requireAuth, async (req, res) => {
   try {
     const { notes } = req.body;
     const { rows } = await pool.query(
       `UPDATE job_applications SET internal_notes = $1, updated_at = NOW()
        WHERE id = $2
        RETURNING id, internal_notes AS "internalNotes"`,
-      [notes || null, req.params.id]
+      [notes ? sanitizeText(notes) : null, req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
     res.json(rows[0]);
@@ -396,8 +556,70 @@ router.patch('/:id/notes', async (req, res) => {
   }
 });
 
+// PATCH /api/admin/applications/:id/archive
+router.patch('/:id/archive', requireRole('HR_MANAGER'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const appId = req.params.id;
+
+    const ARCHIVABLE_STATUSES = ['Final Hired', 'Final Rejected', 'Retreated'];
+
+    await client.query('BEGIN');
+
+    const { rows: current } = await client.query(
+      `SELECT id, application_status AS "applicationStatus", is_archived AS "isArchived"
+       FROM job_applications WHERE id = $1`,
+      [appId]
+    );
+    if (current.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+    if (!ARCHIVABLE_STATUSES.includes(current[0].applicationStatus)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `لا يمكن أرشفة الطلب إلا في الحالات النهائية: ${ARCHIVABLE_STATUSES.join(', ')}`,
+      });
+    }
+    if (current[0].isArchived) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'الطلب مؤرشف بالفعل' });
+    }
+
+    const { rows } = await client.query(
+      `UPDATE job_applications SET
+        is_archived = TRUE,
+        archived_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, is_archived AS "isArchived", archived_at AS "archivedAt"`,
+      [appId]
+    );
+
+    await insertAuditLog(client, {
+      entityType: 'job_application',
+      entityId: parseInt(appId),
+      applicationId: parseInt(appId),
+      actionType: 'Application Archived',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+      oldValue: JSON.stringify({ isArchived: false }),
+      newValue: JSON.stringify({ isArchived: true }),
+    });
+
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error archiving application:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // GET /api/admin/applications/:id/audit-logs
-router.get('/:id/audit-logs', async (req, res) => {
+router.get('/:id/audit-logs', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, entity_type AS "entityType", entity_id AS "entityId",

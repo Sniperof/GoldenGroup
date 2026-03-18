@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useInterviewStore } from '../../hooks/useInterviewStore';
+import { useVacancyStore } from '../../hooks/useVacancyStore';
 import {
   Users, Plus, Filter, Calendar, CheckCircle, XCircle, Clock,
   AlertTriangle, X, Search
@@ -38,7 +40,9 @@ const emptyForm: ScheduleForm = {
 };
 
 export default function Interviews() {
+  const navigate = useNavigate();
   const { interviews, filters, loading, fetchInterviews, setFilter, resetFilters, scheduleInterview, recordResult } = useInterviewStore();
+  const { vacancies, fetchVacancies } = useVacancyStore();
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [form, setForm] = useState<ScheduleForm>({ ...emptyForm });
   const [formError, setFormError] = useState('');
@@ -48,8 +52,12 @@ export default function Interviews() {
   const [resultStatus, setResultStatus] = useState<'Interview Completed' | 'Interview Failed'>('Interview Completed');
 
   useEffect(() => {
+    fetchVacancies();
+  }, []);
+
+  useEffect(() => {
     fetchInterviews();
-  }, [filters.applicationId, filters.vacancyId, filters.interviewerName, filters.date]);
+  }, [filters.applicationId, filters.jobVacancyId, filters.interviewerName, filters.date]);
 
   const handleSchedule = async () => {
     if (!form.applicationId.trim()) { setFormError('رقم الطلب مطلوب'); return; }
@@ -134,13 +142,23 @@ export default function Interviews() {
             className="bg-slate-50 border border-slate-200 rounded-lg pr-9 pl-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500 w-36"
           />
         </div>
+        <select
+          value={filters.jobVacancyId}
+          onChange={e => setFilter('jobVacancyId', e.target.value)}
+          className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500 w-48"
+        >
+          <option value="">كل الوظائف</option>
+          {vacancies.map(v => (
+            <option key={v.id} value={String(v.id)}>{v.title}</option>
+          ))}
+        </select>
         <input
           type="date"
           value={filters.date}
           onChange={e => setFilter('date', e.target.value)}
           className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500"
         />
-        {(filters.interviewerName || filters.applicationId || filters.date || filters.vacancyId) && (
+        {(filters.interviewerName || filters.applicationId || filters.date || filters.jobVacancyId) && (
           <button onClick={resetFilters} className="text-xs text-slate-500 hover:text-red-500 transition-colors">
             مسح الفلاتر
           </button>
@@ -177,7 +195,9 @@ export default function Interviews() {
               </thead>
               <tbody>
                 {interviews.map((iv, idx) => (
-                  <tr key={iv.id} className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                  <tr key={iv.id}
+                    className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
+                    onClick={() => navigate(`/jobs/interviews/${iv.id}`)}>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{iv.id}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">
                       {iv.applicantFirstName} {iv.applicantLastName}
@@ -206,7 +226,7 @@ export default function Interviews() {
                         {STATUS_LABELS[iv.interviewStatus] || iv.interviewStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       {iv.interviewStatus === 'Interview Scheduled' && (
                         <button
                           onClick={() => { setResultModal({ id: iv.id }); setResultNotes(''); setResultStatus('Interview Completed'); }}

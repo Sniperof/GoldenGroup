@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
+import { sanitizeText } from '../utils/sanitize.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -16,10 +18,10 @@ const INTERVIEW_COLS = `
   created_at AS "createdAt"
 `;
 
-// GET /api/admin/interviews?applicationId=&interviewerName=&date=&vacancyId=
-router.get('/', async (req, res) => {
+// GET /api/admin/interviews?applicationId=&interviewerName=&date=&jobVacancyId=
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const { applicationId, interviewerName, date, vacancyId } = req.query;
+    const { applicationId, interviewerName, date, jobVacancyId } = req.query;
     const conditions: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -27,7 +29,7 @@ router.get('/', async (req, res) => {
     if (applicationId) { conditions.push(`i.application_id = $${idx++}`); params.push(applicationId); }
     if (interviewerName) { conditions.push(`i.interviewer_name ILIKE $${idx++}`); params.push(`%${interviewerName}%`); }
     if (date) { conditions.push(`i.interview_date = $${idx++}`); params.push(date); }
-    if (vacancyId) { conditions.push(`ja.job_vacancy_id = $${idx++}`); params.push(vacancyId); }
+    if (jobVacancyId) { conditions.push(`ja.job_vacancy_id = $${idx++}`); params.push(jobVacancyId); }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
@@ -51,7 +53,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/admin/interviews — schedule an interview
-router.post('/', async (req, res) => {
+router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const b = req.body;
@@ -65,6 +67,30 @@ router.post('/', async (req, res) => {
 
     await client.query('BEGIN');
 
+    // M3.3: Prevent duplicate scheduled interview for the same application
+    const { rows: existingScheduled } = await client.query(
+      `SELECT id FROM interviews WHERE application_id = $1 AND interview_status = 'Interview Scheduled'`,
+      [b.applicationId]
+    );
+    if (existingScheduled.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'يوجد مقابلة مجدولة بالفعل لهذا الطلب' });
+    }
+
+    // M3.2: Interviewer conflict check — same interviewer + date + time already scheduled
+    const { rows: conflictRows } = await client.query(
+      `SELECT id FROM interviews
+       WHERE interviewer_name = $1
+         AND interview_date = $2
+         AND interview_time = $3
+         AND interview_status = 'Interview Scheduled'`,
+      [b.interviewerName, b.interviewDate, b.interviewTime]
+    );
+    if (conflictRows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'المقابِل لديه مقابلة أخرى في نفس التاريخ والوقت' });
+    }
+
     const { rows } = await client.query(
       `INSERT INTO interviews (
         application_id, interview_type, interview_number,
@@ -74,8 +100,8 @@ router.post('/', async (req, res) => {
       RETURNING ${INTERVIEW_COLS}`,
       [
         b.applicationId, b.interviewType, b.interviewNumber,
-        b.interviewerName, b.interviewDate, b.interviewTime,
-        b.internalNotes || null,
+        sanitizeText(b.interviewerName), b.interviewDate, b.interviewTime,
+        b.internalNotes ? sanitizeText(b.internalNotes) : null,
       ]
     );
 
@@ -84,8 +110,8 @@ router.post('/', async (req, res) => {
       entityId: rows[0].id,
       applicationId: b.applicationId,
       actionType: 'Interview Scheduled',
-      performedByRole: b.performedByRole || 'HR_MANAGER',
-      performedByUserId: b.performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       newValue: JSON.stringify({
         interviewType: b.interviewType,
         interviewNumber: b.interviewNumber,
@@ -105,11 +131,157 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/interviews/:id — update interview result
-router.patch('/:id', async (req, res) => {
+// GET /api/admin/interviews/:id
+router.get('/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${INTERVIEW_COLS},
+        a.first_name AS "applicantFirstName",
+        a.last_name AS "applicantLastName",
+        a.dob AS "applicantDob",
+        a.governorate AS "applicantGovernorate",
+        a.city_or_area AS "applicantCityOrArea",
+        a.academic_qualification AS "applicantAcademicQualification",
+        a.previous_employment AS "applicantPreviousEmployment",
+        a.driving_license AS "applicantDrivingLicense",
+        a.expected_salary AS "applicantExpectedSalary",
+        a.foreign_languages AS "applicantForeignLanguages",
+        a.computer_skills AS "applicantComputerSkills",
+        a.years_of_experience AS "applicantYearsOfExperience",
+        jv.id AS "vacancyId",
+        jv.title AS "vacancyTitle",
+        jv.branch AS "vacancyBranch"
+      FROM interviews i
+      JOIN job_applications ja ON ja.id = i.application_id
+      JOIN applicants a ON a.id = ja.applicant_id
+      JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
+      WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'المقابلة غير موجودة' });
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      applicationId: row.applicationId,
+      interviewType: row.interviewType,
+      interviewNumber: row.interviewNumber,
+      interviewerName: row.interviewerName,
+      interviewDate: row.interviewDate,
+      interviewTime: row.interviewTime,
+      interviewStatus: row.interviewStatus,
+      internalNotes: row.internalNotes,
+      createdAt: row.createdAt,
+      applicant: {
+        firstName: row.applicantFirstName,
+        lastName: row.applicantLastName,
+        dob: row.applicantDob,
+        governorate: row.applicantGovernorate,
+        cityOrArea: row.applicantCityOrArea,
+        academicQualification: row.applicantAcademicQualification,
+        previousEmployment: row.applicantPreviousEmployment,
+        drivingLicense: row.applicantDrivingLicense,
+        expectedSalary: row.applicantExpectedSalary,
+        foreignLanguages: row.applicantForeignLanguages,
+        computerSkills: row.applicantComputerSkills,
+        yearsOfExperience: row.applicantYearsOfExperience,
+      },
+      vacancy: {
+        id: row.vacancyId,
+        title: row.vacancyTitle,
+        branch: row.vacancyBranch,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error fetching interview:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/interviews/:id — edit a scheduled interview
+router.put('/:id', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { interviewStatus, internalNotes, performedByRole, performedByUserId } = req.body;
+    const b = req.body;
+    const interviewId = req.params.id;
+
+    await client.query('BEGIN');
+
+    const { rows: current } = await client.query(
+      'SELECT interview_status, application_id FROM interviews WHERE id = $1',
+      [interviewId]
+    );
+    if (current.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'المقابلة غير موجودة' });
+    }
+    if (current[0].interview_status !== 'Interview Scheduled') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'لا يمكن تعديل مقابلة مكتملة أو فاشلة' });
+    }
+
+    if (b.interviewDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (new Date(b.interviewDate) < today) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'لا يمكن تعيين تاريخ مقابلة في الماضي' });
+      }
+    }
+
+    const { rows } = await client.query(
+      `UPDATE interviews SET
+        interview_date = COALESCE($1, interview_date),
+        interview_time = COALESCE($2, interview_time),
+        interviewer_name = COALESCE($3, interviewer_name),
+        interview_type = COALESCE($4, interview_type),
+        interview_number = COALESCE($5, interview_number),
+        internal_notes = COALESCE($6, internal_notes)
+      WHERE id = $7
+      RETURNING ${INTERVIEW_COLS}`,
+      [
+        b.interviewDate || null,
+        b.interviewTime || null,
+        b.interviewerName ? sanitizeText(b.interviewerName) : null,
+        b.interviewType || null,
+        b.interviewNumber || null,
+        b.internalNotes !== undefined ? (b.internalNotes ? sanitizeText(b.internalNotes) : null) : null,
+        interviewId,
+      ]
+    );
+
+    await insertAuditLog(client, {
+      entityType: 'interview',
+      entityId: parseInt(interviewId),
+      applicationId: current[0].application_id,
+      actionType: 'Interview Updated',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+      newValue: JSON.stringify({
+        interviewDate: b.interviewDate,
+        interviewTime: b.interviewTime,
+        interviewerName: b.interviewerName,
+        interviewType: b.interviewType,
+        interviewNumber: b.interviewNumber,
+      }),
+    });
+
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error updating interview:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /api/admin/interviews/:id/result — update interview result
+router.patch('/:id/result', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { interviewStatus, internalNotes } = req.body;
 
     if (!['Interview Completed', 'Interview Failed'].includes(interviewStatus)) {
       return res.status(400).json({ error: 'حالة المقابلة غير صالحة' });
@@ -136,7 +308,7 @@ router.patch('/:id', async (req, res) => {
         internal_notes = COALESCE($2, internal_notes)
       WHERE id = $3
       RETURNING ${INTERVIEW_COLS}`,
-      [interviewStatus, internalNotes || null, req.params.id]
+      [interviewStatus, internalNotes ? sanitizeText(internalNotes) : null, req.params.id]
     );
 
     await insertAuditLog(client, {
@@ -144,8 +316,8 @@ router.patch('/:id', async (req, res) => {
       entityId: parseInt(req.params.id),
       applicationId: current[0].application_id,
       actionType: 'Interview Result Recorded',
-      performedByRole: performedByRole || 'HR_MANAGER',
-      performedByUserId: performedByUserId || null,
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
       oldValue: current[0].interview_status,
       newValue: interviewStatus,
       internalReason: internalNotes || null,

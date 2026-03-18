@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
+import { checkDuplicate } from '../utils/applicationHelpers.js';
+import { sanitizeText } from '../utils/sanitize.js';
 
 const router = Router();
 
@@ -52,31 +54,15 @@ router.post('/', async (req, res) => {
     }
 
     // Duplicate check: active application for same mobile + same vacancy
-    const FINAL_STATUSES = ['Final Hired', 'Final Rejected', 'Retreated', 'Rejected', 'Interview Failed'];
-    const { rows: activeApps } = await client.query(
-      `SELECT ja.id FROM job_applications ja
-       JOIN applicants ap ON ap.id = ja.applicant_id
-       WHERE ap.mobile_number = $1 AND ja.job_vacancy_id = $2
-         AND ja.application_status NOT IN (${FINAL_STATUSES.map((_, i) => `$${i + 3}`).join(',')})`,
-      [a.mobileNumber, body.jobVacancyId, ...FINAL_STATUSES]
-    );
-    if (activeApps.length > 0) {
+    const dupResult = await checkDuplicate(client, a.mobileNumber, body.jobVacancyId);
+    if (dupResult.blocked) {
       await client.query('ROLLBACK');
       return res.status(409).json({
         error: 'يوجد طلب نشط بالفعل لهذا الرقم والشاغر الوظيفي',
-        duplicateApplicationId: activeApps[0].id,
+        duplicateApplicationId: dupResult.duplicateApplicationId,
       });
     }
-
-    // Check for historical duplicates (flag only)
-    const { rows: histApps } = await client.query(
-      `SELECT ja.id FROM job_applications ja
-       JOIN applicants ap ON ap.id = ja.applicant_id
-       WHERE ap.mobile_number = $1 AND ja.job_vacancy_id = $2
-         AND ja.application_status IN (${FINAL_STATUSES.map((_, i) => `$${i + 3}`).join(',')})`,
-      [a.mobileNumber, body.jobVacancyId, ...FINAL_STATUSES]
-    );
-    const duplicateFlag = histApps.length > 0;
+    const duplicateFlag = dupResult.duplicateFlag;
 
     // Insert applicant
     const { rows: applicantRows } = await client.query(
@@ -115,10 +101,12 @@ router.post('/', async (req, res) => {
         RETURNING id`,
         [
           r.type || 'Customer', r.employeeId || null,
-          r.fullName, r.lastName || null, r.mobileNumber || null,
-          r.governorate || null, r.cityOrArea || null,
-          r.subArea || null, r.neighborhood || null,
-          r.detailedAddress || null, r.referrerWork || null, r.referrerNotes || null,
+          sanitizeText(r.fullName), r.lastName ? sanitizeText(r.lastName) : null, r.mobileNumber || null,
+          r.governorate ? sanitizeText(r.governorate) : null, r.cityOrArea ? sanitizeText(r.cityOrArea) : null,
+          r.subArea ? sanitizeText(r.subArea) : null, r.neighborhood ? sanitizeText(r.neighborhood) : null,
+          r.detailedAddress ? sanitizeText(r.detailedAddress) : null,
+          r.referrerWork ? sanitizeText(r.referrerWork) : null,
+          r.referrerNotes ? sanitizeText(r.referrerNotes) : null,
         ]
       );
       referrerId = refRows[0].id;
