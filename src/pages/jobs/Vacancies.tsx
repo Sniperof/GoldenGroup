@@ -7,6 +7,10 @@ import {
   MapPin, GraduationCap, Users, ChevronDown, X, RotateCcw, Lock, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useBranchStore } from '../../hooks/useBranchStore';
+import GeoSmartSearch, { GeoSelection, getLevelName } from '../../components/GeoSmartSearch';
+import { api } from '../../lib/api';
+import type { GeoUnit } from '../../lib/types';
 
 const STATUS_COLORS: Record<VacancyStatus, string> = {
   Open: 'bg-emerald-100 text-emerald-700',
@@ -16,8 +20,6 @@ const STATUS_COLORS: Record<VacancyStatus, string> = {
 const STATUS_LABELS: Record<VacancyStatus, string> = {
   Open: 'مفتوحة', Closed: 'مغلقة', Archived: 'مؤرشفة',
 };
-const BRANCHES = ['بغداد', 'البصرة', 'أربيل', 'الموصل', 'النجف', 'كربلاء'];
-
 const emptyVacancy: Partial<JobVacancy> = {
   title: '', branch: '', governorate: null, cityOrArea: null, subArea: null,
   neighborhood: null, detailedAddress: null, workType: null, requiredGender: null,
@@ -42,13 +44,24 @@ export default function Vacancies() {
   const [formData, setFormData] = useState<Partial<JobVacancy>>({ ...emptyVacancy });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const { branches, fetchBranches } = useBranchStore();
+  const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+  
+  const [geoSelection, setGeoSelection] = useState<GeoSelection>({
+    govId: '', regionId: '', subId: '', neighborhoodId: ''
+  });
 
-  useEffect(() => { fetchVacancies(); }, [filters.status, filters.branch, filters.search]);
+  useEffect(() => { 
+    fetchVacancies(); 
+    fetchBranches();
+    api.geoUnits.list().then(setGeoUnits).catch(console.error);
+  }, [filters.status, filters.branch, filters.search]);
 
   const openCreate = () => {
     setEditingVacancy(null);
     setEditTier(1);
     setFormData({ ...emptyVacancy });
+    setGeoSelection({ govId: '', regionId: '', subId: '', neighborhoodId: '' });
     setFormError('');
     setShowModal(true);
   };
@@ -57,6 +70,16 @@ export default function Vacancies() {
     setEditingVacancy(v);
     setEditTier(1); // will be updated on save response
     setFormData({ ...v });
+    
+    // Attempt to map strings back to IDs if they match names. But typically we just reset.
+    // For a robust approach, we need reverse lookups or just keep geo IDs. 
+    // Given the DB uses strings, we just try to find them or leave blank to require re-selection if they want to change.
+    const govId = geoUnits.find(u => u.name === v.governorate && u.level === 1)?.id.toString() || '';
+    const regionId = geoUnits.find(u => u.name === v.cityOrArea && u.level === 2)?.id.toString() || '';
+    const subId = geoUnits.find(u => u.name === v.subArea && u.level === 3)?.id.toString() || '';
+    const neighborhoodId = geoUnits.find(u => u.name === v.neighborhood && u.level === 4)?.id.toString() || '';
+    
+    setGeoSelection({ govId, regionId, subId, neighborhoodId });
     setFormError('');
     setShowModal(true);
   };
@@ -70,13 +93,26 @@ export default function Vacancies() {
     if (!formData.endDate) { setFormError('تاريخ النهاية مطلوب'); return; }
     if (formData.startDate > formData.endDate) { setFormError('تاريخ البداية يجب أن يكون قبل تاريخ النهاية'); return; }
 
+    const govName = getLevelName(geoUnits, geoSelection.govId);
+    const regionName = getLevelName(geoUnits, geoSelection.regionId);
+    const subName = getLevelName(geoUnits, geoSelection.subId);
+    const neiName = getLevelName(geoUnits, geoSelection.neighborhoodId);
+    
+    const finalData = {
+      ...formData,
+      governorate: govName || formData.governorate,
+      cityOrArea: regionName || formData.cityOrArea,
+      subArea: subName || formData.subArea,
+      neighborhood: neiName || formData.neighborhood
+    };
+
     setSaving(true);
     try {
       if (editingVacancy) {
-        const result = await updateVacancy(editingVacancy.id, formData);
+        const result = await updateVacancy(editingVacancy.id, finalData);
         setEditTier(result.editTier as 1 | 2 | 3);
       } else {
-        await createVacancy(formData);
+        await createVacancy(finalData);
       }
       setShowModal(false);
       fetchVacancies();
@@ -146,7 +182,7 @@ export default function Vacancies() {
           <select value={filters.branch} onChange={e => setFilter('branch', e.target.value)}
             className="appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-8 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
             <option value="">كل الفروع</option>
-            {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+            {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
           </select>
           <ChevronDown className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
@@ -225,6 +261,9 @@ export default function Vacancies() {
                     </td>
                     <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => navigate(`/jobs/vacancies/${v.id}`)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="عرض التفاصيل">
+                          <Eye className="w-4 h-4" />
+                        </button>
                         {v.status !== 'Archived' && (
                           <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="تعديل">
                             <Edit className="w-4 h-4" />
@@ -305,7 +344,7 @@ export default function Vacancies() {
                         disabled={isFieldLocked('full')}
                         className={inputCls(isFieldLocked('full'))}>
                         <option value="">اختر الفرع</option>
-                        {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                        {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                       </select>
                     </div>
                     <div>
@@ -326,25 +365,15 @@ export default function Vacancies() {
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-600 border-b border-slate-100 pb-2">الموقع</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">المحافظة</label>
-                      <input value={formData.governorate || ''} onChange={e => setField('governorate', e.target.value || null)}
-                        disabled={isFieldLocked('full')} className={inputCls(isFieldLocked('full'))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">المدينة / المنطقة</label>
-                      <input value={formData.cityOrArea || ''} onChange={e => setField('cityOrArea', e.target.value || null)}
-                        disabled={isFieldLocked('full')} className={inputCls(isFieldLocked('full'))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">المنطقة الفرعية</label>
-                      <input value={formData.subArea || ''} onChange={e => setField('subArea', e.target.value || null)}
-                        disabled={isFieldLocked('full')} className={inputCls(isFieldLocked('full'))} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">الحي</label>
-                      <input value={formData.neighborhood || ''} onChange={e => setField('neighborhood', e.target.value || null)}
-                        disabled={isFieldLocked('full')} className={inputCls(isFieldLocked('full'))} />
+                    <div className="col-span-2">
+                       <GeoSmartSearch 
+                         label="الموقع الجغرافي"
+                         geoUnits={geoUnits}
+                         value={geoSelection}
+                         onChange={setGeoSelection}
+                         placeholder="اختر موقع الشاغر الجغرافي..."
+                         disabled={isFieldLocked('full')}
+                       />
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-slate-600 mb-1">العنوان التفصيلي</label>

@@ -206,6 +206,15 @@ export async function createSchema() {
       routes JSONB DEFAULT '[]',
       extra_zones JSONB DEFAULT '[]'
     );
+
+    CREATE TABLE IF NOT EXISTS branches (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      location_geo_id INTEGER REFERENCES geo_units(id),
+      covered_geo_ids JSONB DEFAULT '[]',
+      status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   await migrateJobTables();

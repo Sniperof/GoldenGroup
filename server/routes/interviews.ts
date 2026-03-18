@@ -252,7 +252,7 @@ router.put('/:id', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) =
 
     await insertAuditLog(client, {
       entityType: 'interview',
-      entityId: parseInt(interviewId),
+      entityId: parseInt(interviewId as string),
       applicationId: current[0].application_id,
       actionType: 'Interview Updated',
       performedByRole: req.user!.role,
@@ -313,7 +313,7 @@ router.patch('/:id/result', requireAuth, async (req, res) => {
 
     await insertAuditLog(client, {
       entityType: 'interview',
-      entityId: parseInt(req.params.id),
+      entityId: parseInt(req.params.id as string),
       applicationId: current[0].application_id,
       actionType: 'Interview Result Recorded',
       performedByRole: req.user!.role,

@@ -276,7 +276,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 router.patch('/:id/start', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const courseId = req.params.id;
+    const courseId = req.params.id as string;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });
@@ -331,7 +331,7 @@ router.post('/:id/attendance', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { attendance, attendance_date } = req.body;
-    const courseId = req.params.id;
+    const courseId = req.params.id as string;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });
@@ -404,7 +404,7 @@ router.post('/:id/attendance', requireRole('HR_MANAGER'), async (req, res) => {
 router.patch('/:id/complete', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const courseId = req.params.id;
+    const courseId = req.params.id as string;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });
@@ -481,8 +481,8 @@ router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), a
   const client = await pool.connect();
   try {
     const { result } = req.body;
-    const courseId = req.params.id;
-    const appId = parseInt(req.params.applicationId);
+    const courseId = req.params.id as string;
+    const appId = parseInt(req.params.applicationId as string);
 
     if (!['Passed', 'Retraining', 'Rejected', 'Retreated'].includes(result))
       return res.status(400).json({ error: 'نتيجة غير صالحة' });
@@ -558,7 +558,7 @@ router.post('/:id/trainees', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { application_ids } = req.body;
-    const courseId = req.params.id;
+    const courseId = req.params.id as string;
 
     const { rows: courseRows } = await client.query(`SELECT * FROM training_courses WHERE id = $1`, [courseId]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });

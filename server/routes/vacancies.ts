@@ -50,6 +50,21 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/admin/vacancies/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ${VACANCY_COLS} FROM job_vacancies WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'الشاغر غير موجود' });
+    res.json(rows[0]);
+  } catch (err: any) {
+    console.error('Error fetching vacancy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/vacancies
 router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
@@ -233,7 +248,7 @@ router.put('/:id', requireRole('HR_MANAGER'), async (req, res) => {
 
     await insertAuditLog(client, {
       entityType: 'job_vacancy',
-      entityId: parseInt(vacancyId),
+      entityId: parseInt(vacancyId as string),
       actionType: 'Job Vacancy Updated',
       performedByRole: req.user!.role,
       performedByUserId: req.user!.id,
@@ -291,7 +306,7 @@ router.patch('/:id/status', requireRole('HR_MANAGER'), async (req, res) => {
 
     await insertAuditLog(client, {
       entityType: 'job_vacancy',
-      entityId: parseInt(req.params.id),
+      entityId: parseInt(req.params.id as string),
       actionType: 'Vacancy Status Changed',
       performedByRole: req.user!.role,
       performedByUserId: req.user!.id,

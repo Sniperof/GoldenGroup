@@ -10,7 +10,7 @@ import {
     ClipboardList, UsersRound, MapPinned, ChevronDown, Gem, Eye,
     Briefcase, Calendar, AlertTriangle, DollarSign, RefreshCw, RotateCcw, PhoneCall,
     FileText, FilePlus2, Headset, Settings, UserPlus, Menu, X as CloseIcon,
-    ChevronLeft, ChevronRight, Target, BadgeCheck, GraduationCap, Mic2, LogOut
+    ChevronLeft, ChevronRight, Target, BadgeCheck, GraduationCap, Mic2, LogOut, Building2
 } from 'lucide-react';
 
 const navItems = [
@@ -435,7 +435,22 @@ export default function MainLayout() {
                         </AnimatePresence>
                     </div>
 
-                    {/* 8. System Settings (At Bottom) */}
+                    {/* 8. Branches */}
+                    <NavLink
+                        to="/branches"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={({ isActive }: { isActive: boolean }) =>
+                            `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-right ${isActive
+                                ? 'bg-sky-50 text-sky-600 border-r-4 border-sky-500 font-bold'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            } ${isCollapsed ? 'lg:justify-center lg:px-0 lg:border-r-0' : ''}`
+                        }
+                    >
+                        <Building2 className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
+                        <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة الفروع</span>
+                    </NavLink>
+
+                    {/* 9. System Settings (At Bottom) */}
                     <NavLink
                         to="/settings"
                         onClick={() => setIsMobileMenuOpen(false)}

@@ -135,7 +135,7 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
         duplicateApplicationId: dupResult.duplicateApplicationId,
       });
     }
-    const duplicateFlag = dupResult.duplicateFlag;
+    const duplicateFlag = 'duplicateFlag' in dupResult ? dupResult.duplicateFlag : undefined;
 
     // Insert applicant
     const { rows: applicantRows } = await client.query(
@@ -332,7 +332,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const { stage, status, internalNotes } = req.body;
-    const appId = req.params.id;
+    const appId = req.params.id as string;
 
     const { rows: currentRows } = await client.query(
       `SELECT ja.current_stage, ja.application_status,
@@ -411,7 +411,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
 router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const appId = req.params.id;
+    const appId = req.params.id as string;
 
     await client.query('BEGIN');
 
@@ -500,7 +500,7 @@ router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
 router.patch('/:id/escalate', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const appId = req.params.id;
+    const appId = req.params.id as string;
 
     await client.query('BEGIN');
 
@@ -560,7 +560,7 @@ router.patch('/:id/notes', requireAuth, async (req, res) => {
 router.patch('/:id/archive', requireRole('HR_MANAGER'), async (req, res) => {
   const client = await pool.connect();
   try {
-    const appId = req.params.id;
+    const appId = req.params.id as string;
 
     const ARCHIVABLE_STATUSES = ['Final Hired', 'Final Rejected', 'Retreated'];
 

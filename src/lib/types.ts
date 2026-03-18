@@ -85,7 +85,17 @@ export interface Employee {
     role: 'supervisor' | 'technician' | 'telemarketer';
     mobile: string;
     status: 'active' | 'leave' | 'inactive';
-    avatar: string;
+    avatar?: string;
+}
+
+export interface Branch {
+    id: number;
+    name: string;
+    locationGeoId?: number | null;
+    locationGeoName?: string;
+    coveredGeoIds: number[];
+    status: 'active' | 'inactive';
+    createdAt: string;
 }
 
 export type ContactType = 'mobile' | 'landline' | 'other';

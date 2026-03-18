@@ -26,6 +26,13 @@ interface GeoSmartSearchProps {
     label?: string;
     required?: boolean;
     placeholder?: string;
+    disabled?: boolean;
+}
+
+export function getLevelName(geoUnits: GeoUnit[], idStr: string | undefined): string | null {
+    if (!idStr) return null;
+    const unit = geoUnits.find(u => u.id.toString() === idStr);
+    return unit ? unit.name : null;
 }
 
 interface GeoSuggestion {
@@ -82,7 +89,7 @@ function formatShort(path: GeoUnit[]): { gov: string; detail: string } {
 /*  GeoSmartSearch Component                                            */
 /* ------------------------------------------------------------------ */
 
-export default function GeoSmartSearch({ geoUnits, value, onChange, label, required, placeholder }: GeoSmartSearchProps) {
+export default function GeoSmartSearch({ geoUnits, value, onChange, label, required, placeholder, disabled }: GeoSmartSearchProps) {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -174,12 +181,12 @@ export default function GeoSmartSearch({ geoUnits, value, onChange, label, requi
                 </label>
             )}
 
-            <div className="relative">
+            <div className={`relative ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
                 {/* Selected State */}
                 {selectedPath && !isOpen ? (
                     <div
-                        onClick={() => setIsOpen(true)}
-                        className="flex items-center gap-2 w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer hover:border-sky-300 transition-all group"
+                        onClick={() => !disabled && setIsOpen(true)}
+                        className={`flex items-center gap-2 w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 ${disabled ? 'cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-sky-300'} transition-all group`}
                     >
                         <MapPin className="w-4 h-4 text-sky-500 shrink-0" />
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 shrink-0">
@@ -188,13 +195,15 @@ export default function GeoSmartSearch({ geoUnits, value, onChange, label, requi
                         <span className="text-sm text-slate-700 font-medium truncate flex-1">
                             {short!.detail}
                         </span>
-                        <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); handleClear(); }}
-                            className="w-6 h-6 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
+                        {!disabled && (
+                            <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); handleClear(); }}
+                                className="w-6 h-6 rounded-md flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
                 ) : (
                     /* Search Input */
@@ -204,10 +213,11 @@ export default function GeoSmartSearch({ geoUnits, value, onChange, label, requi
                             ref={inputRef}
                             type="text"
                             value={search}
+                            disabled={disabled}
                             onChange={e => { setSearch(e.target.value); setIsOpen(true); }}
                             onFocus={() => setIsOpen(true)}
                             placeholder={placeholder || 'ابحث عن محافظة، منطقة، حي...'}
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-10 text-sm placeholder:text-gray-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 focus:outline-none transition-all"
+                            className={`w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-10 text-sm placeholder:text-gray-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 focus:outline-none transition-all ${disabled ? 'cursor-not-allowed bg-gray-50' : ''}`}
                         />
                     </div>
                 )}

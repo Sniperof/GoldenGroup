@@ -386,7 +386,7 @@ export default function PublicJobs() {
 
               {/* Server Error / Duplicate / Network banners */}
               <AnimatePresence>
-                {submitResult && submitResult.type !== 'success' && (
+                {submitResult && (
                   <motion.div
                     id="submit-result"
                     initial={{ opacity: 0, y: -8 }}

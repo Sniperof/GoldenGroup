@@ -21,6 +21,12 @@ export const api = {
     create: (data: any) => request<any>('/geo-units', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number) => request<any>(`/geo-units/${id}`, { method: 'DELETE' }),
   },
+  branches: {
+    list: () => request<any[]>('/branches'),
+    create: (data: any) => request<any>('/branches', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request<any>(`/branches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request<any>(`/branches/${id}`, { method: 'DELETE' }),
+  },
   employees: {
     list: () => request<any[]>('/employees'),
     create: (data: any) => request<any>('/employees', { method: 'POST', body: JSON.stringify(data) }),

@@ -7,6 +7,7 @@ import { createSchema, seedData } from './schema.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import geoUnitsRouter from './routes/geoUnits.js';
+import branchesRouter from './routes/branches.js';
 import employeesRouter from './routes/employees.js';
 import clientsRouter from './routes/clients.js';
 import candidatesRouter from './routes/candidates.js';
@@ -39,6 +40,7 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/geo-units', geoUnitsRouter);
+app.use('/api/branches', branchesRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/candidates', candidatesRouter);

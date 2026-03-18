@@ -6,6 +6,7 @@ await start();
 const vite = spawn('npx', ['vite'], {
   stdio: 'inherit',
   env: process.env,
+  shell: true,
 });
 
 process.on('SIGTERM', () => {

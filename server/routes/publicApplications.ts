@@ -62,7 +62,7 @@ router.post('/', async (req, res) => {
         duplicateApplicationId: dupResult.duplicateApplicationId,
       });
     }
-    const duplicateFlag = dupResult.duplicateFlag;
+    const duplicateFlag = 'duplicateFlag' in dupResult ? dupResult.duplicateFlag : undefined;
 
     // Insert applicant
     const { rows: applicantRows } = await client.query(

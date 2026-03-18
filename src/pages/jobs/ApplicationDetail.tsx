@@ -300,7 +300,7 @@ export default function ApplicationDetail() {
                 <InfoRow label="جهة العمل السابقة" value={detail.applicant?.previousEmployment || '—'} />
                 <InfoRow label="مهارات الحاسب" value={detail.applicant?.computerSkills || '—'} icon={<Monitor className="w-3.5 h-3.5" />} />
                 <InfoRow label="اللغات الأجنبية" value={detail.applicant?.foreignLanguages || '—'} icon={<Globe className="w-3.5 h-3.5" />} />
-                <InfoRow label="رخصة القيادة" value={detail.applicant?.drivingLicense || '—'} icon={<Car className="w-3.5 h-3.5" />} />
+                <InfoRow label="رخصة القيادة" value={typeof detail.applicant?.drivingLicense === 'boolean' ? (detail.applicant.drivingLicense ? 'نعم' : 'لا') : String(detail.applicant?.drivingLicense || '—')} icon={<Car className="w-3.5 h-3.5" />} />
                 <InfoRow label="الراتب المتوقع" value={detail.applicant?.expectedSalary ? `${detail.applicant.expectedSalary} د.ع` : '—'} icon={<DollarSign className="w-3.5 h-3.5" />} />
                 <InfoRow label="المحافظة" value={detail.applicant?.governorate || '—'} />
                 <InfoRow label="المدينة / المنطقة" value={detail.applicant?.cityOrArea || '—'} />
