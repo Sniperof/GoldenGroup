@@ -336,6 +336,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
 
     const { rows: currentRows } = await client.query(
       `SELECT ja.current_stage, ja.application_status,
+        ja.is_escalated,
         jv.max_retraining_count
        FROM job_applications ja
        JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -344,6 +345,13 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
     );
     if (currentRows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
     const current = currentRows[0];
+
+    // Block: escalated applications are frozen
+    if (current.is_escalated) {
+      return res.status(409).json({
+        error: 'لا يمكن تغيير المرحلة: الطلب مُصعَّد. يجب حل التصعيد أولاً.',
+      });
+    }
 
     // Block: Training stage transitions go exclusively through the training module
     if (isTrainingManagedStage(current.current_stage)) {
@@ -417,6 +425,7 @@ router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
 
     const { rows: appRows } = await client.query(
       `SELECT ja.id, ja.job_vacancy_id, ja.current_stage, ja.application_status,
+        ja.is_escalated,
         jv.id AS vacancy_id
       FROM job_applications ja
       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -428,6 +437,14 @@ router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
       return res.status(404).json({ error: 'الطلب غير موجود' });
     }
     const app = appRows[0];
+
+    // Block: escalated applications are frozen
+    if (app.is_escalated) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'لا يمكن تنفيذ التوظيف: الطلب مُصعَّد. يجب حل التصعيد أولاً.',
+      });
+    }
 
     // Must be at Final Decision with Passed status
     if (app.current_stage !== 'Final Decision' || app.application_status !== 'Passed') {
@@ -532,6 +549,48 @@ router.patch('/:id/escalate', requireRole('HR_MANAGER'), async (req, res) => {
   } catch (err: any) {
     await client.query('ROLLBACK');
     console.error('Error escalating application:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /api/admin/applications/:id/resolve-escalation
+router.patch('/:id/resolve-escalation', requireRole('HR_MANAGER'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const appId = req.params.id;
+
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE job_applications SET
+        is_escalated = FALSE,
+        escalated_at = NULL,
+        updated_at = NOW()
+      WHERE id = $1 AND is_escalated = TRUE
+      RETURNING id, is_escalated AS "isEscalated", escalated_at AS "escalatedAt"`,
+      [appId]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'الطلب غير موجود أو غير مُصعَّد' });
+    }
+
+    await insertAuditLog(client, {
+      entityType: 'job_application',
+      entityId: parseInt(appId),
+      applicationId: parseInt(appId),
+      actionType: 'Escalation Resolved',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+    });
+
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error resolving escalation:', err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();

@@ -9,8 +9,6 @@ export const STAGE_ORDER = [
 export type ApplicationStage = typeof STAGE_ORDER[number];
 
 export const TERMINAL_STATUSES = [
-  'Rejected',
-  'Interview Failed',
   'Final Hired',
   'Final Rejected',
   'Retreated',
@@ -40,6 +38,12 @@ const VALID_TRANSITIONS = new Set([
   // Training stage transitions are managed exclusively by the training module endpoints.
   // They are intentionally excluded here so the generic stage transition endpoint
   // cannot modify applications in the Training stage.
+
+  // Rejected intermediate → Final Decision
+  'Shortlisted:Rejected:Final Decision:Final Rejected',
+  'Interview:Interview Failed:Final Decision:Final Rejected',
+  'Interview:Rejected:Final Decision:Final Rejected',
+  'Training:Rejected:Final Decision:Final Rejected',
 
   // Final Decision stage
   'Final Decision:Passed:Final Decision:Final Rejected',
