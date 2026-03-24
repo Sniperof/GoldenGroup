@@ -18,6 +18,36 @@ const INTERVIEW_COLS = `
   created_at AS "createdAt"
 `;
 
+// GET /api/admin/interviews/eligible/:jobVacancyId
+router.get('/eligible/:jobVacancyId', requireAuth, async (req, res) => {
+  try {
+    const { jobVacancyId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT ja.id,
+         a.first_name AS "applicantFirstName",
+         a.last_name AS "applicantLastName",
+         ja.current_stage AS "currentStage",
+         ja.application_status AS "applicationStatus"
+       FROM job_applications ja
+       JOIN applicants a ON a.id = ja.applicant_id
+       WHERE ja.job_vacancy_id = $1
+         AND (
+           (ja.current_stage = 'Shortlisted' AND ja.application_status = 'Qualified') OR
+           (ja.current_stage = 'Interview' AND ja.application_status = 'Interview Completed')
+         )
+         AND ja.id NOT IN (
+           SELECT application_id FROM interviews WHERE interview_status = 'Interview Scheduled'
+         )
+       ORDER BY a.last_name, a.first_name`,
+      [jobVacancyId]
+    );
+    res.json(rows);
+  } catch (err: any) {
+    console.error('Error fetching eligible for interview:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/interviews?applicationId=&interviewerName=&date=&jobVacancyId=
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -103,6 +133,14 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
         sanitizeText(b.interviewerName), b.interviewDate, b.interviewTime,
         b.internalNotes ? sanitizeText(b.internalNotes) : null,
       ]
+    );
+
+    // Auto-update application status to Interview Scheduled
+    await client.query(
+      `UPDATE job_applications 
+       SET current_stage = 'Interview', application_status = 'Interview Scheduled', updated_at = NOW() 
+       WHERE id = $1`,
+      [b.applicationId]
     );
 
     await insertAuditLog(client, {
@@ -309,6 +347,14 @@ router.patch('/:id/result', requireAuth, async (req, res) => {
       WHERE id = $3
       RETURNING ${INTERVIEW_COLS}`,
       [interviewStatus, internalNotes ? sanitizeText(internalNotes) : null, req.params.id]
+    );
+
+    // Auto-update application status to match interview outcome
+    await client.query(
+      `UPDATE job_applications 
+       SET current_stage = 'Interview', application_status = $1, updated_at = NOW() 
+       WHERE id = $2`,
+      [interviewStatus, current[0].application_id]
     );
 
     await insertAuditLog(client, {
