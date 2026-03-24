@@ -215,6 +215,18 @@ export async function createSchema() {
       status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS system_lists (
+      id SERIAL PRIMARY KEY,
+      category VARCHAR(100) NOT NULL,
+      value VARCHAR(255) NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      display_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_system_lists_category ON system_lists(category);
   `);
 
   await migrateJobTables();
@@ -491,6 +503,22 @@ async function fixSchemaConstraints() {
     `);
   } catch { /* ignore */ }
 
+  // New modifications for manual applications
+  try {
+    // Drop constraint on application_source
+    await pool.query(`ALTER TABLE job_applications DROP CONSTRAINT IF EXISTS job_applications_application_source_check`);
+    
+    // Drop NOT NULL from job_vacancy_id
+    await pool.query(`ALTER TABLE job_applications ALTER COLUMN job_vacancy_id DROP NOT NULL`);
+    
+    // Add whatsapp flags and specialization to applicants
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS has_whatsapp_primary BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS has_whatsapp_secondary BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS specialization VARCHAR(255)`);
+  } catch (err) {
+    console.error('Migration adjustments failed:', err);
+  }
+
   // Create training_course_trainees junction table
   try {
     await pool.query(`
@@ -550,6 +578,69 @@ async function createHrUsers() {
   try {
     await pool.query(`ALTER TABLE training_attendance DROP CONSTRAINT IF EXISTS training_attendance_recorded_by_user_id_fkey`);
   } catch { /* ignore */ }
+
+  // Add required_certificate & required_major columns to job_vacancies
+  try {
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS required_certificate VARCHAR(255)`);
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS required_major VARCHAR(255)`);
+  } catch { /* ignore */ }
+
+  // Add contact_info JSONB column to branches
+  try {
+    await pool.query(`ALTER TABLE branches ADD COLUMN IF NOT EXISTS contact_info JSONB DEFAULT '[]'::jsonb`);
+  } catch { /* ignore */ }
+
+  // Add contact_methods JSONB column to job_vacancies (replaces email)
+  try {
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS contact_methods JSONB DEFAULT '[]'::jsonb`);
+  } catch { /* ignore */ }
+
+  // Add unique constraint on system_lists(category, value) so we can do ON CONFLICT DO NOTHING
+  try {
+    await pool.query(`ALTER TABLE system_lists ADD CONSTRAINT system_lists_category_value_unique UNIQUE (category, value)`);
+  } catch { /* ignore — constraint may already exist */ }
+
+  // Seed new system list categories (idempotent — skips duplicates)
+  try {
+    await pool.query(`
+      INSERT INTO system_lists (category, value, display_order) VALUES
+        ('job_title', 'فني صيانة أجهزة', 1),
+        ('job_title', 'مندوب مبيعات', 2),
+        ('job_title', 'فني تركيب', 3),
+        ('job_title', 'مسؤول خدمة العملاء', 4),
+        ('job_title', 'محاسب', 5),
+        ('certificate', 'ابتدائية', 1),
+        ('certificate', 'متوسطة', 2),
+        ('certificate', 'إعدادية', 3),
+        ('certificate', 'دبلوم', 4),
+        ('certificate', 'بكالوريوس', 5),
+        ('certificate', 'ماجستير', 6),
+        ('certificate', 'دكتوراه', 7),
+        ('major:دبلوم', 'تقنيات حاسبات', 1),
+        ('major:دبلوم', 'إدارة أعمال', 2),
+        ('major:دبلوم', 'محاسبة', 3),
+        ('major:بكالوريوس', 'هندسة حاسبات', 1),
+        ('major:بكالوريوس', 'هندسة كهرباء', 2),
+        ('major:بكالوريوس', 'إدارة أعمال', 3),
+        ('major:بكالوريوس', 'محاسبة', 4),
+        ('major:ماجستير', 'هندسة حاسبات', 1),
+        ('major:ماجستير', 'إدارة أعمال', 2),
+        ('major:دكتوراه', 'هندسة حاسبات', 1),
+        ('application_source', 'إنترنت (Website)', 1),
+        ('application_source', 'تسجيل داخلي', 2),
+        ('application_source', 'نماذج ورقية', 3),
+        ('application_source', 'صفحة فيسبوك', 4),
+        ('foreign_language', 'الإنجليزية', 1),
+        ('foreign_language', 'الفرنسية', 2),
+        ('foreign_language', 'الكردية', 3),
+        ('foreign_language', 'التركية', 4),
+        ('foreign_language', 'الألمانية', 5)
+      ON CONFLICT (category, value) DO NOTHING
+    `);
+    console.log('New system list categories seeded (job_title, certificate, major, app_source, languages).');
+  } catch (err) {
+    console.warn('System list seeding warning:', err);
+  }
 }
 
 export async function seedData() {
@@ -669,4 +760,50 @@ export async function seedData() {
 
     SELECT setval('maintenance_requests_id_seq', (SELECT MAX(id) FROM maintenance_requests));
   `);
+
+  // Seed system lists
+  const { rows: sysListRows } = await pool.query('SELECT COUNT(*) FROM system_lists');
+  if (parseInt(sysListRows[0].count) === 0) {
+    await pool.query(`
+      INSERT INTO system_lists (category, value, display_order) VALUES
+        ('nationality', 'عراقي', 1),
+        ('nationality', 'أردني', 2),
+        ('nationality', 'سوري', 3),
+        ('nationality', 'مصري', 4),
+        ('work_type', 'دوام كامل', 1),
+        ('work_type', 'دوام جزئي', 2),
+        ('work_type', 'نظام الشفتات', 3),
+        ('marital_status', 'أعزب / عزباء', 1),
+        ('marital_status', 'متزوج / متزوجة', 2),
+        ('marital_status', 'أرمل / أرملة', 3),
+        ('marital_status', 'مطلق / مطلقة', 4),
+        ('gender', 'ذكر', 1),
+        ('gender', 'أنثى', 2),
+        ('driving_license', 'نعم', 1),
+        ('driving_license', 'لا', 2),
+        ('job_title', 'فني صيانة أجهزة', 1),
+        ('job_title', 'مندوب مبيعات', 2),
+        ('job_title', 'فني تركيب', 3),
+        ('job_title', 'مسؤول خدمة العملاء', 4),
+        ('job_title', 'محاسب', 5),
+        ('certificate', 'ابتدائية', 1),
+        ('certificate', 'متوسطة', 2),
+        ('certificate', 'إعدادية', 3),
+        ('certificate', 'دبلوم', 4),
+        ('certificate', 'بكالوريوس', 5),
+        ('certificate', 'ماجستير', 6),
+        ('certificate', 'دكتوراه', 7),
+        ('major:دبلوم', 'تقنيات حاسبات', 1),
+        ('major:دبلوم', 'إدارة أعمال', 2),
+        ('major:دبلوم', 'محاسبة', 3),
+        ('major:بكالوريوس', 'هندسة حاسبات', 1),
+        ('major:بكالوريوس', 'هندسة كهرباء', 2),
+        ('major:بكالوريوس', 'إدارة أعمال', 3),
+        ('major:بكالوريوس', 'محاسبة', 4),
+        ('major:ماجستير', 'هندسة حاسبات', 1),
+        ('major:ماجستير', 'إدارة أعمال', 2),
+        ('major:دكتوراه', 'هندسة حاسبات', 1)
+    `);
+    console.log('System lists seeded.');
+  }
 }

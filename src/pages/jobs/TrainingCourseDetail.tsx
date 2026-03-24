@@ -10,15 +10,12 @@ import {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function generateDates(start: string, end: string): string[] {
-  const dates: string[] = [];
-  const cur = new Date(start); cur.setHours(0, 0, 0, 0);
-  const endD = new Date(end); endD.setHours(0, 0, 0, 0);
-  while (cur <= endD) {
-    dates.push(cur.toISOString().split('T')[0]);
-    cur.setDate(cur.getDate() + 1);
+function generateDates(attendance: { attendanceDate: string }[]): string[] {
+  const datesSet = new Set<string>();
+  for (const a of attendance) {
+    datesSet.add(a.attendanceDate);
   }
-  return dates;
+  return Array.from(datesSet).sort();
 }
 
 function formatDate(d: string) {
@@ -91,7 +88,7 @@ export default function TrainingCourseDetail() {
   );
 
   const course = selectedCourse;
-  const dates = course.startDate && course.endDate ? generateDates(course.startDate, course.endDate) : [];
+  const dates = generateDates(course.attendance || []);
 
   // Build attendance lookup: { applicationId_date: status }
   const attMap: Record<string, 'Present' | 'Absent'> = {};
@@ -247,14 +244,15 @@ export default function TrainingCourseDetail() {
       </div>
 
       {/* Attendance Grid */}
-      {(isStarted || isCompleted) && course.trainees.length > 0 && dates.length > 0 && (
+      {(isStarted || isCompleted) && course.trainees.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
           <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-sky-500" />
             سجل الحضور
           </h2>
 
-          <div className="overflow-x-auto">
+          {dates.length > 0 ? (
+            <div className="overflow-x-auto">
             <table className="text-xs min-w-full">
               <thead>
                 <tr className="bg-slate-50">
@@ -292,6 +290,11 @@ export default function TrainingCourseDetail() {
               </tbody>
             </table>
           </div>
+          ) : (
+            <div className="text-center text-slate-500 py-6 text-sm bg-slate-50 rounded-xl">
+              لم يتم تسجيل أي حضور حتى الآن. الرجاء تحديد يوم لإضافته.
+            </div>
+          )}
 
           {/* Record attendance (only when started) */}
           {isStarted && (
@@ -301,6 +304,8 @@ export default function TrainingCourseDetail() {
                 <input
                   type="date"
                   value={attDate}
+                  min={course.startDate}
+                  max={course.endDate}
                   onChange={e => handleDateChange(e.target.value)}
                   className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
                 />

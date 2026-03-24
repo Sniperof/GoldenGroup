@@ -5,7 +5,8 @@ import { authFetch } from '../../lib/authFetch';
 import {
   ArrowRight, User, Briefcase, MapPin, Phone, Mail, Calendar, Users, GraduationCap,
   FileText, Clock, CheckCircle, XCircle, UserPlus, AlertTriangle, Award,
-  ChevronDown, ChevronUp, ArrowRightLeft, Car, Monitor, Globe, DollarSign, Archive
+  ChevronDown, ChevronUp, ArrowRightLeft, Car, Monitor, Globe, DollarSign, Archive,
+  Eye, Minus, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -93,6 +94,7 @@ export default function ApplicationDetail() {
   const [rejectReason, setRejectReason] = useState('');
   const [showReasonModal, setShowReasonModal] = useState<{ newStage: string; newStatus: string } | null>(null);
   const [showAuditExpanded, setShowAuditExpanded] = useState<number | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const fetchDetail = () => {
     setLoading(true);
@@ -100,8 +102,8 @@ export default function ApplicationDetail() {
       authFetch(`/api/admin/applications/${id}`).then(r => r.json()),
       authFetch(`/api/admin/applications/${id}/audit-logs`).then(r => r.json()),
     ]).then(([app, logs]) => {
-      setDetail(app);
-      setAuditLogs(logs);
+      setDetail(app && !app.error ? app : null);
+      setAuditLogs(Array.isArray(logs) ? logs : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   };
@@ -316,11 +318,11 @@ export default function ApplicationDetail() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <InfoRow label="عنوان الوظيفة" value={detail.vacancy?.title || '—'} />
                 <InfoRow label="الفرع" value={detail.vacancy?.branch || '—'} icon={<MapPin className="w-3.5 h-3.5" />} />
-                <InfoRow label="المؤهل المطلوب" value={detail.vacancy?.requiredQualification || '—'} icon={<GraduationCap className="w-3.5 h-3.5" />} />
-                <InfoRow label="التخصص المطلوب" value={detail.vacancy?.requiredSpecialization || '—'} />
+                <InfoRow label="الشهادة العلمية" value={detail.vacancy?.requiredCertificate || '—'} icon={<GraduationCap className="w-3.5 h-3.5" />} />
+                <InfoRow label="الاختصاص" value={detail.vacancy?.requiredMajor || '—'} />
                 <InfoRow label="سنوات الخبرة" value={detail.vacancy?.requiredExperienceYears?.toString() || '—'} />
                 <InfoRow label="الشواغر المتبقية" value={detail.vacancy?.vacancyCount?.toString() || '—'} icon={<Users className="w-3.5 h-3.5" />} />
-                <InfoRow label="الحد الأقصى للإعادة" value={detail.vacancy?.maxRetrainingCount?.toString() || '—'} />
+
                 <InfoRow label="الفترة"
                   value={`${detail.vacancy?.startDate ? new Date(detail.vacancy.startDate).toLocaleDateString('ar-IQ') : '—'} → ${detail.vacancy?.endDate ? new Date(detail.vacancy.endDate).toLocaleDateString('ar-IQ') : '—'}`}
                   icon={<Calendar className="w-3.5 h-3.5" />} />
@@ -395,7 +397,9 @@ export default function ApplicationDetail() {
                     <button
                       key={i}
                       onClick={() => {
-                        if (action.requiresReason) {
+                        if (action.newStatus === 'In Review') {
+                          setShowReviewModal(true);
+                        } else if (action.requiresReason) {
                           setShowReasonModal({ newStage: action.newStage, newStatus: action.newStatus });
                         } else {
                           handleStageAction(action.newStage, action.newStatus);
@@ -574,6 +578,191 @@ export default function ApplicationDetail() {
           )}
         </div>
       )}
+
+      {/* Review Comparison Modal */}
+      <AnimatePresence>
+        {showReviewModal && detail && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+            onClick={() => setShowReviewModal(false)}>
+            <motion.div initial={{ scale: 0.96, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.96, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden"
+              style={{ maxHeight: 'min(92vh, 800px)' }}
+              onClick={e => e.stopPropagation()} dir="rtl">
+
+              {/* Header */}
+              <div className="px-6 pt-5 pb-4 border-b border-slate-100 shrink-0 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Eye className="w-5 h-5 text-sky-500" /> مراجعة الطلب مقابل متطلبات الشاغر
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    طلب #{detail.id} — {detail.applicant?.firstName} {detail.applicant?.lastName}
+                  </p>
+                </div>
+                <button onClick={() => setShowReviewModal(false)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                {(() => {
+                  const app = detail.applicant;
+                  const vac = detail.vacancy;
+                  if (!app || !vac) return <p className="text-center text-slate-400">لا توجد بيانات</p>;
+
+                  /* helper to compare and show match icon */
+                  type MatchLevel = 'match' | 'mismatch' | 'neutral';
+                  const MatchIcon = ({ level }: { level: MatchLevel }) => (
+                    level === 'match' ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" /> :
+                    level === 'mismatch' ? <XCircle className="w-4 h-4 text-red-400 shrink-0" /> :
+                    <Minus className="w-4 h-4 text-slate-300 shrink-0" />
+                  );
+                  const matchBorder = (l: MatchLevel) =>
+                    l === 'match' ? 'border-emerald-200 bg-emerald-50/40' :
+                    l === 'mismatch' ? 'border-red-200 bg-red-50/30' :
+                    'border-slate-100 bg-slate-50/40';
+
+                  /* determine match levels */
+                  const genderMatch: MatchLevel = !vac.requiredGender ? 'neutral' :
+                    app.gender === vac.requiredGender ? 'match' : 'mismatch';
+
+                  const certMatch: MatchLevel = !vac.requiredCertificate ? 'neutral' :
+                    app.academicQualification === vac.requiredCertificate ? 'match' : 'mismatch';
+
+                  const expMatch: MatchLevel = vac.requiredExperienceYears == null ? 'neutral' :
+                    (app.yearsOfExperience ?? 0) >= vac.requiredExperienceYears ? 'match' : 'mismatch';
+
+                  const dlMatch: MatchLevel = !vac.drivingLicenseRequired ? 'neutral' :
+                    app.drivingLicense ? 'match' : 'mismatch';
+
+                  const appAge = app.dob
+                    ? Math.floor((Date.now() - new Date(app.dob).getTime()) / 31557600000)
+                    : null;
+                  const ageMatch: MatchLevel = (!vac.requiredAgeMin && !vac.requiredAgeMax) || appAge == null ? 'neutral' :
+                    ((!vac.requiredAgeMin || appAge >= vac.requiredAgeMin) && (!vac.requiredAgeMax || appAge <= vac.requiredAgeMax)) ? 'match' : 'mismatch';
+
+                  const totalCriteria = [genderMatch, certMatch, expMatch, dlMatch, ageMatch];
+                  const matchCount = totalCriteria.filter(m => m === 'match').length;
+                  const mismatchCount = totalCriteria.filter(m => m === 'mismatch').length;
+                  const neutralCount = totalCriteria.filter(m => m === 'neutral').length;
+
+                  const rows: { label: string; applicant: string; vacancy: string; level: MatchLevel }[] = [
+                    { label: 'الجنس', applicant: app.gender || '—', vacancy: vac.requiredGender || 'لا يهم', level: genderMatch },
+                    { label: 'العمر', applicant: appAge != null ? `${appAge} سنة` : '—', vacancy: (vac.requiredAgeMin || vac.requiredAgeMax) ? `${vac.requiredAgeMin || '—'} – ${vac.requiredAgeMax || '—'} سنة` : 'لا يهم', level: ageMatch },
+                    { label: 'المؤهل العلمي', applicant: app.academicQualification || '—', vacancy: vac.requiredCertificate || 'لا يهم', level: certMatch },
+                    { label: 'سنوات الخبرة', applicant: app.yearsOfExperience?.toString() || '0', vacancy: vac.requiredExperienceYears != null ? `${vac.requiredExperienceYears}+` : 'لا يهم', level: expMatch },
+                    { label: 'رخصة القيادة', applicant: app.drivingLicense ? 'نعم' : 'لا', vacancy: vac.drivingLicenseRequired ? 'مطلوبة' : 'غير مطلوبة', level: dlMatch },
+                  ];
+
+                  return (
+                    <div className="space-y-5">
+                      {/* Summary bar */}
+                      <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-4">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          <span className="text-sm font-bold text-emerald-700">{matchCount} مطابق</span>
+                        </div>
+                        <div className="w-px h-5 bg-slate-200" />
+                        <div className="flex items-center gap-1.5">
+                          <XCircle className="w-4 h-4 text-red-400" />
+                          <span className="text-sm font-bold text-red-600">{mismatchCount} غير مطابق</span>
+                        </div>
+                        <div className="w-px h-5 bg-slate-200" />
+                        <div className="flex items-center gap-1.5">
+                          <Minus className="w-4 h-4 text-slate-300" />
+                          <span className="text-sm font-bold text-slate-500">{neutralCount} غير محدد</span>
+                        </div>
+                        <div className="mr-auto">
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                            mismatchCount === 0 ? 'bg-emerald-100 text-emerald-700' :
+                            mismatchCount <= 1 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {mismatchCount === 0 ? 'ملاءمة ممتازة' : mismatchCount <= 1 ? 'ملاءمة جزئية' : 'ملاءمة ضعيفة'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Comparison table */}
+                      <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                        <div className="grid grid-cols-[1fr_1fr_auto_1fr] bg-slate-50 border-b border-slate-200">
+                          <div className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-widest">المعيار</div>
+                          <div className="px-4 py-3 text-xs font-bold text-sky-600 uppercase tracking-widest flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> المتقدم</div>
+                          <div className="px-4 py-3"></div>
+                          <div className="px-4 py-3 text-xs font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> الشاغر</div>
+                        </div>
+                        {rows.map((row, i) => (
+                          <div key={row.label} className={`grid grid-cols-[1fr_1fr_auto_1fr] items-center border-b last:border-b-0 ${matchBorder(row.level)} ${i % 2 === 0 ? '' : 'bg-opacity-60'}`}>
+                            <div className="px-4 py-3 text-sm font-semibold text-slate-700">{row.label}</div>
+                            <div className="px-4 py-3 text-sm text-slate-600">{row.applicant}</div>
+                            <div className="px-2 py-3"><MatchIcon level={row.level} /></div>
+                            <div className="px-4 py-3 text-sm text-slate-600">{row.vacancy}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Extra applicant info */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4">
+                          <p className="text-[11px] font-bold text-sky-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5" /> بيانات المتقدم الإضافية
+                          </p>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="text-xs text-slate-400">الهاتف:</span> <span className="text-slate-700 font-mono" dir="ltr">{app.mobileNumber || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">البريد:</span> <span className="text-slate-700">{app.email || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">مهارات الحاسب:</span> <span className="text-slate-700">{app.computerSkills || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">اللغات:</span> <span className="text-slate-700">{app.foreignLanguages || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">جهة العمل السابقة:</span> <span className="text-slate-700">{app.previousEmployment || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">الموقع:</span> <span className="text-slate-700">{[app.governorate, app.cityOrArea].filter(Boolean).join(' / ') || '—'}</span></div>
+                          </div>
+                        </div>
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+                          <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                            <Briefcase className="w-3.5 h-3.5" /> متطلبات الشاغر الإضافية
+                          </p>
+                          <div className="space-y-2 text-sm">
+                            <div><span className="text-xs text-slate-400">نوع العمل:</span> <span className="text-slate-700">{vac.workType || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">الاختصاص:</span> <span className="text-slate-700">{vac.requiredMajor || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">المهارات:</span> <span className="text-slate-700">{vac.requiredSkills || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">المسؤوليات:</span> <span className="text-slate-700">{vac.responsibilities || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">الموقع:</span> <span className="text-slate-700">{[vac.governorate, vac.cityOrArea].filter(Boolean).join(' / ') || '—'}</span></div>
+                            <div><span className="text-xs text-slate-400">الشواغر:</span> <span className="text-slate-700">{vac.vacancyCount}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 shrink-0 flex items-center justify-between bg-white">
+                <button onClick={() => setShowReviewModal(false)}
+                  className="px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                  إغلاق
+                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => {
+                    setShowReviewModal(false);
+                    setShowReasonModal({ newStage: 'Submitted', newStatus: 'Rejected' });
+                  }} className="px-5 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors">
+                    رفض
+                  </button>
+                  <button onClick={() => {
+                    setShowReviewModal(false);
+                    handleStageAction('Submitted', 'In Review');
+                  }} disabled={actionLoading}
+                    className="px-6 py-2.5 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-lg shadow-sky-500/25 transition-all disabled:opacity-50 flex items-center gap-2">
+                    {actionLoading ? 'جاري...' : <><CheckCircle className="w-4 h-4" /> تأكيد بدء المراجعة</>}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Reason Modal */}
       <AnimatePresence>

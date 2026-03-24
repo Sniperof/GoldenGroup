@@ -39,6 +39,7 @@ import Interviews from './pages/jobs/Interviews';
 import InterviewDetail from './pages/jobs/InterviewDetail';
 import TrainingCourses from './pages/jobs/TrainingCourses';
 import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
+import SystemLists from './pages/admin/SystemLists';
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -82,6 +83,7 @@ export default function App() {
 
                         <Route path="/telemarketer" element={<TelemarketerWorkspace />} />
                         <Route path="/settings" element={<SystemSettings />} />
+                        <Route path="/system-lists" element={<SystemLists />} />
                         <Route path="/branches" element={<Branches />} />
 
                         {/* Job Applications Epic */}

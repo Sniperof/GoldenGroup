@@ -31,6 +31,7 @@ import interviewsRouter from './routes/interviews.js';
 import trainingCoursesRouter from './routes/trainingCourses.js';
 import publicAreasRouter from './routes/publicAreas.js';
 import authRouter from './routes/auth.js';
+import systemListsRouter from './routes/systemLists.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -63,6 +64,7 @@ app.use('/api/admin/applications', adminApplicationsRouter);
 app.use('/api/admin/interviews', interviewsRouter);
 app.use('/api/admin/training-courses', trainingCoursesRouter);
 app.use('/api/public/areas', publicAreasRouter);
+app.use('/api/system-lists', systemListsRouter);
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));

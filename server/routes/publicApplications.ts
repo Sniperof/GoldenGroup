@@ -70,20 +70,22 @@ router.post('/', async (req, res) => {
         first_name, last_name, dob, gender, marital_status, email,
         mobile_number, secondary_mobile, governorate, city_or_area,
         sub_area, neighborhood, detailed_address,
-        academic_qualification, previous_employment, driving_license,
+        academic_qualification, specialization, previous_employment, driving_license,
         expected_salary, computer_skills, foreign_languages,
-        years_of_experience, cv_url, photo_url, applicant_segment
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        years_of_experience, cv_url, photo_url, applicant_segment,
+        has_whatsapp_primary, has_whatsapp_secondary
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       RETURNING id`,
       [
         a.firstName, a.lastName, a.dob, a.gender, a.maritalStatus, a.email || null,
         a.mobileNumber, a.secondaryMobile || null,
         a.governorate, a.cityOrArea || null, a.subArea || null, a.neighborhood || null, a.detailedAddress || null,
-        a.academicQualification || null, a.previousEmployment || null,
+        a.academicQualification || null, a.specialization || null, a.previousEmployment || null,
         a.drivingLicense || null, a.expectedSalary ? parseInt(a.expectedSalary) : null,
         a.computerSkills || null, a.foreignLanguages || null,
         a.yearsOfExperience ? parseInt(a.yearsOfExperience) : null,
         a.cvUrl || null, a.photoUrl || null, a.applicantSegment || null,
+        a.hasWhatsappPrimary || false, a.hasWhatsappSecondary || false,
       ]
     );
     const applicantId = applicantRows[0].id;

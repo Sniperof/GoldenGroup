@@ -98,15 +98,14 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
     if (!a.gender) return res.status(400).json({ error: 'الجنس مطلوب' });
     if (!a.maritalStatus) return res.status(400).json({ error: 'الحالة الاجتماعية مطلوبة' });
     if (!a.governorate?.trim()) return res.status(400).json({ error: 'المحافظة مطلوبة' });
-    if (!body.jobVacancyId) return res.status(400).json({ error: 'معرّف الشاغر الوظيفي مطلوب' });
 
     const submissionType = body.submissionType;
     if (!['Apply', 'Refer a Candidate'].includes(submissionType)) {
       return res.status(400).json({ error: 'نوع التقديم غير صالح' });
     }
     const applicationSource = body.applicationSource;
-    if (!['Internal', 'External Platforms'].includes(applicationSource)) {
-      return res.status(400).json({ error: 'مصدر الطلب يجب أن يكون Internal أو External Platforms' });
+    if (!applicationSource) {
+      return res.status(400).json({ error: 'مصدر الطلب مطلوب' });
     }
     // enteredByUserId now comes from auth context
     if (submissionType === 'Refer a Candidate' && !body.referrer?.fullName?.trim()) {
@@ -115,23 +114,25 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
 
     await client.query('BEGIN');
 
-    // Vacancy: must be Open and within date range
-    const { rows: vacRows } = await client.query(
-      `SELECT id, status FROM job_vacancies
-       WHERE id = $1 AND status = 'Open' AND CURRENT_DATE BETWEEN start_date AND end_date`,
-      [body.jobVacancyId]
-    );
-    if (vacRows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'الشاغر غير موجود أو غير مفتوح للتقديم أو خارج الفترة المحددة' });
+    // Vacancy: if linked, must be Open and within date range
+    if (body.jobVacancyId) {
+      const { rows: vacRows } = await client.query(
+        `SELECT id, status FROM job_vacancies
+         WHERE id = $1 AND status = 'Open' AND CURRENT_DATE BETWEEN start_date AND end_date`,
+        [body.jobVacancyId]
+      );
+      if (vacRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'الشاغر غير موجود أو غير مفتوح للتقديم أو خارج الفترة المحددة' });
+      }
     }
 
     // Duplicate check
-    const dupResult = await checkDuplicate(client, a.mobileNumber, body.jobVacancyId);
+    const dupResult = await checkDuplicate(client, a.mobileNumber, body.jobVacancyId || null);
     if (dupResult.blocked) {
       await client.query('ROLLBACK');
       return res.status(409).json({
-        error: 'يوجد طلب نشط بالفعل لهذا الرقم والشاغر الوظيفي',
+        error: body.jobVacancyId ? 'يوجد طلب نشط بالفعل لهذا الرقم والشاغر الوظيفي' : 'يوجد طلب عام نشط بالفعل لهذا الرقم',
         duplicateApplicationId: dupResult.duplicateApplicationId,
       });
     }
@@ -143,20 +144,22 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
         first_name, last_name, dob, gender, marital_status, email,
         mobile_number, secondary_mobile, governorate, city_or_area,
         sub_area, neighborhood, detailed_address,
-        academic_qualification, previous_employment, driving_license,
+        academic_qualification, specialization, previous_employment, driving_license,
         expected_salary, computer_skills, foreign_languages,
-        years_of_experience, cv_url, photo_url, applicant_segment
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        years_of_experience, cv_url, photo_url, applicant_segment,
+        has_whatsapp_primary, has_whatsapp_secondary
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       RETURNING id`,
       [
         a.firstName, a.lastName, a.dob, a.gender, a.maritalStatus, a.email || null,
         a.mobileNumber, a.secondaryMobile || null,
         a.governorate, a.cityOrArea || null, a.subArea || null, a.neighborhood || null, a.detailedAddress || null,
-        a.academicQualification || null, a.previousEmployment || null,
+        a.academicQualification || null, a.specialization || null, a.previousEmployment || null,
         a.drivingLicense || null, a.expectedSalary ? parseInt(a.expectedSalary) : null,
         a.computerSkills || null, a.foreignLanguages || null,
         a.yearsOfExperience ? parseInt(a.yearsOfExperience) : null,
         a.cvUrl || null, a.photoUrl || null, a.applicantSegment || null,
+        a.hasWhatsappPrimary || false, a.hasWhatsappSecondary || false,
       ]
     );
     const applicantId = applicantRows[0].id;
@@ -200,7 +203,7 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
         current_stage AS "currentStage", application_status AS "applicationStatus",
         duplicate_flag AS "duplicateFlag", created_at AS "createdAt"`,
       [
-        body.jobVacancyId, applicantId, referrerId,
+        body.jobVacancyId || null, applicantId, referrerId,
         submissionType, applicationSource,
         enteredByUserId, body.enteredByName || null,
         duplicateFlag,
@@ -216,7 +219,7 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
       performedByUserId: req.user!.id,
       newValue: JSON.stringify({
         applicantId, referrerId,
-        jobVacancyId: body.jobVacancyId,
+        jobVacancyId: body.jobVacancyId || null,
         submissionType, applicationSource, duplicateFlag,
       }),
     });
@@ -250,8 +253,11 @@ router.get('/:id', requireAuth, async (req, res) => {
         governorate, city_or_area AS "cityOrArea",
         sub_area AS "subArea", neighborhood, detailed_address AS "detailedAddress",
         academic_qualification AS "academicQualification",
+        specialization,
         previous_employment AS "previousEmployment",
         driving_license AS "drivingLicense",
+        has_whatsapp_primary AS "hasWhatsappPrimary",
+        has_whatsapp_secondary AS "hasWhatsappSecondary",
         expected_salary AS "expectedSalary",
         computer_skills AS "computerSkills",
         foreign_languages AS "foreignLanguages",
@@ -270,12 +276,12 @@ router.get('/:id', requireAuth, async (req, res) => {
         neighborhood, detailed_address AS "detailedAddress",
         work_type AS "workType", required_gender AS "requiredGender",
         required_age_min AS "requiredAgeMin", required_age_max AS "requiredAgeMax",
-        email, required_qualification AS "requiredQualification",
-        required_specialization AS "requiredSpecialization",
+        email, required_certificate AS "requiredCertificate",
+        required_major AS "requiredMajor",
         required_experience_years AS "requiredExperienceYears",
         required_skills AS "requiredSkills", responsibilities,
         driving_license_required AS "drivingLicenseRequired",
-        vacancy_count AS "vacancyCount", max_retraining_count AS "maxRetrainingCount",
+        vacancy_count AS "vacancyCount",
         start_date AS "startDate", end_date AS "endDate",
         status, created_at AS "createdAt", updated_at AS "updatedAt"
       FROM job_vacancies WHERE id = $1`,
@@ -367,7 +373,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
     const validationError = validateStageTransition(
       current.current_stage, current.application_status,
       stage, status,
-      { retrainingCount, maxRetrainingCount: current.max_retraining_count }
+      { retrainingCount, maxRetrainingCount: 999 }
     );
     if (validationError) return res.status(400).json({ error: validationError });
 

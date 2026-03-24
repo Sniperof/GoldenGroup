@@ -1,0 +1,3 @@
+﻿src/pages/jobs/PublicJobs.tsx(149,21): error TS1127: Invalid character.
+src/pages/jobs/PublicJobs.tsx(464,217): error TS1005: ';' expected.
+src/pages/jobs/PublicJobs.tsx(667,1): error TS1160: Unterminated template literal.

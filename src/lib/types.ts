@@ -88,12 +88,24 @@ export interface Employee {
     avatar?: string;
 }
 
+export type BranchContactType = 'email' | 'phone' | 'mobile' | 'website';
+export type BranchDepartment = 'customer_service' | 'hr' | 'management' | 'accounting' | 'other';
+
+export interface BranchContact {
+  id: string;            // client-side UUID for keying
+  type: BranchContactType;
+  department: BranchDepartment;
+  value: string;         // the actual email/phone/url value
+  label?: string;        // optional extra note
+}
+
 export interface Branch {
     id: number;
     name: string;
     locationGeoId?: number | null;
     locationGeoName?: string;
     coveredGeoIds: number[];
+    contactInfo: BranchContact[];
     status: 'active' | 'inactive';
     createdAt: string;
 }
@@ -378,6 +390,14 @@ export interface EmergencyTicket {
     createdAt: string;
 }
 
+export interface SystemList {
+    id: number;
+    category: string;
+    value: string;
+    isActive: boolean;
+    displayOrder: number;
+}
+
 // ─────────────────────────────────────────
 // Job Applications Epic
 // ─────────────────────────────────────────
@@ -410,15 +430,14 @@ export interface JobVacancy {
   requiredGender: string | null;
   requiredAgeMin: number | null;
   requiredAgeMax: number | null;
-  email: string | null;
-  requiredQualification: string | null;
-  requiredSpecialization: string | null;
+  contactMethods: BranchContact[];  // selected from branch contacts
+  requiredCertificate: string | null;
+  requiredMajor: string | null;
   requiredExperienceYears: number | null;
   requiredSkills: string | null;
   responsibilities: string | null;
   drivingLicenseRequired: boolean;
   vacancyCount: number;
-  maxRetrainingCount: number;
   startDate: string;
   endDate: string;
   status: VacancyStatus;

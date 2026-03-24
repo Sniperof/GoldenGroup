@@ -11,13 +11,13 @@ const VACANCY_COLS = `
   neighborhood, detailed_address AS "detailedAddress",
   work_type AS "workType", required_gender AS "requiredGender",
   required_age_min AS "requiredAgeMin", required_age_max AS "requiredAgeMax",
-  email,
-  required_qualification AS "requiredQualification",
-  required_specialization AS "requiredSpecialization",
+  COALESCE(contact_methods, '[]'::jsonb) AS "contactMethods",
+  required_certificate AS "requiredCertificate",
+  required_major AS "requiredMajor",
   required_experience_years AS "requiredExperienceYears",
   required_skills AS "requiredSkills", responsibilities,
   driving_license_required AS "drivingLicenseRequired",
-  vacancy_count AS "vacancyCount", max_retraining_count AS "maxRetrainingCount",
+  vacancy_count AS "vacancyCount",
   start_date AS "startDate", end_date AS "endDate",
   status, created_at AS "createdAt", updated_at AS "updatedAt"
 `;
@@ -83,23 +83,24 @@ router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO job_vacancies (
         title, branch, governorate, city_or_area, sub_area, neighborhood, detailed_address,
-        work_type, required_gender, required_age_min, required_age_max, email,
-        required_qualification, required_specialization, required_experience_years,
+        work_type, required_gender, required_age_min, required_age_max, contact_methods,
+        required_certificate, required_major, required_experience_years,
         required_skills, responsibilities, driving_license_required,
-        vacancy_count, max_retraining_count, start_date, end_date, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'Open')
+        vacancy_count, start_date, end_date, status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'Open')
       RETURNING ${VACANCY_COLS}`,
       [
         v.title, v.branch,
         v.governorate || null, v.cityOrArea || null, v.subArea || null,
         v.neighborhood || null, v.detailedAddress || null,
         v.workType || null, v.requiredGender || null,
-        v.requiredAgeMin || null, v.requiredAgeMax || null, v.email || null,
-        v.requiredQualification || null, v.requiredSpecialization || null,
+        v.requiredAgeMin || null, v.requiredAgeMax || null,
+        JSON.stringify(v.contactMethods || []),
+        v.requiredCertificate || null, v.requiredMajor || null,
         v.requiredExperienceYears || null,
         v.requiredSkills || null, v.responsibilities || null,
         v.drivingLicenseRequired || false,
-        v.vacancyCount, v.maxRetrainingCount || 1,
+        v.vacancyCount,
         v.startDate, v.endDate,
       ]
     );
@@ -190,41 +191,42 @@ router.put('/:id', requireRole('HR_MANAGER'), async (req, res) => {
         `UPDATE job_vacancies SET
           title=$1, branch=$2, governorate=$3, city_or_area=$4, sub_area=$5,
           neighborhood=$6, detailed_address=$7, work_type=$8, required_gender=$9,
-          required_age_min=$10, required_age_max=$11, email=$12,
-          required_qualification=$13, required_specialization=$14,
+          required_age_min=$10, required_age_max=$11, contact_methods=$12,
+          required_certificate=$13, required_major=$14,
           required_experience_years=$15, required_skills=$16, responsibilities=$17,
-          driving_license_required=$18, vacancy_count=$19, max_retraining_count=$20,
-          start_date=$21, end_date=$22, updated_at=NOW()
-        WHERE id=$23
+          driving_license_required=$18, vacancy_count=$19,
+          start_date=$20, end_date=$21, updated_at=NOW()
+        WHERE id=$22
         RETURNING ${VACANCY_COLS}`,
         [
           v.title, v.branch,
           v.governorate || null, v.cityOrArea || null, v.subArea || null,
           v.neighborhood || null, v.detailedAddress || null,
           v.workType || null, v.requiredGender || null,
-          v.requiredAgeMin || null, v.requiredAgeMax || null, v.email || null,
-          v.requiredQualification || null, v.requiredSpecialization || null,
+          v.requiredAgeMin || null, v.requiredAgeMax || null,
+          JSON.stringify(v.contactMethods || []),
+          v.requiredCertificate || null, v.requiredMajor || null,
           v.requiredExperienceYears || null,
           v.requiredSkills || null, v.responsibilities || null,
           v.drivingLicenseRequired || false,
-          v.vacancyCount, v.maxRetrainingCount || 1,
+          v.vacancyCount,
           v.startDate, v.endDate, vacancyId,
         ]
       );
       rows = result.rows;
     } else if (pastSubmitted === 0) {
-      // Tier 2: restricted — end_date, responsibilities, required_skills, email, max_retraining_count
+      // Tier 2: restricted — end_date, responsibilities, required_skills, contact_methods
       editTier = 2;
       await client.query('BEGIN');
       const result = await client.query(
         `UPDATE job_vacancies SET
           end_date=$1, responsibilities=$2, required_skills=$3,
-          email=$4, max_retraining_count=$5, updated_at=NOW()
-        WHERE id=$6
+          contact_methods=$4, updated_at=NOW()
+        WHERE id=$5
         RETURNING ${VACANCY_COLS}`,
         [
           v.endDate || null, v.responsibilities || null, v.requiredSkills || null,
-          v.email || null, v.maxRetrainingCount || 1, vacancyId,
+          JSON.stringify(v.contactMethods || []), vacancyId,
         ]
       );
       rows = result.rows;
