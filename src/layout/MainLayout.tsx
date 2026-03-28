@@ -59,6 +59,10 @@ export default function MainLayout() {
     const { user: authUser, logout } = useAuthStore();
     const { hasPermission } = usePermissions();
 
+    // HR_MANAGER bypasses all permission checks
+    const isManager = authUser?.role === 'HR_MANAGER';
+    const can = (perm: string) => isManager || hasPermission(perm);
+
     const jobsViewPermMap: Record<string, string> = {
       '/jobs/applications': 'jobs.applications.view_list',
       '/jobs/vacancies': 'jobs.vacancies.view_list',
@@ -69,7 +73,7 @@ export default function MainLayout() {
 
     const visibleJobsChildren = jobsChildren.filter(child => {
       const perm = jobsViewPermMap[child.path];
-      return !perm || hasPermission(perm);
+      return !perm || can(perm);
     });
 
     function handleLogout() {
@@ -180,6 +184,7 @@ export default function MainLayout() {
                     ))}
 
                     {/* 1. Records Section */}
+                    {(can('clients.view_list') || can('candidates.view_list') || can('employees.view_list')) && (
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setRecordsOpen(o => !o)}
@@ -223,8 +228,10 @@ export default function MainLayout() {
                             )}
                         </AnimatePresence>
                     </div>
+                    )}
 
                     {/* 2. Appointments (Separate Section) */}
+                    {can('telemarketer.view') && (
                     <NavLink
                         to="/telemarketer"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -238,8 +245,10 @@ export default function MainLayout() {
                         <Headset className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة المواعيد</span>
                     </NavLink>
+                    )}
 
                     {/* 3. Contracts (Single) */}
+                    {can('contracts.view_list') && (
                     <NavLink
                         to="/contracts"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -253,8 +262,10 @@ export default function MainLayout() {
                         <FileText className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة العقود</span>
                     </NavLink>
+                    )}
 
                     {/* 4. Devices (Single) */}
+                    {can('devices.view') && (
                     <NavLink
                         to="/devices"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -268,6 +279,7 @@ export default function MainLayout() {
                         <Gem className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة الأجهزة وقطع الغيار</span>
                     </NavLink>
+                    )}
 
                     {/* Jobs Section */}
                     {visibleJobsChildren.length > 0 && (
@@ -317,6 +329,7 @@ export default function MainLayout() {
                     )}
 
                     {/* 5. Branch Operations (formerly Planning) */}
+                    {can('planning.view') && (
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setPlanningOpen((o: boolean) => !o)}
@@ -360,8 +373,10 @@ export default function MainLayout() {
                             )}
                         </AnimatePresence>
                     </div>
+                    )}
 
                     {/* 6. Tasks & Operations */}
+                    {can('tasks.view') && (
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setOperationsOpen((o: boolean) => !o)}
@@ -405,8 +420,10 @@ export default function MainLayout() {
                             )}
                         </AnimatePresence>
                     </div>
+                    )}
 
                     {/* 7. Geo Section (Moved above Settings) */}
+                    {can('geo.view') && (
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setGeoOpen(o => !o)}
@@ -450,8 +467,10 @@ export default function MainLayout() {
                             )}
                         </AnimatePresence>
                     </div>
+                    )}
 
                     {/* 8. Branches */}
+                    {can('branches.view') && (
                     <NavLink
                         to="/branches"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -465,9 +484,10 @@ export default function MainLayout() {
                         <Building2 className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إدارة الفروع</span>
                     </NavLink>
+                    )}
 
                     {/* 9. System Lists */}
-                    {authUser?.role === 'HR_MANAGER' && (
+                    {can('admin.system_lists.view') && (
                         <NavLink
                             to="/system-lists"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -483,8 +503,8 @@ export default function MainLayout() {
                         </NavLink>
                     )}
 
-                    {/* 10. Roles & Permissions (HR_MANAGER only) */}
-                    {authUser?.role === 'HR_MANAGER' && (
+                    {/* 10. Roles & Permissions */}
+                    {can('admin.roles.view') && (
                         <NavLink
                             to="/admin/roles"
                             onClick={() => setIsMobileMenuOpen(false)}
@@ -501,6 +521,7 @@ export default function MainLayout() {
                     )}
 
                     {/* 11. System Settings (At Bottom) */}
+                    {can('settings.view') && (
                     <NavLink
                         to="/settings"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -514,6 +535,7 @@ export default function MainLayout() {
                         <Settings className={`w-5 h-5 ${isCollapsed ? 'lg:w-6 lg:h-6' : ''}`} />
                         <span className={`${isCollapsed ? 'lg:hidden' : 'block'}`}>إعدادات النظام</span>
                     </NavLink>
+                    )}
 
 
                 </nav>

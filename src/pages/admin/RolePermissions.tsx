@@ -56,6 +56,55 @@ const PERM_LABELS: Record<string, { label: string; desc: string }> = {
   'admin.roles.manage':           { label: 'إدارة الأدوار والصلاحيات',     desc: 'إنشاء وتعديل وحذف الأدوار وتعيين الصلاحيات' },
   'admin.system_lists.view':      { label: 'عرض القوائم النظامية',          desc: 'الاطلاع على القوائم والتصنيفات المستخدمة في النظام' },
   'admin.system_lists.manage':    { label: 'إدارة القوائم النظامية',        desc: 'إضافة وتعديل وحذف عناصر القوائم النظامية' },
+
+  // Clients
+  'clients.view_list':    { label: 'عرض قائمة الزبائن',     desc: 'الاطلاع على جميع سجلات الزبائن في النظام' },
+  'clients.view_detail':  { label: 'عرض ملف الزبون',        desc: 'الدخول إلى الصفحة التفصيلية لكل زبون' },
+  'clients.create':       { label: 'إضافة زبون جديد',        desc: 'إنشاء سجل زبون جديد في النظام' },
+  'clients.edit':         { label: 'تعديل بيانات الزبون',    desc: 'تحديث معلومات الزبون الموجود' },
+
+  // Candidates
+  'candidates.view_list': { label: 'عرض الأسماء المقترحة',   desc: 'الاطلاع على قائمة الأسماء المقترحة للتوظيف' },
+  'candidates.create':    { label: 'إضافة اسم مقترح',        desc: 'إدخال اسم مقترح جديد يدوياً أو عبر الاستيراد' },
+  'candidates.edit':      { label: 'تعديل الاسم المقترح',    desc: 'تحديث بيانات الاسم المقترح' },
+
+  // Employees
+  'employees.view_list':  { label: 'عرض قائمة الموظفين',     desc: 'الاطلاع على سجلات الموظفين الميدانيين' },
+  'employees.create':     { label: 'إضافة موظف جديد',        desc: 'إضافة موظف جديد إلى النظام' },
+  'employees.edit':       { label: 'تعديل بيانات الموظف',    desc: 'تحديث معلومات الموظف' },
+
+  // Contracts
+  'contracts.view_list':  { label: 'عرض قائمة العقود',       desc: 'الاطلاع على جميع العقود المسجلة' },
+  'contracts.create':     { label: 'إنشاء عقد جديد',          desc: 'إضافة عقد خدمة جديد للزبائن' },
+  'contracts.edit':       { label: 'تعديل العقد',             desc: 'تحديث بنود وتفاصيل عقد موجود' },
+
+  // Devices
+  'devices.view':   { label: 'عرض الأجهزة وقطع الغيار',  desc: 'الاطلاع على كتالوج الأجهزة والمكونات' },
+  'devices.manage': { label: 'إدارة الأجهزة وقطع الغيار', desc: 'إضافة وتعديل وحذف الأجهزة وقطع الغيار' },
+
+  // Tasks
+  'tasks.view':   { label: 'عرض المهام والعمليات',        desc: 'الاطلاع على مهام اليوم والطوارئ والصيانة والمتابعة' },
+  'tasks.manage': { label: 'إدارة المهام وتحديث حالاتها', desc: 'تغيير حالة المهام وتعيينها للفرق' },
+
+  // Planning
+  'planning.view':   { label: 'عرض خطط وجداول الفرع',      desc: 'الاطلاع على ملخص الخطة وجداول الفرق' },
+  'planning.manage': { label: 'إدارة الجدولة وتعيين المسارات', desc: 'إنشاء الجداول وتعيين مسارات العمل للفرق' },
+
+  // Telemarketer
+  'telemarketer.view':   { label: 'عرض إدارة المواعيد',       desc: 'الاطلاع على المواعيد والعملاء المحتملين' },
+  'telemarketer.manage': { label: 'إدارة المواعيد والعملاء',  desc: 'إضافة وتعديل المواعيد وتتبع العملاء المحتملين' },
+
+  // Geo
+  'geo.view':   { label: 'عرض المناطق الجغرافية',      desc: 'الاطلاع على المستويات الإدارية والمناطق' },
+  'geo.manage': { label: 'إدارة المناطق والمستويات',   desc: 'إضافة وتعديل وتنظيم المناطق الجغرافية' },
+
+  // Branches
+  'branches.view':   { label: 'عرض الفروع',    desc: 'الاطلاع على قائمة الفروع وبياناتها' },
+  'branches.manage': { label: 'إدارة الفروع',  desc: 'إضافة وتعديل وإدارة فروع الشركة' },
+
+  // Settings
+  'settings.view':   { label: 'عرض إعدادات النظام',   desc: 'الاطلاع على إعدادات وتكوينات النظام' },
+  'settings.manage': { label: 'تعديل إعدادات النظام', desc: 'تغيير إعدادات النظام وتخصيص العمل' },
 };
 
 // ── Action icon map ───────────────────────────────────────────────────────────
@@ -93,8 +142,19 @@ function ActionBadge({ action }: { action: string }) {
 
 // ── Module config ─────────────────────────────────────────────────────────────
 const MODULE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  jobs:  { label: 'إدارة التوظيف',         icon: <Briefcase className="w-4 h-4" />,    color: 'text-sky-600 bg-sky-50' },
-  admin: { label: 'إدارة النظام',           icon: <Settings className="w-4 h-4" />,     color: 'text-rose-600 bg-rose-50' },
+  jobs:         { label: 'إدارة التوظيف',              icon: <Briefcase className="w-4 h-4" />,    color: 'text-sky-600 bg-sky-50' },
+  clients:      { label: 'سجلات الزبائن',              icon: <Users className="w-4 h-4" />,        color: 'text-violet-600 bg-violet-50' },
+  candidates:   { label: 'الأسماء المقترحة',            icon: <UserCheck className="w-4 h-4" />,    color: 'text-indigo-600 bg-indigo-50' },
+  employees:    { label: 'سجلات الموظفين',              icon: <Users className="w-4 h-4" />,        color: 'text-emerald-600 bg-emerald-50' },
+  contracts:    { label: 'العقود',                      icon: <FileText className="w-4 h-4" />,     color: 'text-amber-600 bg-amber-50' },
+  devices:      { label: 'الأجهزة وقطع الغيار',         icon: <BarChart2 className="w-4 h-4" />,    color: 'text-cyan-600 bg-cyan-50' },
+  tasks:        { label: 'المهام والعمليات',             icon: <ClipboardList className="w-4 h-4" />, color: 'text-orange-600 bg-orange-50' },
+  planning:     { label: 'إدارة عمل الفرع',             icon: <Calendar className="w-4 h-4" />,     color: 'text-teal-600 bg-teal-50' },
+  telemarketer: { label: 'إدارة المواعيد',              icon: <AlertCircle className="w-4 h-4" />,  color: 'text-pink-600 bg-pink-50' },
+  geo:          { label: 'المناطق الجغرافية',           icon: <BookOpen className="w-4 h-4" />,     color: 'text-lime-600 bg-lime-50' },
+  branches:     { label: 'الفروع',                      icon: <Users className="w-4 h-4" />,        color: 'text-fuchsia-600 bg-fuchsia-50' },
+  settings:     { label: 'إعدادات النظام',              icon: <Settings className="w-4 h-4" />,     color: 'text-slate-600 bg-slate-100' },
+  admin:        { label: 'إدارة النظام والصلاحيات',     icon: <Settings className="w-4 h-4" />,     color: 'text-rose-600 bg-rose-50' },
 };
 
 const SUB_MODULE_LABELS: Record<string, string> = {

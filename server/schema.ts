@@ -790,7 +790,45 @@ export async function seedData() {
       ('admin.roles.view', 'admin', 'roles', 'view', 'عرض الأدوار', 40),
       ('admin.roles.manage', 'admin', 'roles', 'manage', 'إدارة الأدوار', 41),
       ('admin.system_lists.view', 'admin', 'system_lists', 'view', 'عرض القوائم النظامية', 42),
-      ('admin.system_lists.manage', 'admin', 'system_lists', 'manage', 'إدارة القوائم النظامية', 43)
+      ('admin.system_lists.manage', 'admin', 'system_lists', 'manage', 'إدارة القوائم النظامية', 43),
+      -- Clients
+      ('clients.view_list', 'clients', 'records', 'view_list', 'عرض قائمة الزبائن', 100),
+      ('clients.view_detail', 'clients', 'records', 'view_detail', 'عرض ملف الزبون', 101),
+      ('clients.create', 'clients', 'records', 'create', 'إضافة زبون جديد', 102),
+      ('clients.edit', 'clients', 'records', 'edit', 'تعديل بيانات الزبون', 103),
+      -- Candidates
+      ('candidates.view_list', 'candidates', 'records', 'view_list', 'عرض الأسماء المقترحة', 110),
+      ('candidates.create', 'candidates', 'records', 'create', 'إضافة اسم مقترح', 111),
+      ('candidates.edit', 'candidates', 'records', 'edit', 'تعديل الاسم المقترح', 112),
+      -- Employees
+      ('employees.view_list', 'employees', 'records', 'view_list', 'عرض قائمة الموظفين', 120),
+      ('employees.create', 'employees', 'records', 'create', 'إضافة موظف جديد', 121),
+      ('employees.edit', 'employees', 'records', 'edit', 'تعديل بيانات الموظف', 122),
+      -- Contracts
+      ('contracts.view_list', 'contracts', 'records', 'view_list', 'عرض قائمة العقود', 130),
+      ('contracts.create', 'contracts', 'records', 'create', 'إنشاء عقد جديد', 131),
+      ('contracts.edit', 'contracts', 'records', 'edit', 'تعديل العقد', 132),
+      -- Devices
+      ('devices.view', 'devices', 'management', 'view', 'عرض الأجهزة وقطع الغيار', 140),
+      ('devices.manage', 'devices', 'management', 'manage', 'إدارة الأجهزة وقطع الغيار', 141),
+      -- Tasks & Operations
+      ('tasks.view', 'tasks', 'operations', 'view', 'عرض المهام والعمليات', 150),
+      ('tasks.manage', 'tasks', 'operations', 'manage', 'إدارة المهام وتحديث حالاتها', 151),
+      -- Planning
+      ('planning.view', 'planning', 'branch', 'view', 'عرض خطط وجداول الفرع', 160),
+      ('planning.manage', 'planning', 'branch', 'manage', 'إدارة الجدولة وتعيين المسارات', 161),
+      -- Telemarketer / Appointments
+      ('telemarketer.view', 'telemarketer', 'appointments', 'view', 'عرض إدارة المواعيد', 170),
+      ('telemarketer.manage', 'telemarketer', 'appointments', 'manage', 'إدارة المواعيد والعملاء', 171),
+      -- Geo
+      ('geo.view', 'geo', 'geography', 'view', 'عرض المناطق الجغرافية', 180),
+      ('geo.manage', 'geo', 'geography', 'manage', 'إدارة المناطق والمستويات', 181),
+      -- Branches
+      ('branches.view', 'branches', 'management', 'view', 'عرض الفروع', 190),
+      ('branches.manage', 'branches', 'management', 'manage', 'إدارة الفروع', 191),
+      -- Settings
+      ('settings.view', 'settings', 'system', 'view', 'عرض إعدادات النظام', 200),
+      ('settings.manage', 'settings', 'system', 'manage', 'تعديل إعدادات النظام', 201)
     ON CONFLICT (key) DO NOTHING
   `);
 
