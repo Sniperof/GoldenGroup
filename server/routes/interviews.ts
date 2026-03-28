@@ -2,7 +2,7 @@ import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
 import { sanitizeText } from '../utils/sanitize.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permission.js';
 
 const router = Router();
 
@@ -18,8 +18,39 @@ const INTERVIEW_COLS = `
   created_at AS "createdAt"
 `;
 
+// GET /api/admin/interviews/eligible/:jobVacancyId
+router.get('/eligible/:jobVacancyId', requirePermission('jobs.interviews.view_eligible'), async (req, res) => {
+  try {
+    const { jobVacancyId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT ja.id,
+         a.first_name AS "applicantFirstName",
+         a.last_name AS "applicantLastName",
+         ja.current_stage AS "currentStage",
+         ja.application_status AS "applicationStatus"
+       FROM job_applications ja
+       JOIN applicants a ON a.id = ja.applicant_id
+       WHERE ja.job_vacancy_id = $1
+         AND (
+           (ja.current_stage = 'Shortlisted' AND ja.application_status = 'Qualified') OR
+           (ja.current_stage = 'Interview' AND ja.application_status = 'Interview Scheduled') OR
+           (ja.current_stage = 'Interview' AND ja.application_status = 'Interview Completed')
+         )
+         AND ja.id NOT IN (
+           SELECT application_id FROM interviews WHERE interview_status = 'Interview Scheduled'
+         )
+       ORDER BY a.last_name, a.first_name`,
+      [jobVacancyId]
+    );
+    res.json(rows);
+  } catch (err: any) {
+    console.error('Error fetching eligible for interview:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/interviews?applicationId=&interviewerName=&date=&jobVacancyId=
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requirePermission('jobs.interviews.view_list'), async (req, res) => {
   try {
     const { applicationId, interviewerName, date, jobVacancyId } = req.query;
     const conditions: string[] = [];
@@ -53,7 +84,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // POST /api/admin/interviews — schedule an interview
-router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
+router.post('/', requirePermission('jobs.interviews.schedule'), async (req, res) => {
   const client = await pool.connect();
   try {
     const b = req.body;
@@ -105,6 +136,15 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
       ]
     );
 
+    // Auto-update application status to Interview Scheduled + dual-write stage_status
+    await client.query(
+      `UPDATE job_applications
+       SET current_stage = 'Interview', application_status = 'Interview Scheduled',
+           stage_status = 'Scheduled', updated_at = NOW()
+       WHERE id = $1`,
+      [b.applicationId]
+    );
+
     await insertAuditLog(client, {
       entityType: 'interview',
       entityId: rows[0].id,
@@ -132,7 +172,7 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
 });
 
 // GET /api/admin/interviews/:id
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requirePermission('jobs.interviews.view_detail'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT ${INTERVIEW_COLS},
@@ -199,7 +239,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PUT /api/admin/interviews/:id — edit a scheduled interview
-router.put('/:id', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
+router.put('/:id', requirePermission('jobs.interviews.edit'), async (req, res) => {
   const client = await pool.connect();
   try {
     const b = req.body;
@@ -252,7 +292,7 @@ router.put('/:id', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) =
 
     await insertAuditLog(client, {
       entityType: 'interview',
-      entityId: parseInt(interviewId),
+      entityId: parseInt(interviewId as string),
       applicationId: current[0].application_id,
       actionType: 'Interview Updated',
       performedByRole: req.user!.role,
@@ -278,7 +318,7 @@ router.put('/:id', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) =
 });
 
 // PATCH /api/admin/interviews/:id/result — update interview result
-router.patch('/:id/result', requireAuth, async (req, res) => {
+router.patch('/:id/result', requirePermission('jobs.interviews.record_result'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { interviewStatus, internalNotes } = req.body;
@@ -286,6 +326,8 @@ router.patch('/:id/result', requireAuth, async (req, res) => {
     if (!['Interview Completed', 'Interview Failed'].includes(interviewStatus)) {
       return res.status(400).json({ error: 'حالة المقابلة غير صالحة' });
     }
+    // Map interview outcome to stage_status (always 'Completed' — Failed is now a separate decision)
+    const newStageStatus = 'Completed';
 
     await client.query('BEGIN');
 
@@ -311,9 +353,20 @@ router.patch('/:id/result', requireAuth, async (req, res) => {
       [interviewStatus, internalNotes ? sanitizeText(internalNotes) : null, req.params.id]
     );
 
+    // Auto-update application status + dual-write stage_status
+    // For 'Interview Failed', also set decision='Failed' for dual-write
+    const decision = interviewStatus === 'Interview Failed' ? 'Failed' : null;
+    await client.query(
+      `UPDATE job_applications
+       SET current_stage = 'Interview', application_status = $1,
+           stage_status = $2, decision = COALESCE($3, decision), updated_at = NOW()
+       WHERE id = $4`,
+      [interviewStatus, newStageStatus, decision, current[0].application_id]
+    );
+
     await insertAuditLog(client, {
       entityType: 'interview',
-      entityId: parseInt(req.params.id),
+      entityId: parseInt(req.params.id as string),
       applicationId: current[0].application_id,
       actionType: 'Interview Result Recorded',
       performedByRole: req.user!.role,

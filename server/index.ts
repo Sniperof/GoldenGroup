@@ -7,6 +7,7 @@ import { createSchema, seedData } from './schema.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import geoUnitsRouter from './routes/geoUnits.js';
+import branchesRouter from './routes/branches.js';
 import employeesRouter from './routes/employees.js';
 import clientsRouter from './routes/clients.js';
 import candidatesRouter from './routes/candidates.js';
@@ -30,6 +31,9 @@ import interviewsRouter from './routes/interviews.js';
 import trainingCoursesRouter from './routes/trainingCourses.js';
 import publicAreasRouter from './routes/publicAreas.js';
 import authRouter from './routes/auth.js';
+import systemListsRouter from './routes/systemLists.js';
+import uploadRouter from './routes/upload.js';
+import rolesRouter from './routes/roles.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -39,6 +43,7 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/geo-units', geoUnitsRouter);
+app.use('/api/branches', branchesRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/candidates', candidatesRouter);
@@ -61,6 +66,13 @@ app.use('/api/admin/applications', adminApplicationsRouter);
 app.use('/api/admin/interviews', interviewsRouter);
 app.use('/api/admin/training-courses', trainingCoursesRouter);
 app.use('/api/public/areas', publicAreasRouter);
+app.use('/api/system-lists', systemListsRouter);
+app.use('/api/upload', uploadRouter);
+app.use('/api/admin', rolesRouter);
+
+// Serve uploaded files (photos, CVs)
+const uploadsPath = path.resolve(__dirname, '..', '..', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));

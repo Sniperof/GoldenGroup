@@ -7,18 +7,16 @@ import {
   CheckCircle, XCircle, Loader2, AlertTriangle, Play, Award,
   UserPlus, ChevronDown,
 } from 'lucide-react';
+import PermissionGate from '../../components/PermissionGate';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function generateDates(start: string, end: string): string[] {
-  const dates: string[] = [];
-  const cur = new Date(start); cur.setHours(0, 0, 0, 0);
-  const endD = new Date(end); endD.setHours(0, 0, 0, 0);
-  while (cur <= endD) {
-    dates.push(cur.toISOString().split('T')[0]);
-    cur.setDate(cur.getDate() + 1);
+function generateDates(attendance: { attendanceDate: string }[]): string[] {
+  const datesSet = new Set<string>();
+  for (const a of attendance) {
+    datesSet.add(a.attendanceDate);
   }
-  return dates;
+  return Array.from(datesSet).sort();
 }
 
 function formatDate(d: string) {
@@ -91,7 +89,7 @@ export default function TrainingCourseDetail() {
   );
 
   const course = selectedCourse;
-  const dates = course.startDate && course.endDate ? generateDates(course.startDate, course.endDate) : [];
+  const dates = generateDates(course.attendance || []);
 
   // Build attendance lookup: { applicationId_date: status }
   const attMap: Record<string, 'Present' | 'Absent'> = {};
@@ -224,37 +222,42 @@ export default function TrainingCourseDetail() {
         )}
         <div className="mt-4 flex items-center gap-3 flex-wrap">
           {isScheduled && (
-            <button
-              onClick={handleStart}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors"
-            >
-              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              بدء الدورة
-            </button>
+            <PermissionGate permission="jobs.training.start">
+              <button
+                onClick={handleStart}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                بدء الدورة
+              </button>
+            </PermissionGate>
           )}
           {isStarted && (
-            <button
-              onClick={handleComplete}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-            >
-              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
-              إكمال الدورة
-            </button>
+            <PermissionGate permission="jobs.training.complete">
+              <button
+                onClick={handleComplete}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
+                إكمال الدورة
+              </button>
+            </PermissionGate>
           )}
         </div>
       </div>
 
       {/* Attendance Grid */}
-      {(isStarted || isCompleted) && course.trainees.length > 0 && dates.length > 0 && (
+      {(isStarted || isCompleted) && course.trainees.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
           <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-sky-500" />
             سجل الحضور
           </h2>
 
-          <div className="overflow-x-auto">
+          {dates.length > 0 ? (
+            <div className="overflow-x-auto">
             <table className="text-xs min-w-full">
               <thead>
                 <tr className="bg-slate-50">
@@ -292,15 +295,23 @@ export default function TrainingCourseDetail() {
               </tbody>
             </table>
           </div>
+          ) : (
+            <div className="text-center text-slate-500 py-6 text-sm bg-slate-50 rounded-xl">
+              لم يتم تسجيل أي حضور حتى الآن. الرجاء تحديد يوم لإضافته.
+            </div>
+          )}
 
           {/* Record attendance (only when started) */}
           {isStarted && (
+            <PermissionGate permission="jobs.training.record_attendance">
             <div className="mt-5 border-t border-slate-100 pt-5">
               <h3 className="text-sm font-semibold text-slate-700 mb-3">تسجيل حضور يوم:</h3>
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <input
                   type="date"
                   value={attDate}
+                  min={course.startDate}
+                  max={course.endDate}
                   onChange={e => handleDateChange(e.target.value)}
                   className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
                 />
@@ -351,6 +362,7 @@ export default function TrainingCourseDetail() {
                 </button>
               </div>
             </div>
+            </PermissionGate>
           )}
         </div>
       )}
@@ -376,33 +388,35 @@ export default function TrainingCourseDetail() {
                     {RESULT_LABELS[t.result]}
                   </span>
                 ) : (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="relative">
-                      <select
-                        value={pendingResults[t.applicationId] || ''}
-                        onChange={e => setPendingResults(p => ({ ...p, [t.applicationId]: e.target.value }))}
-                        className="appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500"
+                  <PermissionGate permission="jobs.training.record_result">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="relative">
+                        <select
+                          value={pendingResults[t.applicationId] || ''}
+                          onChange={e => setPendingResults(p => ({ ...p, [t.applicationId]: e.target.value }))}
+                          className="appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 pr-8 text-sm text-slate-700 focus:ring-2 focus:ring-sky-500"
+                        >
+                          <option value="">اختر النتيجة...</option>
+                          <option value="Passed">ناجح</option>
+                          <option value="Retraining">إعادة تدريب</option>
+                          <option value="Rejected">مرفوض</option>
+                          <option value="Retreated">منسحب</option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                      <button
+                        onClick={() => handleRecordResult(t)}
+                        disabled={savingResult[t.applicationId]}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-semibold hover:bg-sky-700 disabled:opacity-50"
                       >
-                        <option value="">اختر النتيجة...</option>
-                        <option value="Passed">ناجح</option>
-                        <option value="Retraining">إعادة تدريب</option>
-                        <option value="Rejected">مرفوض</option>
-                        <option value="Retreated">منسحب</option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        {savingResult[t.applicationId] ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                        تسجيل
+                      </button>
+                      {resultErrors[t.applicationId] && (
+                        <span className="text-xs text-red-600">{resultErrors[t.applicationId]}</span>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleRecordResult(t)}
-                      disabled={savingResult[t.applicationId]}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-semibold hover:bg-sky-700 disabled:opacity-50"
-                    >
-                      {savingResult[t.applicationId] ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                      تسجيل
-                    </button>
-                    {resultErrors[t.applicationId] && (
-                      <span className="text-xs text-red-600">{resultErrors[t.applicationId]}</span>
-                    )}
-                  </div>
+                  </PermissionGate>
                 )}
               </div>
             ))}

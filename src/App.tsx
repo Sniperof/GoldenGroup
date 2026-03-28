@@ -28,6 +28,7 @@ import TelemarketerWorkspace from './pages/TelemarketerWorkspace';
 import TeamTasksDetail from './pages/planning/TeamTasksDetail';
 import MarketingOperations from './pages/tasks/MarketingOperations';
 import SystemSettings from './pages/SystemSettings';
+import Branches from './pages/Branches';
 import Vacancies from './pages/jobs/Vacancies';
 import VacancyDetail from './pages/jobs/VacancyDetail';
 import PublicJobs from './pages/jobs/PublicJobs';
@@ -38,6 +39,9 @@ import Interviews from './pages/jobs/Interviews';
 import InterviewDetail from './pages/jobs/InterviewDetail';
 import TrainingCourses from './pages/jobs/TrainingCourses';
 import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
+import SystemLists from './pages/admin/SystemLists';
+import Roles from './pages/admin/Roles';
+import RolePermissions from './pages/admin/RolePermissions';
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -81,6 +85,8 @@ export default function App() {
 
                         <Route path="/telemarketer" element={<TelemarketerWorkspace />} />
                         <Route path="/settings" element={<SystemSettings />} />
+                        <Route path="/system-lists" element={<SystemLists />} />
+                        <Route path="/branches" element={<Branches />} />
 
                         {/* Job Applications Epic */}
                         <Route path="/jobs/vacancies" element={<Vacancies />} />
@@ -93,6 +99,10 @@ export default function App() {
                         <Route path="/jobs/interviews/:id" element={<InterviewDetail />} />
                         <Route path="/jobs/training-courses" element={<TrainingCourses />} />
                         <Route path="/jobs/training-courses/:id" element={<TrainingCourseDetail />} />
+
+                        {/* Admin */}
+                        <Route path="/admin/roles" element={<Roles />} />
+                        <Route path="/admin/roles/:id/permissions" element={<RolePermissions />} />
                     </Route>
                 </Routes>
             </ErrorBoundary>

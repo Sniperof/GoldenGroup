@@ -206,11 +206,33 @@ export async function createSchema() {
       routes JSONB DEFAULT '[]',
       extra_zones JSONB DEFAULT '[]'
     );
+
+    CREATE TABLE IF NOT EXISTS branches (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      location_geo_id INTEGER REFERENCES geo_units(id),
+      covered_geo_ids JSONB DEFAULT '[]',
+      status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS system_lists (
+      id SERIAL PRIMARY KEY,
+      category VARCHAR(100) NOT NULL,
+      value VARCHAR(255) NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      display_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_system_lists_category ON system_lists(category);
   `);
 
   await migrateJobTables();
   await fixSchemaConstraints();
   await createHrUsers();
+  await createPermissionsTables();
 }
 
 async function migrateJobTables() {
@@ -482,6 +504,22 @@ async function fixSchemaConstraints() {
     `);
   } catch { /* ignore */ }
 
+  // New modifications for manual applications
+  try {
+    // Drop constraint on application_source
+    await pool.query(`ALTER TABLE job_applications DROP CONSTRAINT IF EXISTS job_applications_application_source_check`);
+    
+    // Drop NOT NULL from job_vacancy_id
+    await pool.query(`ALTER TABLE job_applications ALTER COLUMN job_vacancy_id DROP NOT NULL`);
+    
+    // Add whatsapp flags and specialization to applicants
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS has_whatsapp_primary BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS has_whatsapp_secondary BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE applicants ADD COLUMN IF NOT EXISTS specialization VARCHAR(255)`);
+  } catch (err) {
+    console.error('Migration adjustments failed:', err);
+  }
+
   // Create training_course_trainees junction table
   try {
     await pool.query(`
@@ -506,6 +544,47 @@ async function fixSchemaConstraints() {
         ADD CONSTRAINT job_vacancies_vacancy_count_check CHECK (vacancy_count >= 0)
     `);
   } catch { /* ignore — constraint may already be correct */ }
+
+  // ── Add stage_status + decision columns (status/decision separation) ──
+  try {
+    await pool.query(`
+      ALTER TABLE job_applications
+        ADD COLUMN IF NOT EXISTS stage_status VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS decision VARCHAR(30)
+    `);
+    // Migrate existing data: derive stage_status and decision from application_status
+    await pool.query(`
+      UPDATE job_applications SET
+        stage_status = CASE
+          WHEN current_stage = 'Submitted' AND application_status = 'New' THEN 'Pending'
+          WHEN current_stage = 'Submitted' AND application_status IN ('In Review', 'Rejected') THEN 'Under Review'
+          WHEN current_stage = 'Shortlisted' THEN 'Ready'
+          WHEN current_stage = 'Interview' AND application_status = 'Interview Scheduled' THEN 'Scheduled'
+          WHEN current_stage = 'Interview' AND application_status IN ('Interview Completed','Interview Failed') THEN 'Completed'
+          WHEN current_stage = 'Training' AND application_status IN ('Approved','Retraining') THEN 'Ready'
+          WHEN current_stage = 'Training' AND application_status = 'Training Scheduled' THEN 'Scheduled'
+          WHEN current_stage = 'Training' AND application_status = 'Training Started' THEN 'In Progress'
+          WHEN current_stage = 'Training' AND application_status = 'Training Completed' THEN 'Completed'
+          WHEN current_stage = 'Final Decision' THEN 'Awaiting Decision'
+          ELSE 'Pending'
+        END,
+        decision = CASE application_status
+          WHEN 'Qualified' THEN 'Qualified'
+          WHEN 'Rejected' THEN 'Rejected'
+          WHEN 'Interview Failed' THEN 'Failed'
+          WHEN 'Approved' THEN 'Approved'
+          WHEN 'Retraining' THEN 'Retraining'
+          WHEN 'Passed' THEN 'Passed'
+          WHEN 'Final Hired' THEN 'Hired'
+          WHEN 'Final Rejected' THEN 'Rejected'
+          WHEN 'Retreated' THEN 'Retreated'
+          ELSE NULL
+        END
+      WHERE stage_status IS NULL
+    `);
+  } catch (err) {
+    console.error('stage_status/decision migration failed:', err);
+  }
 }
 
 async function createHrUsers() {
@@ -541,6 +620,115 @@ async function createHrUsers() {
   try {
     await pool.query(`ALTER TABLE training_attendance DROP CONSTRAINT IF EXISTS training_attendance_recorded_by_user_id_fkey`);
   } catch { /* ignore */ }
+
+  // Add required_certificate & required_major columns to job_vacancies
+  try {
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS required_certificate VARCHAR(255)`);
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS required_major VARCHAR(255)`);
+  } catch { /* ignore */ }
+
+  // Add contact_info JSONB column to branches
+  try {
+    await pool.query(`ALTER TABLE branches ADD COLUMN IF NOT EXISTS contact_info JSONB DEFAULT '[]'::jsonb`);
+  } catch { /* ignore */ }
+
+  // Add contact_methods JSONB column to job_vacancies (replaces email)
+  try {
+    await pool.query(`ALTER TABLE job_vacancies ADD COLUMN IF NOT EXISTS contact_methods JSONB DEFAULT '[]'::jsonb`);
+  } catch { /* ignore */ }
+
+  // Add unique constraint on system_lists(category, value) so we can do ON CONFLICT DO NOTHING
+  try {
+    await pool.query(`ALTER TABLE system_lists ADD CONSTRAINT system_lists_category_value_unique UNIQUE (category, value)`);
+  } catch { /* ignore — constraint may already exist */ }
+
+  // Seed new system list categories (idempotent — skips duplicates)
+  try {
+    await pool.query(`
+      INSERT INTO system_lists (category, value, display_order) VALUES
+        ('job_title', 'فني صيانة أجهزة', 1),
+        ('job_title', 'مندوب مبيعات', 2),
+        ('job_title', 'فني تركيب', 3),
+        ('job_title', 'مسؤول خدمة العملاء', 4),
+        ('job_title', 'محاسب', 5),
+        ('certificate', 'ابتدائية', 1),
+        ('certificate', 'متوسطة', 2),
+        ('certificate', 'إعدادية', 3),
+        ('certificate', 'دبلوم', 4),
+        ('certificate', 'بكالوريوس', 5),
+        ('certificate', 'ماجستير', 6),
+        ('certificate', 'دكتوراه', 7),
+        ('major:دبلوم', 'تقنيات حاسبات', 1),
+        ('major:دبلوم', 'إدارة أعمال', 2),
+        ('major:دبلوم', 'محاسبة', 3),
+        ('major:بكالوريوس', 'هندسة حاسبات', 1),
+        ('major:بكالوريوس', 'هندسة كهرباء', 2),
+        ('major:بكالوريوس', 'إدارة أعمال', 3),
+        ('major:بكالوريوس', 'محاسبة', 4),
+        ('major:ماجستير', 'هندسة حاسبات', 1),
+        ('major:ماجستير', 'إدارة أعمال', 2),
+        ('major:دكتوراه', 'هندسة حاسبات', 1),
+        ('application_source', 'إنترنت (Website)', 1),
+        ('application_source', 'تسجيل داخلي', 2),
+        ('application_source', 'نماذج ورقية', 3),
+        ('application_source', 'صفحة فيسبوك', 4),
+        ('foreign_language', 'الإنجليزية', 1),
+        ('foreign_language', 'الفرنسية', 2),
+        ('foreign_language', 'الكردية', 3),
+        ('foreign_language', 'التركية', 4),
+        ('foreign_language', 'الألمانية', 5)
+      ON CONFLICT (category, value) DO NOTHING
+    `);
+    console.log('New system list categories seeded (job_title, certificate, major, app_source, languages).');
+  } catch (err) {
+    console.warn('System list seeding warning:', err);
+  }
+}
+
+async function createPermissionsTables() {
+  // Create roles table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL UNIQUE,
+      display_name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_system BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Create permissions table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS permissions (
+      id SERIAL PRIMARY KEY,
+      key VARCHAR(150) NOT NULL UNIQUE,
+      module VARCHAR(50) NOT NULL,
+      sub_module VARCHAR(50) NOT NULL,
+      action VARCHAR(50) NOT NULL,
+      display_name VARCHAR(255) NOT NULL,
+      display_order INTEGER DEFAULT 0
+    )
+  `);
+
+  // Create role_permissions junction table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id SERIAL PRIMARY KEY,
+      role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+      permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+      UNIQUE(role_id, permission_id)
+    )
+  `);
+
+  // Migrate hr_users: add role_id column
+  try {
+    await pool.query(`ALTER TABLE hr_users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id)`);
+  } catch { /* ignore */ }
+
+  console.log('Permissions tables created.');
 }
 
 export async function seedData() {
@@ -557,6 +745,121 @@ export async function seedData() {
     `, [managerHash, assistantHash]);
     console.log('Default HR users seeded.');
   }
+
+  // Seed system roles (idempotent)
+  await pool.query(`
+    INSERT INTO roles (name, display_name, description, is_system) VALUES
+      ('HR_MANAGER', 'مدير الموارد البشرية', 'صلاحيات كاملة لإدارة قسم الوظائف', TRUE),
+      ('HR_ASSISTANT', 'مساعد الموارد البشرية', 'صلاحيات محدودة للمساعدة في إدارة الوظائف', TRUE)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  // Seed all permissions (idempotent)
+  await pool.query(`
+    INSERT INTO permissions (key, module, sub_module, action, display_name, display_order) VALUES
+      ('jobs.vacancies.view_list', 'jobs', 'vacancies', 'view_list', 'عرض قائمة الشواغر', 1),
+      ('jobs.vacancies.view_detail', 'jobs', 'vacancies', 'view_detail', 'عرض تفاصيل الشاغر', 2),
+      ('jobs.vacancies.create', 'jobs', 'vacancies', 'create', 'إنشاء شاغر وظيفي', 3),
+      ('jobs.vacancies.edit', 'jobs', 'vacancies', 'edit', 'تعديل شاغر وظيفي', 4),
+      ('jobs.vacancies.change_status', 'jobs', 'vacancies', 'change_status', 'تغيير حالة الشاغر', 5),
+      ('jobs.applications.view_list', 'jobs', 'applications', 'view_list', 'عرض قائمة الطلبات', 10),
+      ('jobs.applications.view_detail', 'jobs', 'applications', 'view_detail', 'عرض تفاصيل الطلب', 11),
+      ('jobs.applications.create', 'jobs', 'applications', 'create', 'إنشاء طلب يدوي', 12),
+      ('jobs.applications.change_stage', 'jobs', 'applications', 'change_stage', 'تغيير مرحلة الطلب', 13),
+      ('jobs.applications.record_decision', 'jobs', 'applications', 'record_decision', 'تسجيل قرار على الطلب', 14),
+      ('jobs.applications.hire', 'jobs', 'applications', 'hire', 'التعيين النهائي', 15),
+      ('jobs.applications.escalate', 'jobs', 'applications', 'escalate', 'تصعيد الطلب', 16),
+      ('jobs.applications.archive', 'jobs', 'applications', 'archive', 'أرشفة الطلب', 17),
+      ('jobs.applications.edit_notes', 'jobs', 'applications', 'edit_notes', 'تعديل الملاحظات', 18),
+      ('jobs.applications.view_audit_logs', 'jobs', 'applications', 'view_audit_logs', 'عرض سجل التدقيق', 19),
+      ('jobs.interviews.view_list', 'jobs', 'interviews', 'view_list', 'عرض قائمة المقابلات', 20),
+      ('jobs.interviews.view_detail', 'jobs', 'interviews', 'view_detail', 'عرض تفاصيل المقابلة', 21),
+      ('jobs.interviews.view_eligible', 'jobs', 'interviews', 'view_eligible', 'عرض المرشحين المؤهلين للمقابلة', 22),
+      ('jobs.interviews.schedule', 'jobs', 'interviews', 'schedule', 'جدولة مقابلة', 23),
+      ('jobs.interviews.edit', 'jobs', 'interviews', 'edit', 'تعديل مقابلة', 24),
+      ('jobs.interviews.record_result', 'jobs', 'interviews', 'record_result', 'تسجيل نتيجة المقابلة', 25),
+      ('jobs.training.view_list', 'jobs', 'training', 'view_list', 'عرض قائمة الدورات التدريبية', 30),
+      ('jobs.training.view_detail', 'jobs', 'training', 'view_detail', 'عرض تفاصيل الدورة التدريبية', 31),
+      ('jobs.training.view_eligible', 'jobs', 'training', 'view_eligible', 'عرض المؤهلين للتدريب', 32),
+      ('jobs.training.create', 'jobs', 'training', 'create', 'إنشاء دورة تدريبية', 33),
+      ('jobs.training.start', 'jobs', 'training', 'start', 'بدء الدورة التدريبية', 34),
+      ('jobs.training.complete', 'jobs', 'training', 'complete', 'إكمال الدورة التدريبية', 35),
+      ('jobs.training.record_attendance', 'jobs', 'training', 'record_attendance', 'تسجيل الحضور', 36),
+      ('jobs.training.record_result', 'jobs', 'training', 'record_result', 'تسجيل نتيجة التدريب', 37),
+      ('jobs.training.add_trainees', 'jobs', 'training', 'add_trainees', 'إضافة متدربين', 38),
+      ('admin.roles.view', 'admin', 'roles', 'view', 'عرض الأدوار', 40),
+      ('admin.roles.manage', 'admin', 'roles', 'manage', 'إدارة الأدوار', 41),
+      ('admin.system_lists.view', 'admin', 'system_lists', 'view', 'عرض القوائم النظامية', 42),
+      ('admin.system_lists.manage', 'admin', 'system_lists', 'manage', 'إدارة القوائم النظامية', 43),
+      -- Clients
+      ('clients.view_list', 'clients', 'records', 'view_list', 'عرض قائمة الزبائن', 100),
+      ('clients.view_detail', 'clients', 'records', 'view_detail', 'عرض ملف الزبون', 101),
+      ('clients.create', 'clients', 'records', 'create', 'إضافة زبون جديد', 102),
+      ('clients.edit', 'clients', 'records', 'edit', 'تعديل بيانات الزبون', 103),
+      -- Candidates
+      ('candidates.view_list', 'candidates', 'records', 'view_list', 'عرض الأسماء المقترحة', 110),
+      ('candidates.create', 'candidates', 'records', 'create', 'إضافة اسم مقترح', 111),
+      ('candidates.edit', 'candidates', 'records', 'edit', 'تعديل الاسم المقترح', 112),
+      -- Employees
+      ('employees.view_list', 'employees', 'records', 'view_list', 'عرض قائمة الموظفين', 120),
+      ('employees.create', 'employees', 'records', 'create', 'إضافة موظف جديد', 121),
+      ('employees.edit', 'employees', 'records', 'edit', 'تعديل بيانات الموظف', 122),
+      -- Contracts
+      ('contracts.view_list', 'contracts', 'records', 'view_list', 'عرض قائمة العقود', 130),
+      ('contracts.create', 'contracts', 'records', 'create', 'إنشاء عقد جديد', 131),
+      ('contracts.edit', 'contracts', 'records', 'edit', 'تعديل العقد', 132),
+      -- Devices
+      ('devices.view', 'devices', 'management', 'view', 'عرض الأجهزة وقطع الغيار', 140),
+      ('devices.manage', 'devices', 'management', 'manage', 'إدارة الأجهزة وقطع الغيار', 141),
+      -- Tasks & Operations
+      ('tasks.view', 'tasks', 'operations', 'view', 'عرض المهام والعمليات', 150),
+      ('tasks.manage', 'tasks', 'operations', 'manage', 'إدارة المهام وتحديث حالاتها', 151),
+      -- Planning
+      ('planning.view', 'planning', 'branch', 'view', 'عرض خطط وجداول الفرع', 160),
+      ('planning.manage', 'planning', 'branch', 'manage', 'إدارة الجدولة وتعيين المسارات', 161),
+      -- Telemarketer / Appointments
+      ('telemarketer.view', 'telemarketer', 'appointments', 'view', 'عرض إدارة المواعيد', 170),
+      ('telemarketer.manage', 'telemarketer', 'appointments', 'manage', 'إدارة المواعيد والعملاء', 171),
+      -- Geo
+      ('geo.view', 'geo', 'geography', 'view', 'عرض المناطق الجغرافية', 180),
+      ('geo.manage', 'geo', 'geography', 'manage', 'إدارة المناطق والمستويات', 181),
+      -- Branches
+      ('branches.view', 'branches', 'management', 'view', 'عرض الفروع', 190),
+      ('branches.manage', 'branches', 'management', 'manage', 'إدارة الفروع', 191),
+      -- Settings
+      ('settings.view', 'settings', 'system', 'view', 'عرض إعدادات النظام', 200),
+      ('settings.manage', 'settings', 'system', 'manage', 'تعديل إعدادات النظام', 201)
+    ON CONFLICT (key) DO NOTHING
+  `);
+
+  // Grant ALL permissions to HR_MANAGER role
+  await pool.query(`
+    INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'HR_MANAGER'
+    ON CONFLICT (role_id, permission_id) DO NOTHING
+  `);
+
+  // Grant subset to HR_ASSISTANT
+  await pool.query(`
+    INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON p.key IN (
+        'jobs.vacancies.view_list', 'jobs.vacancies.view_detail',
+        'jobs.applications.view_list', 'jobs.applications.view_detail', 'jobs.applications.create',
+        'jobs.applications.change_stage', 'jobs.applications.record_decision',
+        'jobs.applications.edit_notes', 'jobs.applications.view_audit_logs',
+        'jobs.interviews.view_list', 'jobs.interviews.view_detail', 'jobs.interviews.view_eligible',
+        'jobs.interviews.schedule', 'jobs.interviews.edit', 'jobs.interviews.record_result',
+        'jobs.training.view_list', 'jobs.training.view_detail', 'jobs.training.view_eligible'
+      ) WHERE r.name = 'HR_ASSISTANT'
+    ON CONFLICT (role_id, permission_id) DO NOTHING
+  `);
+
+  // Backfill role_id from legacy role column
+  await pool.query(`
+    UPDATE hr_users SET role_id = (SELECT id FROM roles WHERE name = hr_users.role) WHERE role_id IS NULL
+  `);
+
+  console.log('Permissions seeded and role_id backfilled.');
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM employees');
   if (parseInt(rows[0].count) > 0) return;
@@ -660,4 +963,50 @@ export async function seedData() {
 
     SELECT setval('maintenance_requests_id_seq', (SELECT MAX(id) FROM maintenance_requests));
   `);
+
+  // Seed system lists
+  const { rows: sysListRows } = await pool.query('SELECT COUNT(*) FROM system_lists');
+  if (parseInt(sysListRows[0].count) === 0) {
+    await pool.query(`
+      INSERT INTO system_lists (category, value, display_order) VALUES
+        ('nationality', 'عراقي', 1),
+        ('nationality', 'أردني', 2),
+        ('nationality', 'سوري', 3),
+        ('nationality', 'مصري', 4),
+        ('work_type', 'دوام كامل', 1),
+        ('work_type', 'دوام جزئي', 2),
+        ('work_type', 'نظام الشفتات', 3),
+        ('marital_status', 'أعزب / عزباء', 1),
+        ('marital_status', 'متزوج / متزوجة', 2),
+        ('marital_status', 'أرمل / أرملة', 3),
+        ('marital_status', 'مطلق / مطلقة', 4),
+        ('gender', 'ذكر', 1),
+        ('gender', 'أنثى', 2),
+        ('driving_license', 'نعم', 1),
+        ('driving_license', 'لا', 2),
+        ('job_title', 'فني صيانة أجهزة', 1),
+        ('job_title', 'مندوب مبيعات', 2),
+        ('job_title', 'فني تركيب', 3),
+        ('job_title', 'مسؤول خدمة العملاء', 4),
+        ('job_title', 'محاسب', 5),
+        ('certificate', 'ابتدائية', 1),
+        ('certificate', 'متوسطة', 2),
+        ('certificate', 'إعدادية', 3),
+        ('certificate', 'دبلوم', 4),
+        ('certificate', 'بكالوريوس', 5),
+        ('certificate', 'ماجستير', 6),
+        ('certificate', 'دكتوراه', 7),
+        ('major:دبلوم', 'تقنيات حاسبات', 1),
+        ('major:دبلوم', 'إدارة أعمال', 2),
+        ('major:دبلوم', 'محاسبة', 3),
+        ('major:بكالوريوس', 'هندسة حاسبات', 1),
+        ('major:بكالوريوس', 'هندسة كهرباء', 2),
+        ('major:بكالوريوس', 'إدارة أعمال', 3),
+        ('major:بكالوريوس', 'محاسبة', 4),
+        ('major:ماجستير', 'هندسة حاسبات', 1),
+        ('major:ماجستير', 'إدارة أعمال', 2),
+        ('major:دكتوراه', 'هندسة حاسبات', 1)
+    `);
+    console.log('System lists seeded.');
+  }
 }

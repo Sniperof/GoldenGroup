@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrainingStore } from '../../hooks/useTrainingStore';
-import type { CreateTrainingCourseRequest } from '../../lib/types';
+import type { CreateTrainingCourseRequest, DeviceModel } from '../../lib/types';
+import { authFetch } from '../../lib/authFetch';
+import { api } from '../../lib/api';
 import {
   GraduationCap, Plus, Search, Filter, ChevronDown, ChevronLeft, ChevronRight,
   Calendar, User, Monitor, Building2, Users, CheckCircle, X, Loader2,
 } from 'lucide-react';
+import PermissionGate from '../../components/PermissionGate';
 
 const STATUS_COLORS: Record<string, string> = {
   'Training Scheduled': 'bg-blue-100 text-blue-700',
@@ -47,6 +50,7 @@ export default function TrainingCourses() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [deviceModels, setDeviceModels] = useState<DeviceModel[]>([]);
   const [eligibleTrainees, setEligibleTrainees] = useState<EligibleTrainee[]>([]);
   const [loadingTrainees, setLoadingTrainees] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -62,16 +66,20 @@ export default function TrainingCourses() {
 
   useEffect(() => {
     if (showModal) {
-      fetch('/api/admin/vacancies?status=Open')
+      authFetch('/api/admin/vacancies?status=Open')
         .then(r => r.json())
         .then(data => setVacancies(Array.isArray(data) ? data : []))
         .catch(() => setVacancies([]));
+
+      api.deviceModels.list()
+        .then(data => setDeviceModels(data))
+        .catch(() => setDeviceModels([]));
     }
   }, [showModal]);
 
   async function onVacancyChange(vacId: number) {
     const vac = vacancies.find(v => v.id === vacId);
-    setForm(f => ({ ...f, job_vacancy_id: vacId, branch: vac?.branch || f.branch, trainee_application_ids: [] }));
+    setForm(f => ({ ...f, job_vacancy_id: vacId, branch: vac?.branch || '', trainee_application_ids: [] }));
     setEligibleTrainees([]);
     if (vacId) {
       setLoadingTrainees(true);
@@ -141,13 +149,15 @@ export default function TrainingCourses() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">إدارة دورات التدريب وسجلات الحضور والنتائج</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          إنشاء دورة تدريبية
-        </button>
+        <PermissionGate permission="jobs.training.create">
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            إنشاء دورة تدريبية
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -312,18 +322,28 @@ export default function TrainingCourses() {
                     <Building2 className="w-3 h-3" /> الفرع *
                   </label>
                   <input type="text" value={form.branch}
-                    onChange={e => setForm(f => ({ ...f, branch: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500" />
+                    readOnly
+                    dir="rtl"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-not-allowed text-slate-500"
+                    placeholder="يتم تحديده تلقائياً من الشاغر" />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
                     <Monitor className="w-3 h-3" /> الجهاز
                   </label>
-                  <input type="text" value={form.device_name}
+                  <select
+                    value={form.device_name}
                     onChange={e => setForm(f => ({ ...f, device_name: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500"
-                    placeholder="اختياري" />
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 bg-white"
+                  >
+                    <option value="">لا يوجد / اختياري</option>
+                    {deviceModels.map(d => (
+                      <option key={d.id} value={d.name}>
+                        {d.name} {d.brand ? `— ${d.brand}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-span-2">

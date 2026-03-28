@@ -12,17 +12,20 @@ const FINAL_STATUSES = ['Final Hired', 'Final Rejected', 'Retreated', 'Rejected'
 export async function checkDuplicate(
   client: PoolClient,
   mobileNumber: string,
-  vacancyId: number
+  vacancyId: number | null
 ): Promise<{ blocked: true; duplicateApplicationId: number } | { blocked: false; duplicateFlag: boolean }> {
   const placeholders = FINAL_STATUSES.map((_, i) => `$${i + 3}`).join(',');
+
+  const vacancyCondition = vacancyId === null ? 'ja.job_vacancy_id IS NULL' : 'ja.job_vacancy_id = $2';
+  const queryParams: any[] = vacancyId === null ? [mobileNumber, null, ...FINAL_STATUSES] : [mobileNumber, vacancyId, ...FINAL_STATUSES];
 
   // Active check: same mobile + vacancy, NOT in terminal statuses
   const { rows: activeApps } = await client.query(
     `SELECT ja.id FROM job_applications ja
      JOIN applicants ap ON ap.id = ja.applicant_id
-     WHERE ap.mobile_number = $1 AND ja.job_vacancy_id = $2
+     WHERE ap.mobile_number = $1 AND ${vacancyCondition}
        AND ja.application_status NOT IN (${placeholders})`,
-    [mobileNumber, vacancyId, ...FINAL_STATUSES]
+    queryParams
   );
   if (activeApps.length > 0) {
     return { blocked: true, duplicateApplicationId: activeApps[0].id };
@@ -32,9 +35,9 @@ export async function checkDuplicate(
   const { rows: histApps } = await client.query(
     `SELECT ja.id FROM job_applications ja
      JOIN applicants ap ON ap.id = ja.applicant_id
-     WHERE ap.mobile_number = $1 AND ja.job_vacancy_id = $2
+     WHERE ap.mobile_number = $1 AND ${vacancyCondition}
        AND ja.application_status IN (${placeholders})`,
-    [mobileNumber, vacancyId, ...FINAL_STATUSES]
+    queryParams
   );
   return { blocked: false, duplicateFlag: histApps.length > 0 };
 }

@@ -1,10 +1,28 @@
 const API_BASE = '/api';
 
+// Read token from localStorage at call time (not at import time)
+function getToken(): string | null {
+  return localStorage.getItem('hr_token');
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    // Token expired or invalid — clear session and redirect to login
+    localStorage.removeItem('hr_token');
+    localStorage.removeItem('hr_user');
+    window.location.href = '/login';
+    throw new Error('انتهت صلاحية الجلسة — يرجى تسجيل الدخول مرة أخرى');
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API Error ${res.status}: ${text}`);
@@ -20,6 +38,12 @@ export const api = {
     list: () => request<any[]>('/geo-units'),
     create: (data: any) => request<any>('/geo-units', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number) => request<any>(`/geo-units/${id}`, { method: 'DELETE' }),
+  },
+  branches: {
+    list: () => request<any[]>('/branches'),
+    create: (data: any) => request<any>('/branches', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request<any>(`/branches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request<any>(`/branches/${id}`, { method: 'DELETE' }),
   },
   employees: {
     list: () => request<any[]>('/employees'),
@@ -97,5 +121,17 @@ export const api = {
     list: () => request<Record<string, any>>('/route-assignments'),
     get: (key: string) => request<any>(`/route-assignments/${key}`),
     save: (key: string, data: any) => request<any>(`/route-assignments/${key}`, { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  systemLists: {
+    list: (params?: { category?: string; activeOnly?: boolean }) => {
+      const query = new URLSearchParams();
+      if (params?.category) query.append('category', params.category);
+      if (params?.activeOnly) query.append('activeOnly', 'true');
+      const qs = query.toString() ? `?${query.toString()}` : '';
+      return request<any[]>(`/system-lists${qs}`);
+    },
+    create: (data: any) => request<any>('/system-lists', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request<any>(`/system-lists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request<any>(`/system-lists/${id}`, { method: 'DELETE' }),
   },
 };

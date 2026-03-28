@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT id, name, username, password_hash, role, is_active
+      `SELECT id, name, username, password_hash, role, role_id, is_active
        FROM hr_users WHERE username = $1`,
       [username.trim()]
     );
@@ -34,15 +34,28 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
+    // Fetch permissions for this user's role
+    let permissions: string[] = [];
+    if (user.role_id) {
+      const { rows: permRows } = await pool.query(
+        `SELECT p.key FROM role_permissions rp
+         JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.role_id = $1`,
+        [user.role_id]
+      );
+      permissions = permRows.map((r: any) => r.key);
+    }
+
     const token = jwt.sign(
-      { id: user.id, name: user.name, role: user.role },
+      { id: user.id, name: user.name, role: user.role, roleId: user.role_id },
       JWT_SECRET,
-      { expiresIn: '12h' }
+      { expiresIn: '7d' }
     );
 
     res.json({
       token,
-      user: { id: user.id, name: user.name, role: user.role },
+      user: { id: user.id, name: user.name, role: user.role, roleId: user.role_id },
+      permissions,
     });
   } catch (err: any) {
     console.error('Login error:', err);

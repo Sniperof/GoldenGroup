@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useInterviewStore } from '../../hooks/useInterviewStore';
 import { useVacancyStore } from '../../hooks/useVacancyStore';
+import { authFetch } from '../../lib/authFetch';
 import {
   Users, Plus, Filter, Calendar, CheckCircle, XCircle, Clock,
   AlertTriangle, X, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PermissionGate from '../../components/PermissionGate';
 
 const STATUS_LABELS: Record<string, string> = {
   'Interview Scheduled': 'مجدولة',
@@ -20,6 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 interface ScheduleForm {
+  jobVacancyId: string;
   applicationId: string;
   interviewType: 'HR Interview' | 'Technical Interview';
   interviewNumber: 'First Interview' | 'Second Interview';
@@ -30,6 +33,7 @@ interface ScheduleForm {
 }
 
 const emptyForm: ScheduleForm = {
+  jobVacancyId: '',
   applicationId: '',
   interviewType: 'HR Interview',
   interviewNumber: 'First Interview',
@@ -50,6 +54,8 @@ export default function Interviews() {
   const [resultModal, setResultModal] = useState<{ id: number } | null>(null);
   const [resultNotes, setResultNotes] = useState('');
   const [resultStatus, setResultStatus] = useState<'Interview Completed' | 'Interview Failed'>('Interview Completed');
+  const [eligibleApps, setEligibleApps] = useState<any[]>([]);
+  const [loadingEligible, setLoadingEligible] = useState(false);
 
   useEffect(() => {
     fetchVacancies();
@@ -58,6 +64,27 @@ export default function Interviews() {
   useEffect(() => {
     fetchInterviews();
   }, [filters.applicationId, filters.jobVacancyId, filters.interviewerName, filters.date]);
+
+  async function handleVacancyChange(vacId: string) {
+    setForm(p => ({ ...p, jobVacancyId: vacId, applicationId: '' }));
+    if (!vacId) {
+      setEligibleApps([]);
+      return;
+    }
+    setLoadingEligible(true);
+    try {
+      const res = await authFetch(`/api/admin/interviews/eligible/${vacId}`);
+      if (res.ok) {
+        setEligibleApps(await res.json());
+      } else {
+        setEligibleApps([]);
+      }
+    } catch {
+      setEligibleApps([]);
+    } finally {
+      setLoadingEligible(false);
+    }
+  }
 
   const handleSchedule = async () => {
     if (!form.applicationId.trim()) { setFormError('رقم الطلب مطلوب'); return; }
@@ -110,12 +137,14 @@ export default function Interviews() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">جدولة وتتبع مقابلات التوظيف</p>
         </div>
-        <button
-          onClick={() => setShowScheduleModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-lg shadow-sky-500/25 text-sm transition-all"
-        >
-          <Plus className="w-4 h-4" /> جدولة مقابلة
-        </button>
+        <PermissionGate permission="jobs.interviews.schedule">
+          <button
+            onClick={() => setShowScheduleModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-lg shadow-sky-500/25 text-sm transition-all"
+          >
+            <Plus className="w-4 h-4" /> جدولة مقابلة
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -228,12 +257,14 @@ export default function Interviews() {
                     </td>
                     <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       {iv.interviewStatus === 'Interview Scheduled' && (
-                        <button
-                          onClick={() => { setResultModal({ id: iv.id }); setResultNotes(''); setResultStatus('Interview Completed'); }}
-                          className="text-xs px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
-                        >
-                          تسجيل النتيجة
-                        </button>
+                        <PermissionGate permission="jobs.interviews.record_result">
+                          <button
+                            onClick={() => { setResultModal({ id: iv.id }); setResultNotes(''); setResultStatus('Interview Completed'); }}
+                            className="text-xs px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
+                          >
+                            تسجيل النتيجة
+                          </button>
+                        </PermissionGate>
                       )}
                     </td>
                   </tr>
@@ -268,10 +299,25 @@ export default function Interviews() {
               )}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">رقم الطلب *</label>
-                  <input type="number" value={form.applicationId}
-                    onChange={e => setForm(p => ({ ...p, applicationId: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-500" placeholder="1" />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">الشاغر الوظيفي *</label>
+                  <select value={form.jobVacancyId} onChange={e => handleVacancyChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-500 bg-white">
+                    <option value="">اختر الشاغر...</option>
+                    {vacancies.filter(v => v.status === 'Open').map(v => (
+                      <option key={v.id} value={v.id}>{v.title} — {v.branch}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">المتقدم (الطلبات المؤهلة) *</label>
+                  <select value={form.applicationId} onChange={e => setForm(p => ({ ...p, applicationId: e.target.value }))}
+                    disabled={!form.jobVacancyId || loadingEligible}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-500 bg-white disabled:bg-slate-50 disabled:text-slate-400">
+                    <option value="">{loadingEligible ? 'جاري التحميل...' : 'اختر المتقدم...'}</option>
+                    {eligibleApps.map(a => (
+                      <option key={a.id} value={a.id}>{a.applicantFirstName} {a.applicantLastName} (رقم {a.id})</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

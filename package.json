@@ -4,8 +4,8 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "dev": "tsx server/start.ts",
-        "dev:server": "tsx server/index.ts",
+        "dev": "tsx watch server/start.ts",
+        "dev:server": "tsx watch server/index.ts",
         "dev:client": "vite",
         "build": "tsc -b && vite build",
         "preview": "vite preview"
@@ -14,6 +14,7 @@
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.6",
         "@types/leaflet": "^1.9.21",
+        "@types/multer": "^2.1.0",
         "@types/pg": "^8.18.0",
         "bcryptjs": "^3.0.3",
         "cookie": "^1.1.1",
@@ -24,6 +25,7 @@
         "jsonwebtoken": "^9.0.3",
         "leaflet": "^1.9.4",
         "lucide-react": "^0.469.0",
+        "multer": "^2.1.1",
         "pg": "^8.20.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
@@ -45,5 +47,6 @@
         "tailwindcss": "^4.0.0",
         "typescript": "~5.6.2",
         "vite": "^6.0.0"
-    }
+    },
+    "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
 }

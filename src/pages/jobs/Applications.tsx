@@ -5,6 +5,7 @@ import type { ApplicationStage, ApplicationStatus } from '../../lib/types';
 import {
   ClipboardList, Search, Filter, ChevronDown, Eye, AlertTriangle, Calendar, Archive, Plus
 } from 'lucide-react';
+import PermissionGate from '../../components/PermissionGate';
 
 const STAGE_COLORS: Record<ApplicationStage, string> = {
   'Submitted': 'bg-blue-100 text-blue-700',
@@ -14,26 +15,39 @@ const STAGE_COLORS: Record<ApplicationStage, string> = {
   'Final Decision': 'bg-emerald-100 text-emerald-700',
 };
 const STAGE_LABELS: Record<ApplicationStage, string> = {
-  'Submitted': 'مقدّم',
+  'Submitted': 'استلام الطلب',
   'Shortlisted': 'القائمة القصيرة',
-  'Interview': 'مقابلة',
-  'Training': 'تدريب',
+  'Interview': 'المقابلة',
+  'Training': 'التدريب',
   'Final Decision': 'القرار النهائي',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  'New': 'bg-blue-50 text-blue-600', 'In Review': 'bg-indigo-50 text-indigo-600',
-  'Qualified': 'bg-emerald-50 text-emerald-600', 'Rejected': 'bg-red-50 text-red-600',
-  'Interview Scheduled': 'bg-amber-50 text-amber-600', 'Interview Completed': 'bg-teal-50 text-teal-600',
-  'Interview Failed': 'bg-red-50 text-red-600', 'Approved': 'bg-green-50 text-green-600',
-  'Training Scheduled': 'bg-cyan-50 text-cyan-600', 'Training Started': 'bg-sky-50 text-sky-600',
-  'Training Completed': 'bg-emerald-50 text-emerald-600', 'Retraining': 'bg-orange-50 text-orange-600',
-  'Passed': 'bg-green-50 text-green-600',
+const STAGE_STATUS_COLORS: Record<string, string> = {
+  'Pending': 'bg-slate-100 text-slate-600',
+  'Under Review': 'bg-indigo-50 text-indigo-600',
+  'Ready': 'bg-amber-50 text-amber-600',
+  'Scheduled': 'bg-amber-100 text-amber-700',
+  'Completed': 'bg-emerald-50 text-emerald-700',
+  'In Progress': 'bg-sky-50 text-sky-600',
+  'Awaiting Decision': 'bg-violet-50 text-violet-600',
+  // Terminal statuses use applicationStatus styling
   'Final Hired': 'bg-emerald-100 text-emerald-700',
   'Final Rejected': 'bg-red-100 text-red-700',
   'Retreated': 'bg-slate-100 text-slate-500',
+  'Rejected': 'bg-red-50 text-red-600',
 };
 
+const STAGE_STATUS_LABELS: Record<string, string> = {
+  'Pending': 'قيد الانتظار',
+  'Under Review': 'قيد المراجعة',
+  'Ready': 'جاهز',
+  'Scheduled': 'مجدول',
+  'Completed': 'مكتمل',
+  'In Progress': 'قيد التنفيذ',
+  'Awaiting Decision': 'بانتظار القرار',
+};
+
+// Kept for filter options only
 const STATUS_LABELS: Record<string, string> = {
   'New': 'جديد', 'In Review': 'قيد المراجعة', 'Qualified': 'مؤهل', 'Rejected': 'مرفوض',
   'Interview Scheduled': 'مقابلة مجدولة', 'Interview Completed': 'مقابلة مكتملة',
@@ -74,11 +88,13 @@ export default function Applications() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">عرض وإدارة جميع طلبات التوظيف المقدمة</p>
         </div>
-        <button
-          onClick={() => navigate('/jobs/applications/new')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold shadow-lg shadow-sky-500/25 transition-all text-sm">
-          <Plus className="w-4 h-4" /> إدخال طلب يدوي
-        </button>
+        <PermissionGate permission="jobs.applications.create">
+          <button
+            onClick={() => navigate('/jobs/applications/new')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold shadow-lg shadow-sky-500/25 transition-all text-sm">
+            <Plus className="w-4 h-4" /> إدخال طلب يدوي
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -189,7 +205,7 @@ export default function Applications() {
                   <th className="px-4 py-3 text-right font-semibold text-slate-600">الوظيفة</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-600">الفرع</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">المرحلة</th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-600">الحالة</th>
+                  <th className="px-4 py-3 text-center font-semibold text-slate-600">الحالة التشغيلية</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">تكرار</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">أرشيف</th>
                   <th className="px-4 py-3 text-center font-semibold text-slate-600">عرض</th>
@@ -220,8 +236,8 @@ export default function Applications() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[app.applicationStatus] || 'bg-slate-100 text-slate-600'}`}>
-                        {STATUS_LABELS[app.applicationStatus] || app.applicationStatus}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STAGE_STATUS_COLORS[app.stageStatus] || STAGE_STATUS_COLORS[app.applicationStatus] || 'bg-slate-100 text-slate-600'}`}>
+                        {STAGE_STATUS_LABELS[app.stageStatus] || STATUS_LABELS[app.applicationStatus] || app.stageStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">

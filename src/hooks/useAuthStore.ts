@@ -3,14 +3,19 @@ import { create } from 'zustand';
 export interface AuthUser {
   id: number;
   name: string;
-  role: 'HR_MANAGER' | 'HR_ASSISTANT';
+  role: string;
+  roleId?: number;
 }
 
 interface AuthState {
   token: string | null;
   user: AuthUser | null;
-  login: (token: string, user: AuthUser) => void;
+  permissions: string[];
+  login: (token: string, user: AuthUser, permissions?: string[]) => void;
   logout: () => void;
+  hasPermission: (key: string) => boolean;
+  hasAnyPermission: (...keys: string[]) => boolean;
+  setPermissions: (permissions: string[]) => void;
 }
 
 const storedToken = localStorage.getItem('hr_token');
@@ -22,18 +27,40 @@ const storedUser = (() => {
     return null;
   }
 })();
+const storedPermissions = (() => {
+  try {
+    const raw = localStorage.getItem('hr_permissions');
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+})();
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: storedToken,
   user: storedUser,
-  login(token, user) {
+  permissions: storedPermissions,
+  login(token, user, permissions = []) {
     localStorage.setItem('hr_token', token);
     localStorage.setItem('hr_user', JSON.stringify(user));
-    set({ token, user });
+    localStorage.setItem('hr_permissions', JSON.stringify(permissions));
+    set({ token, user, permissions });
   },
   logout() {
     localStorage.removeItem('hr_token');
     localStorage.removeItem('hr_user');
-    set({ token: null, user: null });
+    localStorage.removeItem('hr_permissions');
+    set({ token: null, user: null, permissions: [] });
+  },
+  hasPermission(key: string) {
+    return get().permissions.includes(key);
+  },
+  hasAnyPermission(...keys: string[]) {
+    const perms = get().permissions;
+    return keys.some(k => perms.includes(k));
+  },
+  setPermissions(permissions: string[]) {
+    localStorage.setItem('hr_permissions', JSON.stringify(permissions));
+    set({ permissions });
   },
 }));

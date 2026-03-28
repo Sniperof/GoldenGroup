@@ -85,7 +85,29 @@ export interface Employee {
     role: 'supervisor' | 'technician' | 'telemarketer';
     mobile: string;
     status: 'active' | 'leave' | 'inactive';
-    avatar: string;
+    avatar?: string;
+}
+
+export type BranchContactType = 'email' | 'phone' | 'mobile' | 'website';
+export type BranchDepartment = 'customer_service' | 'hr' | 'management' | 'accounting' | 'other';
+
+export interface BranchContact {
+  id: string;            // client-side UUID for keying
+  type: BranchContactType;
+  department: BranchDepartment;
+  value: string;         // the actual email/phone/url value
+  label?: string;        // optional extra note
+}
+
+export interface Branch {
+    id: number;
+    name: string;
+    locationGeoId?: number | null;
+    locationGeoName?: string;
+    coveredGeoIds: number[];
+    contactInfo: BranchContact[];
+    status: 'active' | 'inactive';
+    createdAt: string;
 }
 
 export type ContactType = 'mobile' | 'landline' | 'other';
@@ -368,6 +390,14 @@ export interface EmergencyTicket {
     createdAt: string;
 }
 
+export interface SystemList {
+    id: number;
+    category: string;
+    value: string;
+    isActive: boolean;
+    displayOrder: number;
+}
+
 // ─────────────────────────────────────────
 // Job Applications Epic
 // ─────────────────────────────────────────
@@ -383,6 +413,10 @@ export type ApplicationStatus =
   | 'Training Scheduled' | 'Training Started' | 'Training Completed' | 'Retraining'
   | 'Passed'
   | 'Final Hired' | 'Final Rejected' | 'Retreated';
+
+// ── New separated fields ──
+export type StageStatus = 'Pending' | 'Under Review' | 'Ready' | 'Scheduled' | 'Completed' | 'In Progress' | 'Awaiting Decision';
+export type Decision = 'Qualified' | 'Approved' | 'Passed' | 'Hired' | 'Rejected' | 'Failed' | 'Retraining' | 'Retreated';
 
 export type ReferrerType = 'Employee' | 'Customer';
 export type ApplicantSegment = 'OP' | 'FOP' | 'Lead' | 'Visitor';
@@ -400,15 +434,14 @@ export interface JobVacancy {
   requiredGender: string | null;
   requiredAgeMin: number | null;
   requiredAgeMax: number | null;
-  email: string | null;
-  requiredQualification: string | null;
-  requiredSpecialization: string | null;
+  contactMethods: BranchContact[];  // selected from branch contacts
+  requiredCertificate: string | null;
+  requiredMajor: string | null;
   requiredExperienceYears: number | null;
   requiredSkills: string | null;
   responsibilities: string | null;
   drivingLicenseRequired: boolean;
   vacancyCount: number;
-  maxRetrainingCount: number;
   startDate: string;
   endDate: string;
   status: VacancyStatus;
@@ -432,8 +465,9 @@ export interface Applicant {
   neighborhood: string;
   detailedAddress: string;
   academicQualification: string;
+  specialization?: string | null;
   previousEmployment: string;
-  drivingLicense: string | null;
+  drivingLicense: string | boolean | null;
   expectedSalary: number | null;
   computerSkills: string | null;
   foreignLanguages: string | null;
@@ -471,6 +505,8 @@ export interface JobApplication {
   enteredByName: string | null;
   currentStage: ApplicationStage;
   applicationStatus: ApplicationStatus;
+  stageStatus: StageStatus;
+  decision: Decision | null;
   duplicateFlag: boolean;
   isEscalated: boolean;
   escalatedAt: string | null;
@@ -584,8 +620,42 @@ export interface JobApplicationListItem extends JobApplication {
   applicantLastName: string;
   applicantMobile: string;
   applicantGender: string;
+  applicantDob?: string | null;
+  applicantGovernorate?: string | null;
+  applicantCityOrArea?: string | null;
+  applicantAcademicQualification?: string | null;
+  applicantSpecialization?: string | null;
+  applicantDrivingLicense?: string | boolean | null;
+  applicantComputerSkills?: string | null;
+  applicantYearsOfExperience?: number | null;
   vacancyTitle: string;
   vacancyBranch: string;
+  vacancyGovernorate?: string | null;
+  vacancyCityOrArea?: string | null;
+  vacancyRequiredGender?: string | null;
+  vacancyRequiredAgeMin?: number | null;
+  vacancyRequiredAgeMax?: number | null;
+  vacancyRequiredCertificate?: string | null;
+  vacancyRequiredMajor?: string | null;
+  vacancyRequiredExperienceYears?: number | null;
+  vacancyRequiredSkills?: string | null;
+  vacancyDrivingLicenseRequired?: boolean | null;
+}
+
+export interface ApplicationTrainingEnrollment {
+  id: number;
+  trainingCourseId: number;
+  trainingName: string;
+  trainer: string;
+  branch: string;
+  deviceName: string | null;
+  startDate: string;
+  endDate: string;
+  trainingStatus: 'Training Scheduled' | 'Training Started' | 'Training Completed';
+  notes: string | null;
+  result: 'Passed' | 'Retraining' | 'Rejected' | 'Retreated' | null;
+  resultRecordedAt: string | null;
+  addedAt: string;
 }
 
 export interface JobApplicationDetail extends JobApplication {
@@ -593,4 +663,5 @@ export interface JobApplicationDetail extends JobApplication {
   vacancy: JobVacancy;
   referrer: JobReferrer | null;
   interviews: Interview[];
+  trainings: ApplicationTrainingEnrollment[];
 }
