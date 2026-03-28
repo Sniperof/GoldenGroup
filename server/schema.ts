@@ -232,6 +232,7 @@ export async function createSchema() {
   await migrateJobTables();
   await fixSchemaConstraints();
   await createHrUsers();
+  await createPermissionsTables();
 }
 
 async function migrateJobTables() {
@@ -543,6 +544,47 @@ async function fixSchemaConstraints() {
         ADD CONSTRAINT job_vacancies_vacancy_count_check CHECK (vacancy_count >= 0)
     `);
   } catch { /* ignore — constraint may already be correct */ }
+
+  // ── Add stage_status + decision columns (status/decision separation) ──
+  try {
+    await pool.query(`
+      ALTER TABLE job_applications
+        ADD COLUMN IF NOT EXISTS stage_status VARCHAR(30),
+        ADD COLUMN IF NOT EXISTS decision VARCHAR(30)
+    `);
+    // Migrate existing data: derive stage_status and decision from application_status
+    await pool.query(`
+      UPDATE job_applications SET
+        stage_status = CASE
+          WHEN current_stage = 'Submitted' AND application_status = 'New' THEN 'Pending'
+          WHEN current_stage = 'Submitted' AND application_status IN ('In Review', 'Rejected') THEN 'Under Review'
+          WHEN current_stage = 'Shortlisted' THEN 'Ready'
+          WHEN current_stage = 'Interview' AND application_status = 'Interview Scheduled' THEN 'Scheduled'
+          WHEN current_stage = 'Interview' AND application_status IN ('Interview Completed','Interview Failed') THEN 'Completed'
+          WHEN current_stage = 'Training' AND application_status IN ('Approved','Retraining') THEN 'Ready'
+          WHEN current_stage = 'Training' AND application_status = 'Training Scheduled' THEN 'Scheduled'
+          WHEN current_stage = 'Training' AND application_status = 'Training Started' THEN 'In Progress'
+          WHEN current_stage = 'Training' AND application_status = 'Training Completed' THEN 'Completed'
+          WHEN current_stage = 'Final Decision' THEN 'Awaiting Decision'
+          ELSE 'Pending'
+        END,
+        decision = CASE application_status
+          WHEN 'Qualified' THEN 'Qualified'
+          WHEN 'Rejected' THEN 'Rejected'
+          WHEN 'Interview Failed' THEN 'Failed'
+          WHEN 'Approved' THEN 'Approved'
+          WHEN 'Retraining' THEN 'Retraining'
+          WHEN 'Passed' THEN 'Passed'
+          WHEN 'Final Hired' THEN 'Hired'
+          WHEN 'Final Rejected' THEN 'Rejected'
+          WHEN 'Retreated' THEN 'Retreated'
+          ELSE NULL
+        END
+      WHERE stage_status IS NULL
+    `);
+  } catch (err) {
+    console.error('stage_status/decision migration failed:', err);
+  }
 }
 
 async function createHrUsers() {
@@ -643,6 +685,52 @@ async function createHrUsers() {
   }
 }
 
+async function createPermissionsTables() {
+  // Create roles table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL UNIQUE,
+      display_name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_system BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Create permissions table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS permissions (
+      id SERIAL PRIMARY KEY,
+      key VARCHAR(150) NOT NULL UNIQUE,
+      module VARCHAR(50) NOT NULL,
+      sub_module VARCHAR(50) NOT NULL,
+      action VARCHAR(50) NOT NULL,
+      display_name VARCHAR(255) NOT NULL,
+      display_order INTEGER DEFAULT 0
+    )
+  `);
+
+  // Create role_permissions junction table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id SERIAL PRIMARY KEY,
+      role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+      permission_id INTEGER NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+      UNIQUE(role_id, permission_id)
+    )
+  `);
+
+  // Migrate hr_users: add role_id column
+  try {
+    await pool.query(`ALTER TABLE hr_users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id)`);
+  } catch { /* ignore */ }
+
+  console.log('Permissions tables created.');
+}
+
 export async function seedData() {
   // Seed default HR users (idempotent)
   const { rows: hrRows } = await pool.query('SELECT COUNT(*) FROM hr_users');
@@ -657,6 +745,83 @@ export async function seedData() {
     `, [managerHash, assistantHash]);
     console.log('Default HR users seeded.');
   }
+
+  // Seed system roles (idempotent)
+  await pool.query(`
+    INSERT INTO roles (name, display_name, description, is_system) VALUES
+      ('HR_MANAGER', 'مدير الموارد البشرية', 'صلاحيات كاملة لإدارة قسم الوظائف', TRUE),
+      ('HR_ASSISTANT', 'مساعد الموارد البشرية', 'صلاحيات محدودة للمساعدة في إدارة الوظائف', TRUE)
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  // Seed all permissions (idempotent)
+  await pool.query(`
+    INSERT INTO permissions (key, module, sub_module, action, display_name, display_order) VALUES
+      ('jobs.vacancies.view_list', 'jobs', 'vacancies', 'view_list', 'عرض قائمة الشواغر', 1),
+      ('jobs.vacancies.view_detail', 'jobs', 'vacancies', 'view_detail', 'عرض تفاصيل الشاغر', 2),
+      ('jobs.vacancies.create', 'jobs', 'vacancies', 'create', 'إنشاء شاغر وظيفي', 3),
+      ('jobs.vacancies.edit', 'jobs', 'vacancies', 'edit', 'تعديل شاغر وظيفي', 4),
+      ('jobs.vacancies.change_status', 'jobs', 'vacancies', 'change_status', 'تغيير حالة الشاغر', 5),
+      ('jobs.applications.view_list', 'jobs', 'applications', 'view_list', 'عرض قائمة الطلبات', 10),
+      ('jobs.applications.view_detail', 'jobs', 'applications', 'view_detail', 'عرض تفاصيل الطلب', 11),
+      ('jobs.applications.create', 'jobs', 'applications', 'create', 'إنشاء طلب يدوي', 12),
+      ('jobs.applications.change_stage', 'jobs', 'applications', 'change_stage', 'تغيير مرحلة الطلب', 13),
+      ('jobs.applications.record_decision', 'jobs', 'applications', 'record_decision', 'تسجيل قرار على الطلب', 14),
+      ('jobs.applications.hire', 'jobs', 'applications', 'hire', 'التعيين النهائي', 15),
+      ('jobs.applications.escalate', 'jobs', 'applications', 'escalate', 'تصعيد الطلب', 16),
+      ('jobs.applications.archive', 'jobs', 'applications', 'archive', 'أرشفة الطلب', 17),
+      ('jobs.applications.edit_notes', 'jobs', 'applications', 'edit_notes', 'تعديل الملاحظات', 18),
+      ('jobs.applications.view_audit_logs', 'jobs', 'applications', 'view_audit_logs', 'عرض سجل التدقيق', 19),
+      ('jobs.interviews.view_list', 'jobs', 'interviews', 'view_list', 'عرض قائمة المقابلات', 20),
+      ('jobs.interviews.view_detail', 'jobs', 'interviews', 'view_detail', 'عرض تفاصيل المقابلة', 21),
+      ('jobs.interviews.view_eligible', 'jobs', 'interviews', 'view_eligible', 'عرض المرشحين المؤهلين للمقابلة', 22),
+      ('jobs.interviews.schedule', 'jobs', 'interviews', 'schedule', 'جدولة مقابلة', 23),
+      ('jobs.interviews.edit', 'jobs', 'interviews', 'edit', 'تعديل مقابلة', 24),
+      ('jobs.interviews.record_result', 'jobs', 'interviews', 'record_result', 'تسجيل نتيجة المقابلة', 25),
+      ('jobs.training.view_list', 'jobs', 'training', 'view_list', 'عرض قائمة الدورات التدريبية', 30),
+      ('jobs.training.view_detail', 'jobs', 'training', 'view_detail', 'عرض تفاصيل الدورة التدريبية', 31),
+      ('jobs.training.view_eligible', 'jobs', 'training', 'view_eligible', 'عرض المؤهلين للتدريب', 32),
+      ('jobs.training.create', 'jobs', 'training', 'create', 'إنشاء دورة تدريبية', 33),
+      ('jobs.training.start', 'jobs', 'training', 'start', 'بدء الدورة التدريبية', 34),
+      ('jobs.training.complete', 'jobs', 'training', 'complete', 'إكمال الدورة التدريبية', 35),
+      ('jobs.training.record_attendance', 'jobs', 'training', 'record_attendance', 'تسجيل الحضور', 36),
+      ('jobs.training.record_result', 'jobs', 'training', 'record_result', 'تسجيل نتيجة التدريب', 37),
+      ('jobs.training.add_trainees', 'jobs', 'training', 'add_trainees', 'إضافة متدربين', 38),
+      ('admin.roles.view', 'admin', 'roles', 'view', 'عرض الأدوار', 40),
+      ('admin.roles.manage', 'admin', 'roles', 'manage', 'إدارة الأدوار', 41),
+      ('admin.system_lists.view', 'admin', 'system_lists', 'view', 'عرض القوائم النظامية', 42),
+      ('admin.system_lists.manage', 'admin', 'system_lists', 'manage', 'إدارة القوائم النظامية', 43)
+    ON CONFLICT (key) DO NOTHING
+  `);
+
+  // Grant ALL permissions to HR_MANAGER role
+  await pool.query(`
+    INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'HR_MANAGER'
+    ON CONFLICT (role_id, permission_id) DO NOTHING
+  `);
+
+  // Grant subset to HR_ASSISTANT
+  await pool.query(`
+    INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON p.key IN (
+        'jobs.vacancies.view_list', 'jobs.vacancies.view_detail',
+        'jobs.applications.view_list', 'jobs.applications.view_detail', 'jobs.applications.create',
+        'jobs.applications.change_stage', 'jobs.applications.record_decision',
+        'jobs.applications.edit_notes', 'jobs.applications.view_audit_logs',
+        'jobs.interviews.view_list', 'jobs.interviews.view_detail', 'jobs.interviews.view_eligible',
+        'jobs.interviews.schedule', 'jobs.interviews.edit', 'jobs.interviews.record_result',
+        'jobs.training.view_list', 'jobs.training.view_detail', 'jobs.training.view_eligible'
+      ) WHERE r.name = 'HR_ASSISTANT'
+    ON CONFLICT (role_id, permission_id) DO NOTHING
+  `);
+
+  // Backfill role_id from legacy role column
+  await pool.query(`
+    UPDATE hr_users SET role_id = (SELECT id FROM roles WHERE name = hr_users.role) WHERE role_id IS NULL
+  `);
+
+  console.log('Permissions seeded and role_id backfilled.');
 
   const { rows } = await pool.query('SELECT COUNT(*) FROM employees');
   if (parseInt(rows[0].count) > 0) return;

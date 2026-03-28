@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permission.js';
 
 const router = Router();
 
@@ -23,7 +23,7 @@ const VACANCY_COLS = `
 `;
 
 // GET /api/admin/vacancies
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requirePermission('jobs.vacancies.view_list'), async (req, res) => {
   try {
     const { status, branch, search } = req.query;
     const conditions: string[] = [];
@@ -51,7 +51,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // GET /api/admin/vacancies/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', requirePermission('jobs.vacancies.view_detail'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT ${VACANCY_COLS} FROM job_vacancies WHERE id = $1`,
@@ -66,7 +66,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/admin/vacancies
-router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
+router.post('/', requirePermission('jobs.vacancies.create'), async (req, res) => {
   const client = await pool.connect();
   try {
     const v = req.body;
@@ -126,7 +126,7 @@ router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // GET /api/admin/vacancies/:id
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requirePermission('jobs.vacancies.view_detail'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT ${VACANCY_COLS} FROM job_vacancies WHERE id = $1`,
@@ -157,7 +157,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PUT /api/admin/vacancies/:id — 3-tier edit
-router.put('/:id', requireRole('HR_MANAGER'), async (req, res) => {
+router.put('/:id', requirePermission('jobs.vacancies.edit'), async (req, res) => {
   const client = await pool.connect();
   try {
     const v = req.body;
@@ -269,7 +269,7 @@ router.put('/:id', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // PATCH /api/admin/vacancies/:id/status
-router.patch('/:id/status', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/status', requirePermission('jobs.vacancies.change_status'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { status } = req.body;

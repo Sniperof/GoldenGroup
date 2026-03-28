@@ -4,7 +4,8 @@ import jwt from 'jsonwebtoken';
 export interface AuthUser {
   id: number;
   name: string;
-  role: 'HR_MANAGER' | 'HR_ASSISTANT';
+  role: string;
+  roleId?: number;
 }
 
 declare global {
@@ -32,7 +33,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export function requireRole(...roles: ('HR_MANAGER' | 'HR_ASSISTANT')[]) {
+export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     // If req.user is not set yet, try to parse the JWT first
     if (!req.user) {

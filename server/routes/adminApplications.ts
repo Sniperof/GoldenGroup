@@ -1,10 +1,14 @@
 import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
-import { validateStageTransition, isTerminalStatus, isTrainingManagedStage } from '../utils/stageEngine.js';
+import {
+  validateStageTransition, isTerminalStatus, isTrainingManagedStage,
+  validateDecision, getDecisionEffect, deriveApplicationStatus, isTerminalDecision,
+  validateStageStatusTransition, isInterviewManagedTransition,
+} from '../utils/stageEngine.js';
 import { checkVacancyCapacity, checkDuplicate } from '../utils/applicationHelpers.js';
 import { sanitizeText } from '../utils/sanitize.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permission.js';
 
 const router = Router();
 
@@ -25,11 +29,34 @@ const APP_COLS = `
   ja.created_at AS "createdAt",
   ja.updated_at AS "updatedAt",
   ja.is_archived AS "isArchived",
-  ja.archived_at AS "archivedAt"
+  ja.archived_at AS "archivedAt",
+  ja.stage_status AS "stageStatus",
+  ja.decision
 `;
 
+// ── Dual-write helpers: derive new columns from legacy status ──
+function deriveStageStatusFromLegacy(stage: string, legacyStatus: string): string {
+  const map: Record<string, Record<string, string>> = {
+    Submitted:       { New: 'Pending', 'In Review': 'Under Review', Qualified: 'Under Review', Rejected: 'Under Review' },
+    Shortlisted:     { Qualified: 'Ready', Rejected: 'Ready' },
+    Interview:       { 'Interview Scheduled': 'Scheduled', 'Interview Completed': 'Completed', 'Interview Failed': 'Completed' },
+    Training:        { Approved: 'Ready', 'Training Scheduled': 'Scheduled', 'Training Started': 'In Progress', 'Training Completed': 'Completed', Retraining: 'Completed', Rejected: 'Completed' },
+    'Final Decision': { Passed: 'Awaiting Decision', 'Final Hired': 'Awaiting Decision', 'Final Rejected': 'Awaiting Decision' },
+  };
+  return map[stage]?.[legacyStatus] ?? 'Pending';
+}
+
+function deriveDecisionFromLegacy(legacyStatus: string): string | null {
+  const decisionStatuses: Record<string, string> = {
+    Qualified: 'Qualified', Rejected: 'Rejected', 'Interview Failed': 'Failed',
+    Approved: 'Approved', Retraining: 'Retraining', Passed: 'Passed',
+    'Final Hired': 'Hired', 'Final Rejected': 'Rejected', Retreated: 'Retreated',
+  };
+  return decisionStatuses[legacyStatus] ?? null;
+}
+
 // GET /api/admin/applications
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requirePermission('jobs.applications.view_list'), async (req, res) => {
   try {
     const { vacancyId, branch, gender, stage, status, search, applicationSource, isArchived } = req.query;
     const conditions: string[] = [];
@@ -66,8 +93,26 @@ router.get('/', requireAuth, async (req, res) => {
         a.last_name AS "applicantLastName",
         a.mobile_number AS "applicantMobile",
         a.gender AS "applicantGender",
+        a.dob AS "applicantDob",
+        a.governorate AS "applicantGovernorate",
+        a.city_or_area AS "applicantCityOrArea",
+        a.academic_qualification AS "applicantAcademicQualification",
+        a.specialization AS "applicantSpecialization",
+        a.driving_license AS "applicantDrivingLicense",
+        a.computer_skills AS "applicantComputerSkills",
+        a.years_of_experience AS "applicantYearsOfExperience",
         jv.title AS "vacancyTitle",
-        jv.branch AS "vacancyBranch"
+        jv.branch AS "vacancyBranch",
+        jv.governorate AS "vacancyGovernorate",
+        jv.city_or_area AS "vacancyCityOrArea",
+        jv.required_gender AS "vacancyRequiredGender",
+        jv.required_age_min AS "vacancyRequiredAgeMin",
+        jv.required_age_max AS "vacancyRequiredAgeMax",
+        jv.required_certificate AS "vacancyRequiredCertificate",
+        jv.required_major AS "vacancyRequiredMajor",
+        jv.required_experience_years AS "vacancyRequiredExperienceYears",
+        jv.required_skills AS "vacancyRequiredSkills",
+        jv.driving_license_required AS "vacancyDrivingLicenseRequired"
       FROM job_applications ja
       JOIN applicants a ON a.id = ja.applicant_id
       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -83,7 +128,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // POST /api/admin/applications — manual admin entry (Internal / External Platforms)
-router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => {
+router.post('/', requirePermission('jobs.applications.create'), async (req, res) => {
   const client = await pool.connect();
   try {
     const body = req.body;
@@ -194,14 +239,16 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
       `INSERT INTO job_applications (
         job_vacancy_id, applicant_id, referrer_id, submission_type,
         application_source, entered_by_user_id, entered_by_name,
-        current_stage, application_status, duplicate_flag
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'Submitted','New',$8)
+        current_stage, application_status, duplicate_flag,
+        stage_status, decision
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'Submitted','New',$8,'Pending',NULL)
       RETURNING id, job_vacancy_id AS "jobVacancyId", applicant_id AS "applicantId",
         referrer_id AS "referrerId", submission_type AS "submissionType",
         application_source AS "applicationSource",
         entered_by_user_id AS "enteredByUserId", entered_by_name AS "enteredByName",
         current_stage AS "currentStage", application_status AS "applicationStatus",
-        duplicate_flag AS "duplicateFlag", created_at AS "createdAt"`,
+        duplicate_flag AS "duplicateFlag", created_at AS "createdAt",
+        stage_status AS "stageStatus", decision`,
       [
         body.jobVacancyId || null, applicantId, referrerId,
         submissionType, applicationSource,
@@ -236,7 +283,7 @@ router.post('/', requireRole('HR_ASSISTANT', 'HR_MANAGER'), async (req, res) => 
 });
 
 // GET /api/admin/applications/:id
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requirePermission('jobs.applications.view_detail'), async (req, res) => {
   try {
     const { rows: appRows } = await pool.query(
       `SELECT ${APP_COLS} FROM job_applications ja WHERE ja.id = $1`,
@@ -320,12 +367,36 @@ router.get('/:id', requireAuth, async (req, res) => {
       [req.params.id]
     );
 
+    // Fetch training enrollments with course info
+    const { rows: trainingRows } = await pool.query(
+      `SELECT
+        tct.id,
+        tct.training_course_id AS "trainingCourseId",
+        tct.result,
+        tct.result_recorded_at AS "resultRecordedAt",
+        tct.added_at AS "addedAt",
+        tc.training_name AS "trainingName",
+        tc.trainer,
+        tc.branch,
+        tc.device_name AS "deviceName",
+        tc.start_date AS "startDate",
+        tc.end_date AS "endDate",
+        tc.training_status AS "trainingStatus",
+        tc.notes
+      FROM training_course_trainees tct
+      JOIN training_courses tc ON tc.id = tct.training_course_id
+      WHERE tct.application_id = $1
+      ORDER BY tct.added_at ASC`,
+      [req.params.id]
+    );
+
     res.json({
       ...app,
       applicant: applicantRows[0] || null,
       vacancy: vacancyRows[0] || null,
       referrer,
       interviews: interviewRows,
+      trainings: trainingRows,
     });
   } catch (err: any) {
     console.error('Error fetching application detail:', err);
@@ -334,7 +405,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/stage
-router.patch('/:id/stage', requireAuth, async (req, res) => {
+router.patch('/:id/stage', requirePermission('jobs.applications.change_stage'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { stage, status, internalNotes } = req.body;
@@ -342,6 +413,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
 
     const { rows: currentRows } = await client.query(
       `SELECT ja.current_stage, ja.application_status,
+        ja.stage_status, ja.decision,
         jv.max_retraining_count
        FROM job_applications ja
        JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -355,6 +427,13 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
     if (isTrainingManagedStage(current.current_stage)) {
       return res.status(400).json({
         error: 'لا يمكن تغيير حالة الطلب في مرحلة التدريب إلا من خلال وحدة إدارة الدورات التدريبية',
+      });
+    }
+
+    // Block: Interview result transitions go exclusively through the interview module
+    if (isInterviewManagedTransition(current.current_stage, current.application_status, status)) {
+      return res.status(400).json({
+        error: 'يتم تحديث نتيجة المقابلة تلقائياً من خلال وحدة إدارة المقابلات فقط',
       });
     }
 
@@ -379,15 +458,22 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
 
     await client.query('BEGIN');
 
+    // Derive new stage_status and decision from the legacy status for dual-write
+    const derivedStageStatus = deriveStageStatusFromLegacy(stage, status);
+    const derivedDecision = deriveDecisionFromLegacy(status);
+
     const { rows } = await client.query(
       `UPDATE job_applications SET
         current_stage = $1,
         application_status = $2,
-        internal_notes = COALESCE($3, internal_notes),
+        stage_status = $3,
+        decision = $4,
+        internal_notes = COALESCE($5, internal_notes),
         updated_at = NOW()
-      WHERE id = $4
-      RETURNING id, current_stage AS "currentStage", application_status AS "applicationStatus", updated_at AS "updatedAt"`,
-      [stage, status, internalNotes || null, appId]
+      WHERE id = $6
+      RETURNING id, current_stage AS "currentStage", application_status AS "applicationStatus",
+        stage_status AS "stageStatus", decision, updated_at AS "updatedAt"`,
+      [stage, status, derivedStageStatus, derivedDecision, internalNotes || null, appId]
     );
 
     await insertAuditLog(client, {
@@ -397,8 +483,11 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
       actionType: 'Stage Transition',
       performedByRole: req.user!.role,
       performedByUserId: req.user!.id,
-      oldValue: JSON.stringify({ stage: current.current_stage, status: current.application_status }),
-      newValue: JSON.stringify({ stage, status }),
+      oldValue: JSON.stringify({
+        stage: current.current_stage, status: current.application_status,
+        stageStatus: current.stage_status, decision: current.decision,
+      }),
+      newValue: JSON.stringify({ stage, status, stageStatus: derivedStageStatus, decision: derivedDecision }),
       internalReason: internalNotes || null,
     });
 
@@ -414,7 +503,7 @@ router.patch('/:id/stage', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/hire — Final Hired (no override allowed)
-router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/hire', requirePermission('jobs.applications.hire'), async (req, res) => {
   const client = await pool.connect();
   try {
     const appId = req.params.id as string;
@@ -456,6 +545,7 @@ router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
     await client.query(
       `UPDATE job_applications SET
         application_status = 'Final Hired',
+        decision = 'Hired',
         updated_at = NOW()
       WHERE id = $1`,
       [appId]
@@ -502,8 +592,104 @@ router.patch('/:id/hire', requireRole('HR_MANAGER'), async (req, res) => {
   }
 });
 
+// PATCH /api/admin/applications/:id/decision — New decision endpoint (stage_status/decision model)
+router.patch('/:id/decision', requirePermission('jobs.applications.record_decision'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { decision, internalNotes } = req.body;
+    const appId = req.params.id as string;
+
+    if (!decision) return res.status(400).json({ error: 'القرار مطلوب' });
+
+    const { rows: currentRows } = await client.query(
+      `SELECT ja.current_stage, ja.application_status,
+        ja.stage_status, ja.decision,
+        jv.max_retraining_count
+       FROM job_applications ja
+       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
+       WHERE ja.id = $1`,
+      [appId]
+    );
+    if (currentRows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
+    const current = currentRows[0];
+
+    // Count existing retraining for limit check
+    let retrainingCount = 0;
+    if (decision === 'Retraining') {
+      const { rows: rtRows } = await client.query(
+        `SELECT COUNT(*) FROM audit_logs
+         WHERE application_id = $1 AND action_type = 'Decision Made'
+           AND new_value LIKE '%"Retraining"%'`,
+        [appId]
+      );
+      retrainingCount = parseInt(rtRows[0].count);
+    }
+
+    // Validate using the new engine
+    const validationError = validateDecision(
+      current.current_stage,
+      current.stage_status,
+      decision,
+      current.decision,
+      { retrainingCount, maxRetrainingCount: current.max_retraining_count ?? 1 },
+    );
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    await client.query('BEGIN');
+
+    // Get the effect of this decision on stage/stageStatus
+    const effect = getDecisionEffect(current.current_stage, decision);
+    const newStage = effect.newStage;
+    const newStageStatus = effect.newStageStatus === 'current' ? current.stage_status : effect.newStageStatus;
+
+    // Derive backward-compatible application_status
+    const legacyStatus = deriveApplicationStatus(newStage, newStageStatus, decision);
+
+    const { rows } = await client.query(
+      `UPDATE job_applications SET
+        current_stage = $1,
+        stage_status = $2,
+        decision = $3,
+        application_status = $4,
+        internal_notes = COALESCE($5, internal_notes),
+        updated_at = NOW()
+      WHERE id = $6
+      RETURNING id, current_stage AS "currentStage", stage_status AS "stageStatus",
+        decision, application_status AS "applicationStatus", updated_at AS "updatedAt"`,
+      [newStage, newStageStatus, decision, legacyStatus, internalNotes || null, appId]
+    );
+
+    await insertAuditLog(client, {
+      entityType: 'job_application',
+      entityId: parseInt(appId),
+      applicationId: parseInt(appId),
+      actionType: 'Decision Made',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+      oldValue: JSON.stringify({
+        stage: current.current_stage, stageStatus: current.stage_status,
+        decision: current.decision, applicationStatus: current.application_status,
+      }),
+      newValue: JSON.stringify({
+        stage: newStage, stageStatus: newStageStatus,
+        decision, applicationStatus: legacyStatus,
+      }),
+      internalReason: internalNotes || null,
+    });
+
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error making decision:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // PATCH /api/admin/applications/:id/escalate
-router.patch('/:id/escalate', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/escalate', requirePermission('jobs.applications.escalate'), async (req, res) => {
   const client = await pool.connect();
   try {
     const appId = req.params.id as string;
@@ -545,7 +731,7 @@ router.patch('/:id/escalate', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/notes
-router.patch('/:id/notes', requireAuth, async (req, res) => {
+router.patch('/:id/notes', requirePermission('jobs.applications.edit_notes'), async (req, res) => {
   try {
     const { notes } = req.body;
     const { rows } = await pool.query(
@@ -563,7 +749,7 @@ router.patch('/:id/notes', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/admin/applications/:id/archive
-router.patch('/:id/archive', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/archive', requirePermission('jobs.applications.archive'), async (req, res) => {
   const client = await pool.connect();
   try {
     const appId = req.params.id as string;
@@ -625,7 +811,7 @@ router.patch('/:id/archive', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // GET /api/admin/applications/:id/audit-logs
-router.get('/:id/audit-logs', requireAuth, async (req, res) => {
+router.get('/:id/audit-logs', requirePermission('jobs.applications.view_audit_logs'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, entity_type AS "entityType", entity_id AS "entityId",

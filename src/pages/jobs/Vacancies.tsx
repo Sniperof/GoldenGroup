@@ -9,6 +9,7 @@ import {
   ClipboardList, ArrowLeft, ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PermissionGate from '../../components/PermissionGate';
 import { useBranchStore } from '../../hooks/useBranchStore';
 import { useSystemListsStore } from '../../hooks/useSystemLists';
 import GeoSmartSearch, { GeoSelection, getLevelName } from '../../components/GeoSmartSearch';
@@ -441,9 +442,11 @@ export default function Vacancies() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">إنشاء وإدارة فرص العمل المتاحة</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold shadow-lg shadow-sky-500/25 transition-all">
-          <Plus className="w-5 h-5" /> إنشاء شاغر جديد
-        </button>
+        <PermissionGate permission="jobs.vacancies.create">
+          <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold shadow-lg shadow-sky-500/25 transition-all">
+            <Plus className="w-5 h-5" /> إنشاء شاغر جديد
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -519,14 +522,18 @@ export default function Vacancies() {
                     <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => navigate(`/jobs/vacancies/${v.id}`)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="عرض"><Eye className="w-4 h-4" /></button>
-                        {v.status !== 'Archived' && <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="تعديل"><Edit className="w-4 h-4" /></button>}
-                        {v.status === 'Open' && <button onClick={() => handleStatusChange(v.id, 'Closed')} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="إغلاق"><XCircle className="w-4 h-4" /></button>}
-                        {v.status === 'Closed' && (
-                          <>
-                            <button onClick={() => handleStatusChange(v.id, 'Open')} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="إعادة فتح"><RotateCcw className="w-4 h-4" /></button>
-                            <button onClick={() => handleStatusChange(v.id, 'Archived')} className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="أرشفة"><Archive className="w-4 h-4" /></button>
-                          </>
-                        )}
+                        <PermissionGate permission="jobs.vacancies.edit">
+                          {v.status !== 'Archived' && <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors" title="تعديل"><Edit className="w-4 h-4" /></button>}
+                        </PermissionGate>
+                        <PermissionGate permission="jobs.vacancies.change_status">
+                          {v.status === 'Open' && <button onClick={() => handleStatusChange(v.id, 'Closed')} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="إغلاق"><XCircle className="w-4 h-4" /></button>}
+                          {v.status === 'Closed' && (
+                            <>
+                              <button onClick={() => handleStatusChange(v.id, 'Open')} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="إعادة فتح"><RotateCcw className="w-4 h-4" /></button>
+                              <button onClick={() => handleStatusChange(v.id, 'Archived')} className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="أرشفة"><Archive className="w-4 h-4" /></button>
+                            </>
+                          )}
+                        </PermissionGate>
                       </div>
                     </td>
                   </tr>

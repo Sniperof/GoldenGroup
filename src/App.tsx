@@ -40,6 +40,8 @@ import InterviewDetail from './pages/jobs/InterviewDetail';
 import TrainingCourses from './pages/jobs/TrainingCourses';
 import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
 import SystemLists from './pages/admin/SystemLists';
+import Roles from './pages/admin/Roles';
+import RolePermissions from './pages/admin/RolePermissions';
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -97,6 +99,10 @@ export default function App() {
                         <Route path="/jobs/interviews/:id" element={<InterviewDetail />} />
                         <Route path="/jobs/training-courses" element={<TrainingCourses />} />
                         <Route path="/jobs/training-courses/:id" element={<TrainingCourseDetail />} />
+
+                        {/* Admin */}
+                        <Route path="/admin/roles" element={<Roles />} />
+                        <Route path="/admin/roles/:id/permissions" element={<RolePermissions />} />
                     </Route>
                 </Routes>
             </ErrorBoundary>

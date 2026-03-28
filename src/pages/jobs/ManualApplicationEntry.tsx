@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { JobVacancy, GeoUnit } from '../../lib/types';
 import { authFetch } from '../../lib/authFetch';
+import { uploadFile } from '../../lib/uploadFile';
 import { useAuthStore } from '../../hooks/useAuthStore';
 import { useSystemListsStore } from '../../hooks/useSystemLists';
 import GeoSmartSearch, { GeoSelection } from '../../components/GeoSmartSearch';
@@ -287,12 +288,6 @@ export default function ManualApplicationEntry() {
     setR('mobileNumber', '0799999999');
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
-    return new Promise(resolve => {
-      setTimeout(() => { resolve(`https://dummyimage.com/150/e2e8f0/64748b&text=${file.name}`); }, 500);
-    });
-  };
-
   const handleSubmit = async () => {
     if (!validate()) return;
     setSubmitResult(null);
@@ -307,7 +302,7 @@ export default function ManualApplicationEntry() {
       let finalCvUrl = applicant.cvUrl;
       if (applicant.photoFile) finalPhotoUrl = await uploadFile(applicant.photoFile);
       if (applicant.cvFile) finalCvUrl = await uploadFile(applicant.cvFile);
-      if (!finalPhotoUrl) finalPhotoUrl = 'https://dummyimage.com/150/e2e8f0/64748b&text=Photo';
+      // photoUrl stays null if not provided (validation catches missing photo above)
 
       const payload: any = {
         jobVacancyId: selectedVacancyId || null,

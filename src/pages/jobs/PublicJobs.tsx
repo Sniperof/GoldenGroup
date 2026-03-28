@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { uploadFile } from '../../lib/uploadFile';
 import type { JobVacancy, GeoUnit } from '../../lib/types';
 import { useSystemListsStore } from '../../hooks/useSystemLists';
 import GeoSmartSearch, { GeoSelection } from '../../components/GeoSmartSearch';
@@ -251,13 +252,6 @@ export default function PublicJobs() {
     setR('mobileNumber', '0799999999');
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve(`https://dummyimage.com/150/e2e8f0/64748b&text=\${file.name}`);
-      }, 500);
-    });
-  };
 
   const translateServerError = (status: number, message: string): {
     type: 'error' | 'duplicate' | 'network'; text: string;
@@ -289,7 +283,7 @@ export default function PublicJobs() {
 
       if (applicant.photoFile) finalPhotoUrl = await uploadFile(applicant.photoFile);
       if (applicant.cvFile) finalCvUrl = await uploadFile(applicant.cvFile);
-      if (!finalPhotoUrl) finalPhotoUrl = 'https://dummyimage.com/150/e2e8f0/64748b&text=Photo';
+      // photoUrl stays null/empty if no file selected (validation above catches it)
 
       const payload: any = {
         jobVacancyId: selectedVacancy!.id,

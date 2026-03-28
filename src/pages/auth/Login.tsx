@@ -27,7 +27,7 @@ export default function Login() {
         setError(data.error || 'حدث خطأ أثناء تسجيل الدخول');
         return;
       }
-      login(data.token, data.user);
+      login(data.token, data.user, data.permissions || []);
       navigate('/');
     } catch {
       setError('تعذر الاتصال بالخادم');

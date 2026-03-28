@@ -8,6 +8,7 @@ import {
   AlertTriangle, X, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PermissionGate from '../../components/PermissionGate';
 
 const STATUS_LABELS: Record<string, string> = {
   'Interview Scheduled': 'مجدولة',
@@ -136,12 +137,14 @@ export default function Interviews() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">جدولة وتتبع مقابلات التوظيف</p>
         </div>
-        <button
-          onClick={() => setShowScheduleModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-lg shadow-sky-500/25 text-sm transition-all"
-        >
-          <Plus className="w-4 h-4" /> جدولة مقابلة
-        </button>
+        <PermissionGate permission="jobs.interviews.schedule">
+          <button
+            onClick={() => setShowScheduleModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-lg shadow-sky-500/25 text-sm transition-all"
+          >
+            <Plus className="w-4 h-4" /> جدولة مقابلة
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
@@ -254,12 +257,14 @@ export default function Interviews() {
                     </td>
                     <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                       {iv.interviewStatus === 'Interview Scheduled' && (
-                        <button
-                          onClick={() => { setResultModal({ id: iv.id }); setResultNotes(''); setResultStatus('Interview Completed'); }}
-                          className="text-xs px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
-                        >
-                          تسجيل النتيجة
-                        </button>
+                        <PermissionGate permission="jobs.interviews.record_result">
+                          <button
+                            onClick={() => { setResultModal({ id: iv.id }); setResultNotes(''); setResultStatus('Interview Completed'); }}
+                            className="text-xs px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-medium transition-colors"
+                          >
+                            تسجيل النتيجة
+                          </button>
+                        </PermissionGate>
                       )}
                     </td>
                   </tr>

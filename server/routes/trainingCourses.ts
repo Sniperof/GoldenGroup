@@ -2,7 +2,7 @@ import { Router } from 'express';
 import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
 import { sanitizeText } from '../utils/sanitize.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permission.js';
 
 const router = Router();
 
@@ -25,7 +25,7 @@ function mapCourse(row: any) {
 }
 
 // ── GET /eligible/:jobVacancyId — eligible trainee picker (must be before /:id) ──
-router.get('/eligible/:jobVacancyId', requireAuth, async (req, res) => {
+router.get('/eligible/:jobVacancyId', requirePermission('jobs.training.view_eligible'), async (req, res) => {
   try {
     const { jobVacancyId } = req.params;
     const { rows } = await pool.query(
@@ -54,7 +54,7 @@ router.get('/eligible/:jobVacancyId', requireAuth, async (req, res) => {
 });
 
 // ── POST / — Create Training Course ─────────────────────────────────────────
-router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
+router.post('/', requirePermission('jobs.training.create'), async (req, res) => {
   const client = await pool.connect();
   try {
     const {
@@ -131,7 +131,7 @@ router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
         [course.id, appId]
       );
       await client.query(
-        `UPDATE job_applications SET application_status = 'Training Scheduled', updated_at = NOW() WHERE id = $1`,
+        `UPDATE job_applications SET application_status = 'Training Scheduled', stage_status = 'Scheduled', updated_at = NOW() WHERE id = $1`,
         [appId]
       );
       await insertAuditLog(client, {
@@ -165,7 +165,7 @@ router.post('/', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // ── GET / — List Training Courses ────────────────────────────────────────────
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requirePermission('jobs.training.view_list'), async (req, res) => {
   try {
     const {
       branch, start_date, end_date, trainer, device_name,
@@ -228,7 +228,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // ── GET /:id — Course Detail ──────────────────────────────────────────────────
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requirePermission('jobs.training.view_detail'), async (req, res) => {
   try {
     const { rows: courseRows } = await pool.query(`SELECT * FROM training_courses WHERE id = $1`, [req.params.id]);
     if (courseRows.length === 0) return res.status(404).json({ error: 'الدورة التدريبية غير موجودة' });
@@ -273,7 +273,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // ── PATCH /:id/start ──────────────────────────────────────────────────────────
-router.patch('/:id/start', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/start', requirePermission('jobs.training.start'), async (req, res) => {
   const client = await pool.connect();
   try {
     const courseId = req.params.id as string;
@@ -303,7 +303,7 @@ router.patch('/:id/start', requireRole('HR_MANAGER'), async (req, res) => {
 
     for (const { application_id } of traineeRows) {
       await client.query(
-        `UPDATE job_applications SET application_status = 'Training Started', updated_at = NOW() WHERE id = $1`,
+        `UPDATE job_applications SET application_status = 'Training Started', stage_status = 'In Progress', updated_at = NOW() WHERE id = $1`,
         [application_id]
       );
       await insertAuditLog(client, {
@@ -327,7 +327,7 @@ router.patch('/:id/start', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // ── POST /:id/attendance ──────────────────────────────────────────────────────
-router.post('/:id/attendance', requireRole('HR_MANAGER'), async (req, res) => {
+router.post('/:id/attendance', requirePermission('jobs.training.record_attendance'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { attendance, attendance_date } = req.body;
@@ -401,7 +401,7 @@ router.post('/:id/attendance', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // ── PATCH /:id/complete ───────────────────────────────────────────────────────
-router.patch('/:id/complete', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/complete', requirePermission('jobs.training.complete'), async (req, res) => {
   const client = await pool.connect();
   try {
     const courseId = req.params.id as string;
@@ -452,7 +452,7 @@ router.patch('/:id/complete', requireRole('HR_MANAGER'), async (req, res) => {
       );
       if (tctRows[0]?.result == null) {
         await client.query(
-          `UPDATE job_applications SET application_status = 'Training Completed', updated_at = NOW() WHERE id = $1`,
+          `UPDATE job_applications SET application_status = 'Training Completed', stage_status = 'Completed', updated_at = NOW() WHERE id = $1`,
           [application_id]
         );
         await insertAuditLog(client, {
@@ -477,7 +477,7 @@ router.patch('/:id/complete', requireRole('HR_MANAGER'), async (req, res) => {
 });
 
 // ── PATCH /:id/trainees/:applicationId/result ─────────────────────────────────
-router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), async (req, res) => {
+router.patch('/:id/trainees/:applicationId/result', requirePermission('jobs.training.record_result'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { result } = req.body;
@@ -519,11 +519,11 @@ router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), a
       }
     }
 
-    let newStage: string, newStatus: string;
-    if (result === 'Passed')      { newStage = 'Final Decision'; newStatus = 'Passed'; }
-    else if (result === 'Retraining') { newStage = 'Training'; newStatus = 'Retraining'; }
-    else if (result === 'Rejected')   { newStage = 'Final Decision'; newStatus = 'Rejected'; }
-    else                          { newStage = 'Final Decision'; newStatus = 'Retreated'; }
+    let newStage: string, newStatus: string, newDecision: string, newStageStatus: string;
+    if (result === 'Passed')           { newStage = 'Final Decision'; newStatus = 'Passed'; newDecision = 'Passed'; newStageStatus = 'Awaiting Decision'; }
+    else if (result === 'Retraining')  { newStage = 'Training'; newStatus = 'Retraining'; newDecision = 'Retraining'; newStageStatus = 'Ready'; }
+    else if (result === 'Rejected')    { newStage = 'Training'; newStatus = 'Rejected'; newDecision = 'Rejected'; newStageStatus = 'Completed'; }
+    else                               { newStage = 'Training'; newStatus = 'Retreated'; newDecision = 'Retreated'; newStageStatus = 'Completed'; }
 
     await client.query('BEGIN');
     await client.query(
@@ -533,8 +533,9 @@ router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), a
       [result, req.user!.id, courseId, appId]
     );
     await client.query(
-      `UPDATE job_applications SET current_stage = $1, application_status = $2, updated_at = NOW() WHERE id = $3`,
-      [newStage, newStatus, appId]
+      `UPDATE job_applications SET current_stage = $1, application_status = $2,
+        stage_status = $3, decision = $4, updated_at = NOW() WHERE id = $5`,
+      [newStage, newStatus, newStageStatus, newDecision, appId]
     );
     await insertAuditLog(client, {
       entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: appId,
@@ -554,7 +555,7 @@ router.patch('/:id/trainees/:applicationId/result', requireRole('HR_MANAGER'), a
 });
 
 // ── POST /:id/trainees — Add more trainees ────────────────────────────────────
-router.post('/:id/trainees', requireRole('HR_MANAGER'), async (req, res) => {
+router.post('/:id/trainees', requirePermission('jobs.training.add_trainees'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { application_ids } = req.body;
@@ -610,7 +611,7 @@ router.post('/:id/trainees', requireRole('HR_MANAGER'), async (req, res) => {
         [courseId, appId]
       );
       await client.query(
-        `UPDATE job_applications SET application_status = 'Training Scheduled', updated_at = NOW() WHERE id = $1`, [appId]
+        `UPDATE job_applications SET application_status = 'Training Scheduled', stage_status = 'Scheduled', updated_at = NOW() WHERE id = $1`, [appId]
       );
       await insertAuditLog(client, {
         entityType: 'TrainingCourse', entityId: parseInt(courseId), applicationId: appId,

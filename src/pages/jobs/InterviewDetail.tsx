@@ -7,6 +7,7 @@ import {
   Car, Monitor, Globe, DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PermissionGate from '../../components/PermissionGate';
 
 interface InterviewDetail {
   id: number;
@@ -260,15 +261,19 @@ export default function InterviewDetail() {
             <div className="bg-white rounded-2xl border border-slate-200 p-5">
               <h3 className="text-sm font-bold text-slate-700 mb-4">الإجراءات</h3>
               <div className="space-y-2">
-                <button onClick={openEdit} disabled={actionLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/25 transition-all disabled:opacity-50">
-                  <Edit className="w-4 h-4" /> تعديل المقابلة
-                </button>
-                <button onClick={() => { setResultStatus('Interview Completed'); setResultNotes(''); setShowResultModal(true); }}
-                  disabled={actionLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold bg-teal-500 hover:bg-teal-600 text-white shadow-lg shadow-teal-500/25 transition-all disabled:opacity-50">
-                  <CheckCircle className="w-4 h-4" /> تسجيل النتيجة
-                </button>
+                <PermissionGate permission="jobs.interviews.edit">
+                  <button onClick={openEdit} disabled={actionLoading}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/25 transition-all disabled:opacity-50">
+                    <Edit className="w-4 h-4" /> تعديل المقابلة
+                  </button>
+                </PermissionGate>
+                <PermissionGate permission="jobs.interviews.record_result">
+                  <button onClick={() => { setResultStatus('Interview Completed'); setResultNotes(''); setShowResultModal(true); }}
+                    disabled={actionLoading}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold bg-teal-500 hover:bg-teal-600 text-white shadow-lg shadow-teal-500/25 transition-all disabled:opacity-50">
+                    <CheckCircle className="w-4 h-4" /> تسجيل النتيجة
+                  </button>
+                </PermissionGate>
               </div>
             </div>
           )}

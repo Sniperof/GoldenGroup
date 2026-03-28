@@ -8,6 +8,7 @@ import {
   GraduationCap, Plus, Search, Filter, ChevronDown, ChevronLeft, ChevronRight,
   Calendar, User, Monitor, Building2, Users, CheckCircle, X, Loader2,
 } from 'lucide-react';
+import PermissionGate from '../../components/PermissionGate';
 
 const STATUS_COLORS: Record<string, string> = {
   'Training Scheduled': 'bg-blue-100 text-blue-700',
@@ -148,13 +149,15 @@ export default function TrainingCourses() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">إدارة دورات التدريب وسجلات الحضور والنتائج</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          إنشاء دورة تدريبية
-        </button>
+        <PermissionGate permission="jobs.training.create">
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            إنشاء دورة تدريبية
+          </button>
+        </PermissionGate>
       </div>
 
       {/* Filters */}
