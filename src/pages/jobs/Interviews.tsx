@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useInterviewStore } from '../../hooks/useInterviewStore';
 import { useVacancyStore } from '../../hooks/useVacancyStore';
 import { authFetch } from '../../lib/authFetch';
@@ -44,7 +44,7 @@ const emptyForm: ScheduleForm = {
 };
 
 export default function Interviews() {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { interviews, filters, loading, fetchInterviews, setFilter, resetFilters, scheduleInterview, recordResult } = useInterviewStore();
   const { vacancies, fetchVacancies } = useVacancyStore();
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -56,10 +56,31 @@ export default function Interviews() {
   const [resultStatus, setResultStatus] = useState<'Interview Completed' | 'Interview Failed'>('Interview Completed');
   const [eligibleApps, setEligibleApps] = useState<any[]>([]);
   const [loadingEligible, setLoadingEligible] = useState(false);
+  const highlightedInterviewId = Number(searchParams.get('highlightInterviewId') || 0);
 
   useEffect(() => {
     fetchVacancies();
   }, []);
+
+  useEffect(() => {
+    const nextApplicationId = searchParams.get('applicationId') ?? '';
+    const nextJobVacancyId = searchParams.get('jobVacancyId') ?? '';
+    const nextInterviewerName = searchParams.get('interviewerName') ?? '';
+    const nextDate = searchParams.get('date') ?? '';
+
+    if (filters.applicationId !== nextApplicationId) {
+      setFilter('applicationId', nextApplicationId);
+    }
+    if (filters.jobVacancyId !== nextJobVacancyId) {
+      setFilter('jobVacancyId', nextJobVacancyId);
+    }
+    if (filters.interviewerName !== nextInterviewerName) {
+      setFilter('interviewerName', nextInterviewerName);
+    }
+    if (filters.date !== nextDate) {
+      setFilter('date', nextDate);
+    }
+  }, [searchParams, filters.applicationId, filters.jobVacancyId, filters.interviewerName, filters.date, setFilter]);
 
   useEffect(() => {
     fetchInterviews();
@@ -223,10 +244,13 @@ export default function Interviews() {
                 </tr>
               </thead>
               <tbody>
-                {interviews.map((iv, idx) => (
-                  <tr key={iv.id}
-                    className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
-                    onClick={() => navigate(`/jobs/interviews/${iv.id}`)}>
+                {interviews.map((iv, idx) => {
+                  const isHighlighted = highlightedInterviewId === iv.id;
+                  return (
+                  <tr
+                    key={iv.id}
+                    className={`border-b border-slate-100 transition-colors ${isHighlighted ? 'bg-sky-50 ring-1 ring-inset ring-sky-200' : idx % 2 === 1 ? 'bg-slate-50/30 hover:bg-sky-50/40' : 'hover:bg-sky-50/40'}`}
+                  >
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{iv.id}</td>
                     <td className="px-4 py-3 font-medium text-slate-800">
                       {iv.applicantFirstName} {iv.applicantLastName}
@@ -268,7 +292,7 @@ export default function Interviews() {
                       )}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

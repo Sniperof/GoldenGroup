@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Target, Users, PhoneCall } from 'lucide-react';
-import { StorageManager } from "../../lib/storage";
+import { api } from "../../lib/api";
 import { useCandidateStore } from "../../hooks/useCandidateStore";
 import { useClientStore } from "../../hooks/useClientStore";
 import SmartTable, { ColumnDef } from "../SmartTable";
 import { Candidate, Client, GeoUnit, Contract, Visit } from "../../lib/types";
-import { defaultGeoUnits } from "../../lib/defaultData";
 import { getPrimaryContact } from "../../lib/contactUtils";
 
 export default function MarketingOperationsContent() {
@@ -13,13 +12,36 @@ export default function MarketingOperationsContent() {
     const candidates = useCandidateStore((state) => state.candidates);
     const { clients, loadClients, getLeads } = useClientStore();
 
-    const [contracts] = useState<Contract[]>(() => StorageManager.load('contracts', []));
-    const [visits] = useState<Visit[]>(() => StorageManager.load('visits', []));
-    const [geoUnits] = useState<GeoUnit[]>(() => StorageManager.load('geoUnits', defaultGeoUnits));
+    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [visits, setVisits] = useState<Visit[]>([]);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
 
     useEffect(() => {
         loadClients();
     }, [loadClients]);
+
+    useEffect(() => {
+        let active = true;
+
+        Promise.all([api.contracts.list(), api.visits.list(), api.geoUnits.list()])
+            .then(([contractsData, visitsData, geoUnitsData]) => {
+                if (!active) return;
+                setContracts(contractsData);
+                setVisits(visitsData);
+                setGeoUnits(geoUnitsData);
+            })
+            .catch((error) => {
+                console.error('Failed to load marketing operations data:', error);
+                if (!active) return;
+                setContracts([]);
+                setVisits([]);
+                setGeoUnits([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
 
     // --- Computed Lists ---
     const followUpCandidates = useMemo(() => {

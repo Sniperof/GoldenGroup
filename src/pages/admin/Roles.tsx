@@ -389,7 +389,7 @@ function UsersTab() {
 // Main Page
 // ══════════════════════════════════════════════════════════════════
 export default function Roles() {
-  const [activeTab, setActiveTab] = useState<'roles' | 'users'>('roles');
+  const navigate = useNavigate();
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50">
@@ -401,31 +401,33 @@ export default function Roles() {
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">الأدوار والصلاحيات</h1>
-            <p className="text-xs text-slate-500">إدارة أدوار النظام، صلاحياتها، والمستخدمين المرتبطين بها</p>
+            <h1 className="text-xl font-bold text-slate-800">{"\u0627\u0644\u0623\u062f\u0648\u0627\u0631 \u0648\u0627\u0644\u0635\u0644\u0627\u062d\u064a\u0627\u062a"}</h1>
+            <p className="text-xs text-slate-500">{"\u0625\u062f\u0627\u0631\u0629 \u0623\u062f\u0648\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0635\u0644\u0627\u062d\u064a\u0627\u062a\u0647\u0627\u060c \u0645\u0639 \u0625\u0633\u0646\u0627\u062f \u0627\u0644\u062f\u0648\u0631 \u0644\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0646 \u0645\u0644\u0641 \u0627\u0644\u0645\u0648\u0638\u0641 \u0645\u0628\u0627\u0634\u0631\u0629"}</p>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-          {([
-            { key: 'roles', label: 'الأدوار', icon: ShieldCheck },
-            { key: 'users', label: 'المستخدمون', icon: Users },
-          ] as const).map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === tab.key
-                  ? 'bg-white text-sky-600 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}>
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">{"\u0625\u0633\u0646\u0627\u062f \u0627\u0644\u0623\u062f\u0648\u0627\u0631 \u064a\u062a\u0645 \u0645\u0646 \u0645\u0644\u0641 \u0627\u0644\u0645\u0648\u0638\u0641"}</h2>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                {"\u0628\u062f\u0644 \u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a\u0646 \u0645\u0646 \u062c\u062f\u0648\u0644 \u0645\u0646\u0641\u0635\u0644\u060c \u0627\u0641\u062a\u062d \u0633\u062c\u0644 \u0627\u0644\u0645\u0648\u0638\u0641 \u0648\u062d\u062f\u062f \u0644\u0647 \u062d\u0633\u0627\u0628 \u0627\u0644\u0646\u0638\u0627\u0645 \u0648\u0627\u0644\u062f\u0648\u0631 \u0627\u0644\u0625\u062f\u0627\u0631\u064a \u0645\u0646 \u0646\u0641\u0633 \u0627\u0644\u0635\u0641\u062d\u0629."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/employees')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Users className="w-4 h-4" />
+            {"\u0633\u062c\u0644\u0627\u062a \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646"}
+          </button>
         </div>
 
-        {/* Tab content */}
-        {activeTab === 'roles' ? <RolesTab /> : <UsersTab />}
+        <RolesTab />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, RotateCcw, Globe, MapPin, Map, Building, Home, X } from 'lucide-react';
-import { levelNames } from '../lib/defaultData';
+import { levelNames } from '../lib/geoConstants';
 import { api } from '../lib/api';
 import type { GeoUnit } from '../lib/types';
 import SmartTable from '../components/SmartTable';

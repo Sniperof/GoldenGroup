@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { seedSystem } from './lib/seed';
 import { useAuthStore } from './hooks/useAuthStore';
 import Login from './pages/auth/Login';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -9,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import GeoSettings from './pages/GeoSettings';
 import RouteManager from './pages/RouteManager';
 import Employees from './pages/Employees';
+import EmployeeDetail from './pages/EmployeeDetail';
 import Clients from './pages/Clients';
 import ClientProfile from './pages/ClientProfile';
 import CandidatesEntry from './pages/candidates/CandidatesEntry';
@@ -36,7 +35,6 @@ import Applications from './pages/jobs/Applications';
 import ApplicationDetail from './pages/jobs/ApplicationDetail';
 import ManualApplicationEntry from './pages/jobs/ManualApplicationEntry';
 import Interviews from './pages/jobs/Interviews';
-import InterviewDetail from './pages/jobs/InterviewDetail';
 import TrainingCourses from './pages/jobs/TrainingCourses';
 import TrainingCourseDetail from './pages/jobs/TrainingCourseDetail';
 import SystemLists from './pages/admin/SystemLists';
@@ -51,10 +49,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-    useEffect(() => {
-        seedSystem();
-    }, []);
-
     return (
         <BrowserRouter>
             <ErrorBoundary>
@@ -66,6 +60,7 @@ export default function App() {
                         <Route path="/geo" element={<GeoSettings />} />
                         <Route path="/routes" element={<RouteManager />} />
                         <Route path="/employees" element={<Employees />} />
+                        <Route path="/employees/:id" element={<EmployeeDetail />} />
                         <Route path="/clients" element={<Clients />} />
                         <Route path="/clients/:id" element={<ClientProfile />} />
                         <Route path="/candidates" element={<CandidatesEntry />} />
@@ -96,7 +91,6 @@ export default function App() {
                         <Route path="/jobs/applications/new" element={<ManualApplicationEntry />} />
                         <Route path="/jobs/applications/:id" element={<ApplicationDetail />} />
                         <Route path="/jobs/interviews" element={<Interviews />} />
-                        <Route path="/jobs/interviews/:id" element={<InterviewDetail />} />
                         <Route path="/jobs/training-courses" element={<TrainingCourses />} />
                         <Route path="/jobs/training-courses/:id" element={<TrainingCourseDetail />} />
 

@@ -191,7 +191,7 @@ export default function ManualApplicationEntry() {
 
   useEffect(() => {
     fetchLists();
-    authFetch('/api/vacancies?status=open')
+    authFetch('/api/admin/vacancies?status=Open')
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setVacancies(data); })
       .catch(console.error);
@@ -349,7 +349,7 @@ export default function ManualApplicationEntry() {
         };
       }
 
-      const res = await authFetch('/api/applications', {
+      const res = await authFetch('/api/admin/applications', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       const result = await res.json();

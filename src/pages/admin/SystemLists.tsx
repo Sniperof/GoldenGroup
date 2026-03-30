@@ -29,6 +29,16 @@ interface CategoryMeta {
 
 const CATEGORIES: CategoryMeta[] = [
   {
+    id: 'occupation',
+    label: 'المهن',
+    description: 'القيم المعتمدة لحقل المهنة في الأسماء المقترحة وسجلات الزبائن. أي تعديل هنا يظهر مباشرة في نماذج الإضافة والتأهيل.',
+    impact: 'medium',
+    usedIn: [
+      { label: 'إضافة اسم مقترح', route: 'الأسماء المقترحة ← إضافة اسم', icon: <Users className="w-3 h-3" /> },
+      { label: 'إضافة / تعديل زبون', route: 'الزبائن ← نموذج الزبون', icon: <Briefcase className="w-3 h-3" /> },
+    ],
+  },
+  {
     id: 'job_title',
     label: 'عناوين الوظائف',
     description: 'قائمة بالمسميات الوظيفية المتاحة عند إنشاء شاغر وظيفي. كل قيمة تُصبح خياراً في حقل "عنوان الوظيفة".',
@@ -111,9 +121,9 @@ const CATEGORIES: CategoryMeta[] = [
 const MAJOR_PREFIX = 'major:';
 
 const IMPACT_CONFIG = {
-  high:   { label: 'تأثير عالٍ',    cls: 'bg-rose-50 text-rose-600 border-rose-200',    dot: 'bg-rose-500' },
-  medium: { label: 'تأثير متوسط',  cls: 'bg-amber-50 text-amber-600 border-amber-200',  dot: 'bg-amber-500' },
-  low:    { label: 'تأثير بسيط',   cls: 'bg-sky-50 text-sky-600 border-sky-200',        dot: 'bg-sky-400' },
+  high: { label: 'تأثير عالٍ', cls: 'bg-rose-50 text-rose-600 border-rose-200', dot: 'bg-rose-500' },
+  medium: { label: 'تأثير متوسط', cls: 'bg-amber-50 text-amber-600 border-amber-200', dot: 'bg-amber-500' },
+  low: { label: 'تأثير بسيط', cls: 'bg-sky-50 text-sky-600 border-sky-200', dot: 'bg-sky-400' },
 };
 
 export default function SystemLists() {
@@ -154,7 +164,7 @@ export default function SystemLists() {
   useEffect(() => { fetchLists(); }, []);
   useEffect(() => { setSearch(''); setActiveCertificate(null); }, [activeCategory]);
 
-  if (!user || user.role !== 'HR_MANAGER') return <Navigate to="/" replace />;
+  if (!user || !['HR_MANAGER', 'ADMIN'].includes(user.role)) return <Navigate to="/" replace />;
 
   const activeMeta = sidebarCategories.find(c => c.id === activeCategory);
   const isCertificateView = activeCategory === 'certificate';
@@ -233,12 +243,6 @@ export default function SystemLists() {
           </h1>
           <p className="text-sm text-slate-500 mt-1">تحكم ديناميكي بجميع القوائم المنسدلة — كل تغيير ينعكس فوراً على النظام</p>
         </div>
-        <button
-          onClick={() => setIsNewCatOpen(true)}
-          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors"
-        >
-          <FolderPlus className="w-4 h-4" /> إضافة فئة جديدة
-        </button>
       </div>
 
       <div className="flex gap-5 flex-1 min-h-0">
@@ -256,11 +260,10 @@ export default function SystemLists() {
                 <button
                   key={cat.id}
                   onClick={() => { setActiveCategory(cat.id); setActiveCertificate(null); }}
-                  className={`w-full text-right px-3 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between gap-2 group ${
-                    isActive
+                  className={`w-full text-right px-3 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between gap-2 group ${isActive
                       ? 'bg-sky-50 text-sky-700 font-semibold'
                       : 'text-slate-600 hover:bg-slate-50 font-medium'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
@@ -269,9 +272,8 @@ export default function SystemLists() {
                       <Link2 className="w-3 h-3 text-violet-400 flex-shrink-0" />
                     )}
                   </div>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 font-mono ${
-                    isActive ? 'bg-sky-100 text-sky-600' : 'bg-slate-100 text-slate-400'
-                  }`}>{count}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 font-mono ${isActive ? 'bg-sky-100 text-sky-600' : 'bg-slate-100 text-slate-400'
+                    }`}>{count}</span>
                 </button>
               );
             })}

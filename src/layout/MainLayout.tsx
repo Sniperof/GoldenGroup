@@ -59,9 +59,9 @@ export default function MainLayout() {
     const { user: authUser, logout } = useAuthStore();
     const { hasPermission } = usePermissions();
 
-    // HR_MANAGER bypasses all permission checks
-    const isManager = authUser?.role === 'HR_MANAGER';
-    const can = (perm: string) => isManager || hasPermission(perm);
+    // Privileged users bypass explicit UI permission checks
+    const isPrivilegedUser = authUser?.role === 'HR_MANAGER' || authUser?.role === 'ADMIN';
+    const can = (perm: string) => isPrivilegedUser || hasPermission(perm);
 
     const jobsViewPermMap: Record<string, string> = {
       '/jobs/applications': 'jobs.applications.view_list',
@@ -70,9 +70,18 @@ export default function MainLayout() {
       '/jobs/training-courses': 'jobs.training.view_list',
       '/jobs/public': 'jobs.vacancies.view_list',
     };
+    const recordsViewPermMap: Record<string, string> = {
+      '/clients': 'clients.view_list',
+      '/candidates': 'candidates.view_list',
+      '/employees': 'employees.view_list',
+    };
 
     const visibleJobsChildren = jobsChildren.filter(child => {
       const perm = jobsViewPermMap[child.path];
+      return !perm || can(perm);
+    });
+    const visibleRecordsChildren = recordsChildren.filter(child => {
+      const perm = recordsViewPermMap[child.path];
       return !perm || can(perm);
     });
 
@@ -84,7 +93,7 @@ export default function MainLayout() {
     const isOperationsActive = location.pathname.startsWith('/tasks');
     const isContractsActive = location.pathname.startsWith('/contracts');
     const isGeoActive = location.pathname === '/geo' || location.pathname === '/routes';
-    const isRecordsActive = ['/clients', '/candidates', '/employees'].some(p => location.pathname.startsWith(p));
+    const isRecordsActive = visibleRecordsChildren.some(child => location.pathname.startsWith(child.path));
     const isAppointmentsActive = location.pathname.startsWith('/telemarketer');
     const isJobsActive = location.pathname.startsWith('/jobs');
 
@@ -184,7 +193,7 @@ export default function MainLayout() {
                     ))}
 
                     {/* 1. Records Section */}
-                    {(can('clients.view_list') || can('candidates.view_list') || can('employees.view_list')) && (
+                    {visibleRecordsChildren.length > 0 && (
                     <div className={isCollapsed ? 'lg:hidden' : 'block'}>
                         <button
                             onClick={() => setRecordsOpen(o => !o)}
@@ -208,7 +217,7 @@ export default function MainLayout() {
                                     exit={{ height: 0, opacity: 0 }}
                                     className="overflow-hidden"
                                 >
-                                    {recordsChildren.map(child => (
+                                    {visibleRecordsChildren.map(child => (
                                         <NavLink
                                             key={child.path}
                                             to={child.path}
@@ -554,7 +563,11 @@ export default function MainLayout() {
                         <div className={`flex-1 min-w-0 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
                             <p className="text-sm font-semibold text-slate-700 truncate">{authUser?.name || '—'}</p>
                             <p className="text-xs text-slate-500 truncate">
-                                {authUser?.role === 'HR_MANAGER' ? 'مدير الموارد البشرية' : 'مساعد الموارد البشرية'}
+                                {authUser?.role === 'ADMIN'
+                                  ? 'مدير النظام'
+                                  : authUser?.role === 'HR_MANAGER'
+                                    ? 'مدير الموارد البشرية'
+                                    : 'مساعد الموارد البشرية'}
                             </p>
                         </div>
                         <button

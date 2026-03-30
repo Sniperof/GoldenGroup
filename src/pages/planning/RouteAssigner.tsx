@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Users, Save, Plus, MapPin, Route as RouteIcon, ListOrdered, Calculator, X, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
-import { levelNames } from '../../lib/defaultData';
+import { levelNames } from '../../lib/geoConstants';
 import type { Route, GeoUnit, DaySchedule, RouteComposition, RouteAssignmentData } from '../../lib/types';
 
 const levelColors: Record<number, { bg: string; text: string; border: string }> = {

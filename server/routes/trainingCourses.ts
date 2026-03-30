@@ -519,10 +519,10 @@ router.patch('/:id/trainees/:applicationId/result', requirePermission('jobs.trai
       }
     }
 
-    let newStage: string, newStatus: string, newDecision: string, newStageStatus: string;
+    let newStage: string, newStatus: string, newDecision: string | null, newStageStatus: string;
     if (result === 'Passed')           { newStage = 'Final Decision'; newStatus = 'Passed'; newDecision = 'Passed'; newStageStatus = 'Awaiting Decision'; }
     else if (result === 'Retraining')  { newStage = 'Training'; newStatus = 'Retraining'; newDecision = 'Retraining'; newStageStatus = 'Ready'; }
-    else if (result === 'Rejected')    { newStage = 'Training'; newStatus = 'Rejected'; newDecision = 'Rejected'; newStageStatus = 'Completed'; }
+    else if (result === 'Rejected')    { newStage = 'Final Decision'; newStatus = 'Passed'; newDecision = null; newStageStatus = 'Awaiting Decision'; }
     else                               { newStage = 'Training'; newStatus = 'Retreated'; newDecision = 'Retreated'; newStageStatus = 'Completed'; }
 
     await client.query('BEGIN');

@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, UserPlus, Eye, ChevronDown, Search, Filter, AlertTriangle, Clock, CheckCircle, XCircle, ChevronUp, Zap } from 'lucide-react';
 import SmartTable from '../../components/SmartTable';
 import TicketDetailsModal from '../../components/TicketDetailsModal';
 import { useEmergencyStore } from '../../hooks/useEmergencyStore';
-import { defaultEmployees } from '../../lib/defaultData';
+import { api } from '../../lib/api';
 import type { EmergencyTicket, EmergencyTicketPriority, EmergencyTicketStatus, Employee } from '../../lib/types';
 
 const STATUS_CONFIG: Record<EmergencyTicketStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -24,20 +24,27 @@ const PRIORITY_CONFIG: Record<EmergencyTicketPriority, { label: string; color: s
 const PRIORITY_OPTIONS: EmergencyTicketPriority[] = ['Critical', 'High', 'Normal'];
 
 export default function EmergencyTasks() {
-    const { tickets, updateTicket } = useEmergencyStore();
+    const { tickets, updateTicket, loadTickets } = useEmergencyStore();
     const [assigningId, setAssigningId] = useState<number | null>(null);
     const [priorityEditId, setPriorityEditId] = useState<number | null>(null);
     const [detailTicket, setDetailTicket] = useState<EmergencyTicket | null>(null);
+    const [technicians, setTechnicians] = useState<Employee[]>([]);
 
-    const technicians = useMemo(() =>
-        defaultEmployees.filter(e => e.role === 'technician' && e.status === 'active'),
-        []
-    );
+    useEffect(() => {
+        loadTickets();
+        api.employees.list()
+            .then((employees: Employee[]) => {
+                setTechnicians(employees.filter((employee: Employee) => employee.role === 'technician' && employee.status === 'active'));
+            })
+            .catch((error: unknown) => {
+                console.error('Failed to load technicians for emergency tasks:', error);
+                setTechnicians([]);
+            });
+    }, [loadTickets]);
 
     const newCount = useMemo(() => tickets.filter(t => t.status === 'New').length, [tickets]);
 
     const handleAssign = useCallback((ticketId: number, techId: number) => {
-        const tech = defaultEmployees.find(e => e.id === techId);
         updateTicket(ticketId, {
             assignedTechnicianId: techId,
             status: 'Assigned',
@@ -136,12 +143,12 @@ export default function EmergencyTasks() {
             width: '140px',
             render: (t: EmergencyTicket) => {
                 if (t.assignedTechnicianId) {
-                    const tech = defaultEmployees.find(e => e.id === t.assignedTechnicianId);
+                    const tech = technicians.find((employee) => employee.id === t.assignedTechnicianId);
                     return (
-                        <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full overflow-hidden border border-emerald-200">
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full overflow-hidden border border-emerald-200">
                                 <img src={tech?.avatar || ''} alt="" className="w-full h-full object-cover" />
-                            </div>
+                        </div>
                             <span className="text-xs font-medium text-slate-700">{tech?.name || '—'}</span>
                         </div>
                     );

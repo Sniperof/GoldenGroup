@@ -47,12 +47,15 @@ export const api = {
   },
   employees: {
     list: () => request<any[]>('/employees'),
+    get: (id: number) => request<any>(`/employees/${id}`),
     create: (data: any) => request<any>('/employees', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request<any>(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    upsertSystemAccount: (id: number, data: any) => request<any>(`/employees/${id}/system-account`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request<any>(`/employees/${id}`, { method: 'DELETE' }),
   },
   clients: {
     list: () => request<any[]>('/clients'),
+    get: (id: number) => request<any>(`/clients/${id}`),
     create: (data: any) => request<any>('/clients', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request<any>(`/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => request<any>(`/clients/${id}`, { method: 'DELETE' }),
@@ -108,6 +111,11 @@ export const api = {
     create: (data: any) => request<any>('/maintenance-requests', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: any) => request<any>(`/maintenance-requests/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   },
+  emergencyTickets: {
+    list: () => request<any[]>('/emergency-tickets'),
+    create: (data: any) => request<any>('/emergency-tickets', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) => request<any>(`/emergency-tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  },
   visits: {
     list: () => request<any[]>('/visits'),
     create: (data: any) => request<any>('/visits', { method: 'POST', body: JSON.stringify(data) }),
@@ -121,6 +129,13 @@ export const api = {
     list: () => request<Record<string, any>>('/route-assignments'),
     get: (key: string) => request<any>(`/route-assignments/${key}`),
     save: (key: string, data: any) => request<any>(`/route-assignments/${key}`, { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  telemarketing: {
+    snapshot: () => request<{ taskLists: any[]; appointments: any[]; callLogs: any[] }>('/telemarketing/snapshot'),
+    upsertTaskList: (data: any) => request<any>('/telemarketing/task-lists/upsert', { method: 'POST', body: JSON.stringify(data) }),
+    updateTaskListItem: (taskListId: string, itemId: string, data: any) => request<any>(`/telemarketing/task-lists/${taskListId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    createCallLog: (data: any) => request<any>('/telemarketing/call-logs', { method: 'POST', body: JSON.stringify(data) }),
+    createAppointment: (data: any) => request<any>('/telemarketing/appointments', { method: 'POST', body: JSON.stringify(data) }),
   },
   systemLists: {
     list: (params?: { category?: string; activeOnly?: boolean }) => {

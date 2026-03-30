@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApplicationListStore } from '../../hooks/useApplicationListStore';
 import type { ApplicationStage, ApplicationStatus } from '../../lib/types';
+import { getUnifiedApplicationState, getUnifiedApplicationStateClasses } from '../../lib/applicationState';
 import {
   ClipboardList, Search, Filter, ChevronDown, Eye, AlertTriangle, Calendar, Archive, Plus
 } from 'lucide-react';
@@ -47,6 +48,14 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
   'Awaiting Decision': 'بانتظار القرار',
 };
 
+const FINAL_ROW_STYLES: Record<string, string> = {
+  'Final Hired': 'bg-emerald-50/70 hover:bg-emerald-50 border-r-[3px] border-r-emerald-400',
+  'Rejected': 'bg-rose-50/70 hover:bg-rose-50 border-r-[3px] border-r-rose-300',
+  'Interview Failed': 'bg-rose-50/70 hover:bg-rose-50 border-r-[3px] border-r-rose-300',
+  'Final Rejected': 'bg-rose-50/70 hover:bg-rose-50 border-r-[3px] border-r-rose-300',
+  'Retreated': 'bg-slate-50/80 hover:bg-slate-50 border-r-[3px] border-r-slate-300',
+};
+
 // Kept for filter options only
 const STATUS_LABELS: Record<string, string> = {
   'New': 'جديد', 'In Review': 'قيد المراجعة', 'Qualified': 'مؤهل', 'Rejected': 'مرفوض',
@@ -76,6 +85,15 @@ export default function Applications() {
     filters.stage, filters.status, filters.search,
     filters.applicationSource, filters.isArchived,
   ]);
+
+  const getRowClassName = (applicationStatus: string, idx: number) => {
+    const finalStateClass = FINAL_ROW_STYLES[applicationStatus];
+    if (finalStateClass) {
+      return `border-b border-slate-100 transition-colors cursor-pointer ${finalStateClass}`;
+    }
+
+    return `border-b border-slate-100 hover:bg-sky-50/40 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`;
+  };
 
   return (
     <div className="h-full overflow-y-auto p-6" dir="rtl">
@@ -215,7 +233,7 @@ export default function Applications() {
                 {applications.map((app, idx) => (
                   <tr
                     key={app.id}
-                    className={`border-b border-slate-100 hover:bg-sky-50/40 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
+                    className={getRowClassName(app.applicationStatus, idx)}
                     onClick={() => navigate(`/jobs/applications/${app.id}`)}
                   >
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{app.id}</td>
@@ -236,9 +254,21 @@ export default function Applications() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${STAGE_STATUS_COLORS[app.stageStatus] || STAGE_STATUS_COLORS[app.applicationStatus] || 'bg-slate-100 text-slate-600'}`}>
-                        {STAGE_STATUS_LABELS[app.stageStatus] || STATUS_LABELS[app.applicationStatus] || app.stageStatus}
-                      </span>
+                      {(() => {
+                        const unifiedState = getUnifiedApplicationState({
+                          currentStage: app.currentStage,
+                          applicationStatus: app.applicationStatus,
+                          stageStatus: app.stageStatus,
+                          decision: app.decision,
+                          hasScheduledInterview: app.hasScheduledInterview,
+                        });
+
+                        return (
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getUnifiedApplicationStateClasses(unifiedState.tone)}`}>
+                            {unifiedState.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {app.duplicateFlag && (
@@ -257,7 +287,15 @@ export default function Applications() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors">
+                      <button className={`p-1.5 rounded-lg transition-colors ${
+                        app.applicationStatus === 'Final Hired'
+                          ? 'text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100/70'
+                          : ['Rejected', 'Interview Failed', 'Final Rejected'].includes(app.applicationStatus)
+                          ? 'text-rose-400 hover:text-rose-600 hover:bg-rose-100/70'
+                          : app.applicationStatus === 'Retreated'
+                          ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/80'
+                          : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'
+                      }`}>
                         <Eye className="w-4 h-4" />
                       </button>
                     </td>
