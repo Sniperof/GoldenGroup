@@ -1,8 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, MapPin, ShieldCheck, Calendar, User, AlertTriangle, FileText, Paperclip, History, ChevronDown, Wrench } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
-import { defaultMaintenanceRequests, defaultEmployees } from '../lib/defaultData';
+import { api } from '../lib/api';
 import type { EmergencyTicket, EmergencyTicketPriority, MaintenanceRequest, ClientRating } from '../lib/types';
 
 interface Props {
@@ -32,18 +31,40 @@ const PRIORITY_CONFIG: Record<EmergencyTicketPriority, { label: string; color: s
 };
 
 export default function TicketDetailsModal({ ticket, onClose, onUpdate }: Props) {
-    // Load maintenance history for this device
+    const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+    const [employees, setEmployees] = useState<any[]>([]);
+
+    useEffect(() => {
+        let active = true;
+
+        Promise.all([api.maintenanceRequests.list(), api.employees.list()])
+            .then(([requests, employeeList]) => {
+                if (!active) return;
+                setMaintenanceRequests(requests);
+                setEmployees(employeeList);
+            })
+            .catch((error) => {
+                console.error('Failed to load ticket detail dependencies:', error);
+                if (!active) return;
+                setMaintenanceRequests([]);
+                setEmployees([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const maintenanceHistory = useMemo(() => {
         if (!ticket.contractId) return [];
-        const requests = StorageManager.load<MaintenanceRequest[]>('maintenanceRequests', defaultMaintenanceRequests);
-        return requests
+        return maintenanceRequests
             .filter(r => r.contractId === ticket.contractId)
             .sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
-    }, [ticket.contractId]);
+    }, [ticket.contractId, maintenanceRequests]);
 
     const assignedTech = useMemo(() =>
-        ticket.assignedTechnicianId ? defaultEmployees.find(e => e.id === ticket.assignedTechnicianId) : null,
-        [ticket.assignedTechnicianId]
+        ticket.assignedTechnicianId ? employees.find(e => e.id === ticket.assignedTechnicianId) : null,
+        [ticket.assignedTechnicianId, employees]
     );
 
     const rating = RATING_LABELS[ticket.clientRating || 'Undefined'];
@@ -164,7 +185,7 @@ export default function TicketDetailsModal({ ticket, onClose, onUpdate }: Props)
                         ) : (
                             <div className="space-y-2">
                                 {maintenanceHistory.map((req) => {
-                                    const tech = req.technicianId ? defaultEmployees.find(e => e.id === req.technicianId) : null;
+                                    const tech = req.technicianId ? employees.find(e => e.id === req.technicianId) : null;
                                     const date = new Date(req.requestDate);
                                     return (
                                         <div key={req.id} className="bg-slate-50 rounded-xl p-3 border border-slate-100 hover:border-indigo-200 transition-colors">

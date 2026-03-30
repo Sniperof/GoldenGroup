@@ -3,6 +3,10 @@ import pool from '../db.js';
 import { insertAuditLog } from '../utils/auditLog.js';
 import { sanitizeText } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permission.js';
+import {
+  fetchApplicationPolicyState,
+  getApplicationProcessingBlockReason,
+} from '../utils/recruitmentPolicy.js';
 
 const router = Router();
 
@@ -97,6 +101,17 @@ router.post('/', requirePermission('jobs.interviews.schedule'), async (req, res)
     if (!b.interviewTime) return res.status(400).json({ error: 'وقت المقابلة مطلوب' });
 
     await client.query('BEGIN');
+
+    const policyState = await fetchApplicationPolicyState(client, b.applicationId);
+    if (!policyState) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, policyState);
+    if (blockReason) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: blockReason });
+    }
 
     // M3.3: Prevent duplicate scheduled interview for the same application
     const { rows: existingScheduled } = await client.query(
@@ -260,6 +275,17 @@ router.put('/:id', requirePermission('jobs.interviews.edit'), async (req, res) =
       return res.status(400).json({ error: 'لا يمكن تعديل مقابلة مكتملة أو فاشلة' });
     }
 
+    const policyState = await fetchApplicationPolicyState(client, current[0].application_id);
+    if (!policyState) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, policyState);
+    if (blockReason) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: blockReason });
+    }
+
     if (b.interviewDate) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -342,6 +368,17 @@ router.patch('/:id/result', requirePermission('jobs.interviews.record_result'), 
     if (current[0].interview_status !== 'Interview Scheduled') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'يمكن تحديث نتيجة المقابلة المجدولة فقط' });
+    }
+
+    const policyState = await fetchApplicationPolicyState(client, current[0].application_id);
+    if (!policyState) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, policyState);
+    if (blockReason) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: blockReason });
     }
 
     const { rows } = await client.query(

@@ -154,7 +154,7 @@ export default function SystemLists() {
   useEffect(() => { fetchLists(); }, []);
   useEffect(() => { setSearch(''); setActiveCertificate(null); }, [activeCategory]);
 
-  if (!user || user.role !== 'HR_MANAGER') return <Navigate to="/" replace />;
+  if (!user || !['HR_MANAGER', 'ADMIN'].includes(user.role)) return <Navigate to="/" replace />;
 
   const activeMeta = sidebarCategories.find(c => c.id === activeCategory);
   const isCertificateView = activeCategory === 'certificate';

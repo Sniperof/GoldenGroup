@@ -84,8 +84,26 @@ export interface Employee {
     name: string;
     role: 'supervisor' | 'technician' | 'telemarketer';
     mobile: string;
+    branch?: string | null;
+    residence?: string | null;
+    residenceShort?: string | null;
     status: 'active' | 'leave' | 'inactive';
     avatar?: string;
+    jobTitle?: string | null;
+    createdAt?: string;
+}
+
+export interface EmployeeSystemAccount {
+    id: number;
+    username: string;
+    isActive: boolean;
+    roleId: number | null;
+    roleDisplayName: string | null;
+}
+
+export interface EmployeeDetail extends Employee {
+    systemAccount: EmployeeSystemAccount | null;
+    hiringApplication: JobApplicationDetail | null;
 }
 
 export type BranchContactType = 'email' | 'phone' | 'mobile' | 'website';
@@ -508,6 +526,7 @@ export interface JobApplication {
   stageStatus: StageStatus;
   decision: Decision | null;
   duplicateFlag: boolean;
+  hiredEmployeeId: number | null;
   isEscalated: boolean;
   escalatedAt: string | null;
   internalNotes: string | null;
@@ -640,6 +659,7 @@ export interface JobApplicationListItem extends JobApplication {
   vacancyRequiredExperienceYears?: number | null;
   vacancyRequiredSkills?: string | null;
   vacancyDrivingLicenseRequired?: boolean | null;
+  hasScheduledInterview?: boolean;
 }
 
 export interface ApplicationTrainingEnrollment {

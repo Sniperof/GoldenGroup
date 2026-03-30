@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, UserCheck, AlertCircle, ArrowRight, Trash2, Clock, CheckCircle2 } from 'lucide-react';
 import { Candidate, Client } from '../../lib/types';
-import { StorageManager } from '../../lib/storage';
+import { api } from '../../lib/api';
 
 interface QualificationModalProps {
     isOpen: boolean;
@@ -18,6 +18,7 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
     const [step, setStep] = useState<1 | 2>(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeSearch, setActiveSearch] = useState('');
+    const [clientsList, setClientsList] = useState<Client[]>([]);
 
     // Initialize search with candidate's mobile number
     React.useEffect(() => {
@@ -28,6 +29,25 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
         }
     }, [isOpen, candidate]);
 
+    React.useEffect(() => {
+        if (!isOpen) return;
+
+        let active = true;
+
+        api.clients.list()
+            .then((clients) => {
+                if (active) setClientsList(clients);
+            })
+            .catch((error) => {
+                console.error('Failed to load clients for qualification modal:', error);
+                if (active) setClientsList([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [isOpen]);
+
     // Step 1: Search for duplicates or manual search results
     const searchResults = useMemo(() => {
         if (!activeSearch || !isOpen) return [];
@@ -36,7 +56,6 @@ export default function QualificationModal({ isOpen, onClose, candidate, onQuali
             return text.replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
         };
 
-        const clientsList = StorageManager.load<Client[]>('clients', []);
         const terms = normalizeArabic(activeSearch).trim().split(/\s+/).filter(t => t.length > 0);
 
         return clientsList.filter(c => {

@@ -53,9 +53,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ token: null, user: null, permissions: [] });
   },
   hasPermission(key: string) {
+    if (get().user?.role === 'ADMIN') return true;
     return get().permissions.includes(key);
   },
   hasAnyPermission(...keys: string[]) {
+    if (get().user?.role === 'ADMIN') return true;
     const perms = get().permissions;
     return keys.some(k => perms.includes(k));
   },

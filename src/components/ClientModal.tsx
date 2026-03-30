@@ -9,7 +9,7 @@ import MapPicker from './MapPicker';
 import GeoSmartSearch from './GeoSmartSearch';
 import type { GeoSelection } from './GeoSmartSearch';
 import { useCandidateStore } from '../hooks/useCandidateStore';
-import { StorageManager } from '../lib/storage';
+import { api } from '../lib/api';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -54,7 +54,8 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
     const [formData, setFormData] = useState<Partial<Client>>({});
 
     const candidates = useCandidateStore(state => state.candidates);
-    const allClients = StorageManager.load<Client[]>('clients', []);
+    const [allClients, setAllClients] = useState<Client[]>([]);
+    const [employees, setEmployees] = useState<Array<{ id: number; name: string }>>([]);
 
     // Identity fields
     const [firstName, setFirstName] = useState('');
@@ -97,6 +98,36 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
     }, []);
 
     useEffect(() => {
+        if (!isOpen) return;
+
+        let active = true;
+
+        const fetchLookupData = async () => {
+            try {
+                const [clientsData, employeesData] = await Promise.all([
+                    api.clients.list(),
+                    api.employees.list(),
+                ]);
+
+                if (!active) return;
+                setAllClients(clientsData);
+                setEmployees(employeesData.map((employee: any) => ({ id: employee.id, name: employee.name })));
+            } catch (error) {
+                console.error('Failed to fetch client modal lookup data:', error);
+                if (!active) return;
+                setAllClients([]);
+                setEmployees([]);
+            }
+        };
+
+        fetchLookupData();
+
+        return () => {
+            active = false;
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
         if (referralType === 'Personal') {
             setOriginChannel('Acquaintance');
             setReferralNameSnapshot('المدير/المشرف المباشر');
@@ -115,8 +146,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
             setEmployeeSearchError('');
             return;
         }
-        const employees = StorageManager.load<any[]>('employees', []);
-        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim() || e.employeeId === employeeIdInput.trim());
+        const emp = employees.find(e => e.id.toString() === employeeIdInput.trim());
         if (emp) {
             setEmployeeFound({ name: emp.name, id: emp.id });
             setReferralNameSnapshot(emp.name);

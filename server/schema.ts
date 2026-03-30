@@ -14,8 +14,12 @@ export async function createSchema() {
       name VARCHAR(255) NOT NULL,
       role VARCHAR(50) NOT NULL CHECK (role IN ('supervisor', 'technician', 'telemarketer')),
       mobile VARCHAR(50) NOT NULL,
+      branch VARCHAR(255),
+      residence VARCHAR(255),
       status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'leave', 'inactive')),
-      avatar TEXT
+      job_title VARCHAR(255),
+      avatar TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS clients (
@@ -207,6 +211,79 @@ export async function createSchema() {
       extra_zones JSONB DEFAULT '[]'
     );
 
+    CREATE TABLE IF NOT EXISTS emergency_tickets (
+      id SERIAL PRIMARY KEY,
+      client_id INTEGER NOT NULL,
+      client_name VARCHAR(255) NOT NULL,
+      client_address TEXT,
+      client_rating VARCHAR(50) DEFAULT 'Undefined',
+      contract_id INTEGER,
+      device_model_name VARCHAR(255),
+      problem_description TEXT NOT NULL,
+      call_notes TEXT,
+      attachments JSONB DEFAULT '[]',
+      call_receiver VARCHAR(255) NOT NULL,
+      priority VARCHAR(50) DEFAULT 'Normal' CHECK (priority IN ('Critical', 'High', 'Normal')),
+      status VARCHAR(50) DEFAULT 'New' CHECK (status IN ('New', 'Assigned', 'In Progress', 'Completed', 'Cancelled')),
+      assigned_technician_id INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS telemarketing_task_lists (
+      id VARCHAR(100) PRIMARY KEY,
+      team_key VARCHAR(100) NOT NULL,
+      date VARCHAR(50) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(team_key, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS telemarketing_task_list_items (
+      id VARCHAR(100) PRIMARY KEY,
+      task_list_id VARCHAR(100) NOT NULL REFERENCES telemarketing_task_lists(id) ON DELETE CASCADE,
+      entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('candidate', 'client')),
+      entity_id INTEGER NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      mobile VARCHAR(50) NOT NULL,
+      contact_number VARCHAR(50),
+      contact_label VARCHAR(255),
+      address_text TEXT,
+      geo_unit_id INTEGER,
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'called', 'booked')),
+      call_outcome VARCHAR(20)
+    );
+
+    CREATE TABLE IF NOT EXISTS telemarketing_call_logs (
+      id VARCHAR(100) PRIMARY KEY,
+      entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('candidate', 'client')),
+      entity_id INTEGER NOT NULL,
+      task_list_id VARCHAR(100),
+      team_key VARCHAR(100) NOT NULL,
+      outcome VARCHAR(20) NOT NULL CHECK (outcome IN ('no_answer', 'busy', 'rejected', 'booked')),
+      contact_label VARCHAR(255),
+      contact_number VARCHAR(50),
+      notes TEXT,
+      timestamp TIMESTAMPTZ DEFAULT NOW(),
+      called_by INTEGER,
+      communication_method VARCHAR(30)
+    );
+
+    CREATE TABLE IF NOT EXISTS telemarketing_appointments (
+      id VARCHAR(100) PRIMARY KEY,
+      entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('candidate', 'client')),
+      entity_id INTEGER NOT NULL,
+      customer_name VARCHAR(255) NOT NULL,
+      customer_address TEXT,
+      customer_mobile VARCHAR(50),
+      team_key VARCHAR(100) NOT NULL,
+      date VARCHAR(50) NOT NULL,
+      time_slot VARCHAR(50) NOT NULL,
+      occupation VARCHAR(255),
+      water_source VARCHAR(255),
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS branches (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -378,6 +455,7 @@ async function migrateJobTables() {
         'Final Hired', 'Final Rejected', 'Retreated'
       )),
       duplicate_flag BOOLEAN DEFAULT FALSE,
+      hired_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
       is_escalated BOOLEAN DEFAULT FALSE,
       escalated_at TIMESTAMPTZ,
       internal_notes TEXT,
@@ -490,6 +568,18 @@ async function fixSchemaConstraints() {
     await pool.query(`ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
   } catch { /* ignore */ }
 
+  // Extend employees and applications for hiring conversion
+  try {
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS branch VARCHAR(255)`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS residence VARCHAR(255)`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`);
+    await pool.query(`
+      ALTER TABLE job_applications
+        ADD COLUMN IF NOT EXISTS hired_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL
+    `);
+  } catch { /* ignore */ }
+
   // Add recorded_by_user_id to training_attendance
   try {
     await pool.query(`ALTER TABLE training_attendance ADD COLUMN IF NOT EXISTS recorded_by_user_id INTEGER REFERENCES employees(id)`);
@@ -594,11 +684,20 @@ async function createHrUsers() {
       name VARCHAR(255) NOT NULL,
       username VARCHAR(100) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(50) NOT NULL CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT')),
+      role VARCHAR(50) NOT NULL CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT', 'ADMIN')),
       is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  try {
+    await pool.query(`ALTER TABLE hr_users DROP CONSTRAINT IF EXISTS hr_users_role_check`);
+    await pool.query(`
+      ALTER TABLE hr_users
+      ADD CONSTRAINT hr_users_role_check
+      CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT', 'ADMIN'))
+    `);
+  } catch { /* ignore */ }
 
   // Drop FK from audit_logs.performed_by_user_id (was referencing employees)
   try {
@@ -646,11 +745,14 @@ async function createHrUsers() {
   try {
     await pool.query(`
       INSERT INTO system_lists (category, value, display_order) VALUES
-        ('job_title', 'فني صيانة أجهزة', 1),
-        ('job_title', 'مندوب مبيعات', 2),
-        ('job_title', 'فني تركيب', 3),
-        ('job_title', 'مسؤول خدمة العملاء', 4),
-        ('job_title', 'محاسب', 5),
+        ('job_title', 'مشرفة', 1),
+        ('job_title', 'فني', 2),
+        ('job_title', 'تيلماركتر', 3),
+        ('job_title', 'فني صيانة أجهزة', 4),
+        ('job_title', 'مندوب مبيعات', 5),
+        ('job_title', 'فني تركيب', 6),
+        ('job_title', 'مسؤول خدمة العملاء', 7),
+        ('job_title', 'محاسب', 8),
         ('certificate', 'ابتدائية', 1),
         ('certificate', 'متوسطة', 2),
         ('certificate', 'إعدادية', 3),
@@ -728,6 +830,26 @@ async function createPermissionsTables() {
     await pool.query(`ALTER TABLE hr_users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id)`);
   } catch { /* ignore */ }
 
+  try {
+    await pool.query(`ALTER TABLE hr_users ADD COLUMN IF NOT EXISTS employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL`);
+  } catch { /* ignore */ }
+
+  try {
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS first_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS father_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS nickname VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS occupation VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS water_source VARCHAR(255)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS notes TEXT`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS rating VARCHAR(50)`);
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS referrers JSONB DEFAULT '[]'::jsonb`);
+  } catch { /* ignore */ }
+
+  try {
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ux_hr_users_employee_id ON hr_users(employee_id) WHERE employee_id IS NOT NULL`);
+  } catch { /* ignore */ }
+
   console.log('Permissions tables created.');
 }
 
@@ -738,11 +860,13 @@ export async function seedData() {
     const bcrypt = await import('bcryptjs');
     const managerHash = await bcrypt.default.hash('manager123', 10);
     const assistantHash = await bcrypt.default.hash('assistant123', 10);
+    const adminHash = await bcrypt.default.hash('admin123', 10);
     await pool.query(`
       INSERT INTO hr_users (name, username, password_hash, role) VALUES
         ('مدير الموارد البشرية', 'hr_manager', $1, 'HR_MANAGER'),
-        ('مساعد الموارد البشرية', 'hr_assistant', $2, 'HR_ASSISTANT')
-    `, [managerHash, assistantHash]);
+        ('مساعد الموارد البشرية', 'hr_assistant', $2, 'HR_ASSISTANT'),
+        ('مدير النظام', 'system_admin', $3, 'ADMIN')
+    `, [managerHash, assistantHash, adminHash]);
     console.log('Default HR users seeded.');
   }
 
@@ -750,7 +874,8 @@ export async function seedData() {
   await pool.query(`
     INSERT INTO roles (name, display_name, description, is_system) VALUES
       ('HR_MANAGER', 'مدير الموارد البشرية', 'صلاحيات كاملة لإدارة قسم الوظائف', TRUE),
-      ('HR_ASSISTANT', 'مساعد الموارد البشرية', 'صلاحيات محدودة للمساعدة في إدارة الوظائف', TRUE)
+      ('HR_ASSISTANT', 'مساعد الموارد البشرية', 'صلاحيات محدودة للمساعدة في إدارة الوظائف', TRUE),
+      ('ADMIN', 'مدير النظام', 'صلاحيات كاملة على كافة وحدات النظام', TRUE)
     ON CONFLICT (name) DO NOTHING
   `);
 
@@ -804,6 +929,7 @@ export async function seedData() {
       ('employees.view_list', 'employees', 'records', 'view_list', 'عرض قائمة الموظفين', 120),
       ('employees.create', 'employees', 'records', 'create', 'إضافة موظف جديد', 121),
       ('employees.edit', 'employees', 'records', 'edit', 'تعديل بيانات الموظف', 122),
+      ('employees.delete', 'employees', 'records', 'delete', 'حذف موظف', 123),
       -- Contracts
       ('contracts.view_list', 'contracts', 'records', 'view_list', 'عرض قائمة العقود', 130),
       ('contracts.create', 'contracts', 'records', 'create', 'إنشاء عقد جديد', 131),
@@ -839,6 +965,13 @@ export async function seedData() {
     ON CONFLICT (role_id, permission_id) DO NOTHING
   `);
 
+  // Grant ALL permissions to ADMIN role
+  await pool.query(`
+    INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'ADMIN'
+    ON CONFLICT (role_id, permission_id) DO NOTHING
+  `);
+
   // Grant subset to HR_ASSISTANT
   await pool.query(`
     INSERT INTO role_permissions (role_id, permission_id)
@@ -859,10 +992,27 @@ export async function seedData() {
     UPDATE hr_users SET role_id = (SELECT id FROM roles WHERE name = hr_users.role) WHERE role_id IS NULL
   `);
 
-  console.log('Permissions seeded and role_id backfilled.');
+  const bcrypt = await import('bcryptjs');
+  const adminHash = await bcrypt.default.hash('admin123', 10);
+  await pool.query(`
+    INSERT INTO hr_users (name, username, password_hash, role, role_id, is_active)
+    VALUES (
+      'مدير النظام',
+      'system_admin',
+      $1,
+      'ADMIN',
+      (SELECT id FROM roles WHERE name = 'ADMIN'),
+      TRUE
+    )
+    ON CONFLICT (username) DO UPDATE
+      SET name = EXCLUDED.name,
+          password_hash = EXCLUDED.password_hash,
+          role = EXCLUDED.role,
+          role_id = EXCLUDED.role_id,
+          is_active = TRUE
+  `, [adminHash]);
 
-  const { rows } = await pool.query('SELECT COUNT(*) FROM employees');
-  if (parseInt(rows[0].count) > 0) return;
+  console.log('Permissions seeded and role_id backfilled.');
 
   await pool.query(`
     INSERT INTO geo_units (id, name, level, parent_id) VALUES
@@ -885,7 +1035,8 @@ export async function seedData() {
     SELECT setval('geo_units_id_seq', (SELECT MAX(id) FROM geo_units));
   `);
 
-  await pool.query(`
+  if (false) {
+    await pool.query(`
     INSERT INTO employees (id, name, role, mobile, status, avatar) VALUES
       (1, 'ليلى أحمد', 'supervisor', '07701234567', 'active', 'https://ui-avatars.com/api/?name=ليلى+أحمد&background=6366f1&color=fff'),
       (2, 'عمر حسن', 'supervisor', '07709876543', 'active', 'https://ui-avatars.com/api/?name=عمر+حسن&background=6366f1&color=fff'),
@@ -900,7 +1051,8 @@ export async function seedData() {
     ON CONFLICT (id) DO NOTHING;
 
     SELECT setval('employees_id_seq', (SELECT MAX(id) FROM employees));
-  `);
+    `);
+  }
 
   await pool.query(`
     INSERT INTO tasks (id, type, customer_name, context, location, due_date, status, priority) VALUES

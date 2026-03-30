@@ -512,6 +512,7 @@ export default function PlanOverview() {
                 teamLabel={selectedModalTeam?.label || ''}
                 candidates={selectedModalTeam?.candidates || []}
                 leads={selectedModalTeam?.leads || []}
+                geoUnits={geoUnits}
                 onGenerate={handleGenerateList}
             />
         </div>

@@ -1,34 +1,49 @@
 import { create } from 'zustand';
-import { StorageManager } from '../lib/storage';
 import { EmergencyTicket } from '../lib/types';
-
-const STORAGE_KEY = 'emergencyTickets';
+import { api } from '../lib/api';
 
 interface EmergencyStore {
     tickets: EmergencyTicket[];
-    loadTickets: () => void;
-    addTicket: (ticket: EmergencyTicket) => void;
-    updateTicket: (id: number, updates: Partial<EmergencyTicket>) => void;
+    loadTickets: () => Promise<void>;
+    addTicket: (ticket: Omit<EmergencyTicket, 'id' | 'createdAt'>) => Promise<EmergencyTicket | null>;
+    updateTicket: (id: number, updates: Partial<EmergencyTicket>) => Promise<void>;
 }
 
 export const useEmergencyStore = create<EmergencyStore>((set, get) => ({
-    tickets: StorageManager.load<EmergencyTicket[]>(STORAGE_KEY, []),
+    tickets: [],
 
-    loadTickets: () => {
-        set({ tickets: StorageManager.load<EmergencyTicket[]>(STORAGE_KEY, []) });
+    loadTickets: async () => {
+        try {
+            const tickets = await api.emergencyTickets.list();
+            set({ tickets });
+        } catch (error) {
+            console.error('Failed to load emergency tickets:', error);
+            set({ tickets: [] });
+        }
     },
 
-    addTicket: (ticket: EmergencyTicket) => {
-        const updated = [...get().tickets, ticket];
-        StorageManager.save(STORAGE_KEY, updated);
-        set({ tickets: updated });
+    addTicket: async (ticketInput) => {
+        try {
+            const created = await api.emergencyTickets.create(ticketInput);
+            set((state) => ({ tickets: [created, ...state.tickets] }));
+            return created;
+        } catch (error) {
+            console.error('Failed to create emergency ticket:', error);
+            return null;
+        }
     },
 
-    updateTicket: (id: number, updates: Partial<EmergencyTicket>) => {
-        const updated = get().tickets.map(t =>
-            t.id === id ? { ...t, ...updates } : t
-        );
-        StorageManager.save(STORAGE_KEY, updated);
-        set({ tickets: updated });
+    updateTicket: async (id, updates) => {
+        const current = get().tickets.find((ticket) => ticket.id === id);
+        if (!current) return;
+
+        try {
+            const updated = await api.emergencyTickets.update(id, { ...current, ...updates });
+            set((state) => ({
+                tickets: state.tickets.map((ticket) => (ticket.id === id ? updated : ticket)),
+            }));
+        } catch (error) {
+            console.error('Failed to update emergency ticket:', error);
+        }
     },
 }));

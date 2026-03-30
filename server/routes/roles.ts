@@ -47,6 +47,27 @@ router.get('/roles/:id', requirePermission('admin.roles.view'), async (req, res)
 });
 
 // ── POST /roles — Create role ───────────────────────────────────────────────
+router.get('/roles/:id/permissions', requirePermission('admin.roles.view'), async (req, res) => {
+  try {
+    const roleId = req.params.id;
+    const { rows: roleRows } = await pool.query('SELECT id FROM roles WHERE id = $1', [roleId]);
+    if (roleRows.length === 0) return res.status(404).json({ error: 'Ø§Ù„Ø¯ÙˆØ± ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' });
+
+    const { rows } = await pool.query(
+      `SELECT p.* FROM role_permissions rp
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE rp.role_id = $1
+       ORDER BY p.display_order`,
+      [roleId]
+    );
+
+    res.json(rows);
+  } catch (err: any) {
+    console.error('Error fetching role permissions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/roles', requirePermission('admin.roles.manage'), async (req, res) => {
   try {
     const { name, displayName, description } = req.body;

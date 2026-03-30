@@ -8,7 +8,7 @@ import {
   CheckSquare, Square, Key, Eye, Plus, Pencil, Trash2,
   ToggleRight, Award, Users, BookOpen, ClipboardList,
   Briefcase, GraduationCap, Settings, ListChecks, CheckCheck,
-  UserCheck, Calendar, FileText, AlertCircle, BarChart2
+  UserCheck, Calendar, FileText, AlertCircle, BarChart2, ChevronDown
 } from 'lucide-react';
 
 // ── Human-readable labels & descriptions ─────────────────────────────────────
@@ -70,8 +70,9 @@ const PERM_LABELS: Record<string, { label: string; desc: string }> = {
 
   // Employees
   'employees.view_list':  { label: 'عرض قائمة الموظفين',     desc: 'الاطلاع على سجلات الموظفين الميدانيين' },
-  'employees.create':     { label: 'إضافة موظف جديد',        desc: 'إضافة موظف جديد إلى النظام' },
+  'employees.create':     { label: 'إضافة موظف جديد',        desc: 'إضافة موظف جديد أو إنشاء سجل موظف من طلب توظيف مقبول' },
   'employees.edit':       { label: 'تعديل بيانات الموظف',    desc: 'تحديث معلومات الموظف' },
+  'employees.delete':     { label: 'حذف موظف',              desc: 'حذف سجل موظف من النظام' },
 
   // Contracts
   'contracts.view_list':  { label: 'عرض قائمة العقود',       desc: 'الاطلاع على جميع العقود المسجلة' },
@@ -117,6 +118,7 @@ function ActionBadge({ action }: { action: string }) {
     create:           { icon: <Plus className="w-3 h-3" />,         color: 'bg-emerald-50 text-emerald-600', text: 'إنشاء' },
     add_trainees:     { icon: <Plus className="w-3 h-3" />,         color: 'bg-emerald-50 text-emerald-600', text: 'إضافة' },
     edit:             { icon: <Pencil className="w-3 h-3" />,       color: 'bg-amber-50 text-amber-600',   text: 'تعديل' },
+    delete:           { icon: <Trash2 className="w-3 h-3" />,       color: 'bg-rose-50 text-rose-600',     text: 'حذف' },
     edit_notes:       { icon: <Pencil className="w-3 h-3" />,       color: 'bg-amber-50 text-amber-600',   text: 'تعديل' },
     change_status:    { icon: <ToggleRight className="w-3 h-3" />,  color: 'bg-amber-50 text-amber-600',   text: 'تغيير' },
     change_stage:     { icon: <ToggleRight className="w-3 h-3" />,  color: 'bg-amber-50 text-amber-600',   text: 'تحريك' },
@@ -193,6 +195,7 @@ export default function RolePermissions() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [openModules, setOpenModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([fetchRoles(), fetchPermissions()]).then(() => setLoading(false));
@@ -218,6 +221,13 @@ export default function RolePermissions() {
     }
     return map;
   }, [allPermissions]);
+
+  const moduleEntries = useMemo(() => Object.entries(grouped), [grouped]);
+  const moduleKeys = useMemo(() => moduleEntries.map(([module]) => module), [moduleEntries]);
+
+  useEffect(() => {
+    setOpenModules(prev => new Set([...prev].filter(module => moduleKeys.includes(module))));
+  }, [moduleKeys]);
 
   function toggle(permId: number) {
     setAssigned(prev => {
@@ -246,6 +256,23 @@ export default function RolePermissions() {
       allSelected ? ids.forEach(id => next.delete(id)) : ids.forEach(id => next.add(id));
       return next;
     });
+  }
+
+  function toggleModulePanel(module: string) {
+    setOpenModules(prev => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
+      return next;
+    });
+  }
+
+  function expandAllModules() {
+    setOpenModules(new Set(moduleKeys));
+  }
+
+  function collapseAllModules() {
+    setOpenModules(new Set());
   }
 
   async function handleSave() {
@@ -327,6 +354,62 @@ export default function RolePermissions() {
           </div>
         </div>
 
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-bold text-slate-800">{'\u0627\u0644\u0623\u0642\u0633\u0627\u0645'}</p>
+              <p className="text-xs text-slate-500">{'\u0643\u0644 \u0643\u0627\u0631\u062f \u0623\u0635\u0628\u062d \u0642\u0627\u0628\u0644\u0627\u064b \u0644\u0644\u0637\u064a. \u0627\u0641\u062a\u062d \u0627\u0644\u0642\u0633\u0645 \u0627\u0644\u0630\u064a \u062a\u0631\u064a\u062f\u0647 \u0641\u0642\u0637.'}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 flex-nowrap">
+              <button
+                onClick={expandAllModules}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-sky-50 text-sky-600 hover:bg-sky-100 transition-colors"
+              >
+                {'\u0641\u062a\u062d \u0627\u0644\u0643\u0644'}
+              </button>
+              <button
+                onClick={collapseAllModules}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                {'\u0637\u064a \u0627\u0644\u0643\u0644'}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {moduleEntries.map(([module, subGroups]) => {
+              const modCfg = MODULE_CONFIG[module] ?? {
+                label: module,
+                icon: <ListChecks className="w-4 h-4" />,
+                color: 'text-slate-600 bg-slate-100',
+              };
+              const allModulePerms = Object.values(subGroups).flat();
+              const moduleSelected = allModulePerms.filter(p => assigned.has(p.id)).length;
+              const isOpen = openModules.has(module);
+
+              return (
+                <button
+                  key={module}
+                  onClick={() => toggleModulePanel(module)}
+                  className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition-all ${
+                    isOpen
+                      ? 'border-sky-200 bg-sky-50 text-sky-700 shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${modCfg.color}`}>
+                    {modCfg.icon}
+                  </span>
+                  <span>{modCfg.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 ${isOpen ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {moduleSelected}/{allModulePerms.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Feedback */}
         {error && (
           <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl p-4">
@@ -340,7 +423,7 @@ export default function RolePermissions() {
         )}
 
         {/* Permissions grouped by module → subModule */}
-        {Object.entries(grouped).map(([module, subGroups]) => {
+        {moduleEntries.map(([module, subGroups]) => {
           const modCfg = MODULE_CONFIG[module] ?? {
             label: module,
             icon: <ListChecks className="w-4 h-4" />,
@@ -350,33 +433,60 @@ export default function RolePermissions() {
           const moduleSelected = allModulePerms.filter(p => assigned.has(p.id)).length;
           const moduleTotal = allModulePerms.length;
           const allModuleSelected = moduleSelected === moduleTotal;
+          const isOpen = openModules.has(module);
+          const subModuleNames = Object.keys(subGroups).map(sub => SUB_MODULE_LABELS[sub] ?? sub);
 
           return (
-            <div key={module} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div key={module} className={`bg-white rounded-2xl border overflow-hidden transition-all ${isOpen ? 'border-sky-200 shadow-lg shadow-sky-100/60' : 'border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200'}`}>
               {/* Module Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
+              <div className={`flex items-start justify-between gap-4 px-5 py-4 ${isOpen ? 'border-b border-slate-100 bg-gradient-to-l from-sky-50 via-white to-white' : ''}`}>
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${modCfg.color}`}>
                     {modCfg.icon}
                   </span>
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="text-sm font-bold text-slate-800">{modCfg.label}</h3>
+                    {!isOpen && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 mb-1">
+                        {subModuleNames.slice(0, 3).map(name => (
+                          <span key={name} className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[10px] font-medium">
+                            {name}
+                          </span>
+                        ))}
+                        {subModuleNames.length > 3 && (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-400 px-2 py-0.5 text-[10px] font-medium">
+                            +{subModuleNames.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-400">{moduleSelected} من {moduleTotal} صلاحية مُفعَّلة</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => toggleModule(subGroups)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                    allModuleSelected
-                      ? 'bg-sky-100 text-sky-600 hover:bg-sky-200'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {allModuleSelected ? 'إلغاء الكل' : 'تحديد الكل'}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => toggleModule(subGroups)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                      allModuleSelected
+                        ? 'bg-sky-100 text-sky-600 hover:bg-sky-200'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {allModuleSelected ? '\u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0643\u0644' : '\u062a\u062d\u062f\u064a\u062f \u0627\u0644\u0643\u0644'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleModulePanel(module)}
+                    aria-expanded={isOpen}
+                    className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-sky-600 hover:border-sky-200 transition-all"
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
               </div>
 
               {/* SubModule Groups */}
+              {isOpen && (
               <div className="divide-y divide-slate-50">
                 {Object.entries(subGroups).map(([sub, perms]) => {
                   const subLabel = SUB_MODULE_LABELS[sub] ?? sub;
@@ -447,6 +557,7 @@ export default function RolePermissions() {
                   );
                 })}
               </div>
+              )}
             </div>
           );
         })}

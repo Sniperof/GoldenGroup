@@ -9,6 +9,11 @@ import {
 import { checkVacancyCapacity, checkDuplicate } from '../utils/applicationHelpers.js';
 import { sanitizeText } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permission.js';
+import {
+  deriveEmployeeRoleFromVacancyTitle,
+  getApplicationProcessingBlockReason,
+  getEmployeeAvatar,
+} from '../utils/recruitmentPolicy.js';
 
 const router = Router();
 
@@ -23,6 +28,7 @@ const APP_COLS = `
   ja.current_stage AS "currentStage",
   ja.application_status AS "applicationStatus",
   ja.duplicate_flag AS "duplicateFlag",
+  ja.hired_employee_id AS "hiredEmployeeId",
   ja.is_escalated AS "isEscalated",
   ja.escalated_at AS "escalatedAt",
   ja.internal_notes AS "internalNotes",
@@ -112,7 +118,13 @@ router.get('/', requirePermission('jobs.applications.view_list'), async (req, re
         jv.required_major AS "vacancyRequiredMajor",
         jv.required_experience_years AS "vacancyRequiredExperienceYears",
         jv.required_skills AS "vacancyRequiredSkills",
-        jv.driving_license_required AS "vacancyDrivingLicenseRequired"
+        jv.driving_license_required AS "vacancyDrivingLicenseRequired",
+        EXISTS (
+          SELECT 1
+          FROM interviews i
+          WHERE i.application_id = ja.id
+            AND i.interview_status = 'Interview Scheduled'
+        ) AS "hasScheduledInterview"
       FROM job_applications ja
       JOIN applicants a ON a.id = ja.applicant_id
       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -413,7 +425,7 @@ router.patch('/:id/stage', requirePermission('jobs.applications.change_stage'), 
 
     const { rows: currentRows } = await client.query(
       `SELECT ja.current_stage, ja.application_status,
-        ja.stage_status, ja.decision,
+        ja.stage_status, ja.decision, ja.is_escalated,
         jv.max_retraining_count
        FROM job_applications ja
        JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -422,6 +434,11 @@ router.patch('/:id/stage', requirePermission('jobs.applications.change_stage'), 
     );
     if (currentRows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
     const current = currentRows[0];
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, {
+      currentStage: current.current_stage,
+      isEscalated: current.is_escalated,
+    });
+    if (blockReason) return res.status(403).json({ error: blockReason });
 
     // Block: Training stage transitions go exclusively through the training module
     if (isTrainingManagedStage(current.current_stage)) {
@@ -511,7 +528,7 @@ router.patch('/:id/hire', requirePermission('jobs.applications.hire'), async (re
     await client.query('BEGIN');
 
     const { rows: appRows } = await client.query(
-      `SELECT ja.id, ja.job_vacancy_id, ja.current_stage, ja.application_status,
+      `SELECT ja.id, ja.job_vacancy_id, ja.current_stage, ja.application_status, ja.is_escalated,
         jv.id AS vacancy_id
       FROM job_applications ja
       JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -523,6 +540,14 @@ router.patch('/:id/hire', requirePermission('jobs.applications.hire'), async (re
       return res.status(404).json({ error: 'الطلب غير موجود' });
     }
     const app = appRows[0];
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, {
+      currentStage: app.current_stage,
+      isEscalated: app.is_escalated,
+    });
+    if (blockReason) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: blockReason });
+    }
 
     // Must be at Final Decision with Passed status
     if (app.current_stage !== 'Final Decision' || app.application_status !== 'Passed') {
@@ -593,6 +618,122 @@ router.patch('/:id/hire', requirePermission('jobs.applications.hire'), async (re
 });
 
 // PATCH /api/admin/applications/:id/decision — New decision endpoint (stage_status/decision model)
+router.post('/:id/employee', requirePermission('employees.create'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const appId = req.params.id as string;
+
+    await client.query('BEGIN');
+
+    const { rows: appRows } = await client.query(
+      `SELECT ja.id, ja.current_stage, ja.application_status, ja.is_escalated,
+        ja.hired_employee_id AS "hiredEmployeeId",
+        a.first_name AS "firstName", a.last_name AS "lastName",
+       a.mobile_number AS "mobileNumber",
+        a.governorate AS "governorate",
+       a.city_or_area AS "cityOrArea",
+       a.sub_area AS "subArea",
+       a.neighborhood AS "neighborhood",
+       a.detailed_address AS "detailedAddress",
+       a.photo_url AS "photoUrl",
+       jv.title AS "vacancyTitle",
+       jv.branch AS "vacancyBranch"
+       FROM job_applications ja
+       JOIN applicants a ON a.id = ja.applicant_id
+       LEFT JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
+       WHERE ja.id = $1
+       FOR UPDATE OF ja`,
+      [appId]
+    );
+
+    if (appRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    const app = appRows[0];
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, {
+      currentStage: app.current_stage,
+      isEscalated: app.is_escalated,
+    });
+    if (blockReason) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: blockReason });
+    }
+
+    if (app.current_stage !== 'Final Decision' || app.application_status !== 'Final Hired') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'لا يمكن إنشاء سجل موظف إلا بعد اعتماد القرار النهائي كمقبول.',
+      });
+    }
+
+    if (app.hiredEmployeeId) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'تم إنشاء سجل الموظف لهذا الطلب مسبقًا.' });
+    }
+
+    const role = deriveEmployeeRoleFromVacancyTitle(app.vacancyTitle);
+    if (!role) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'عنوان الوظيفة لا يطابق الأدوار المدعومة لإنشاء موظف تلقائيًا: مشرفة، فني، تيلماركتر.',
+      });
+    }
+
+    const fullName = `${app.firstName ?? ''} ${app.lastName ?? ''}`.trim();
+    const avatar = getEmployeeAvatar(fullName, app.photoUrl);
+    const residence = [
+      app.governorate,
+      app.cityOrArea,
+      app.subArea,
+      app.neighborhood,
+      app.detailedAddress,
+    ].filter(Boolean).join(' - ') || null;
+
+    const { rows: employeeRows } = await client.query(
+      `INSERT INTO employees (name, role, mobile, branch, residence, status, avatar, job_title)
+       VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+       RETURNING id, name, role, mobile, branch, residence, status, avatar,
+         job_title AS "jobTitle", created_at AS "createdAt"`,
+      [fullName, role, app.mobileNumber, app.vacancyBranch ?? null, residence, avatar, app.vacancyTitle ?? null]
+    );
+
+    const employee = employeeRows[0];
+
+    await client.query(
+      `UPDATE job_applications
+       SET hired_employee_id = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [employee.id, appId]
+    );
+
+    await insertAuditLog(client, {
+      entityType: 'job_application',
+      entityId: parseInt(appId),
+      applicationId: parseInt(appId),
+      actionType: 'Employee Record Created',
+      performedByRole: req.user!.role,
+      performedByUserId: req.user!.id,
+      newValue: JSON.stringify({
+        employeeId: employee.id,
+        employeeName: employee.name,
+        role: employee.role,
+        jobTitle: employee.jobTitle,
+      }),
+    });
+
+    await client.query('COMMIT');
+    res.status(201).json(employee);
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error('Error creating employee from application:', err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 router.patch('/:id/decision', requirePermission('jobs.applications.record_decision'), async (req, res) => {
   const client = await pool.connect();
   try {
@@ -603,7 +744,7 @@ router.patch('/:id/decision', requirePermission('jobs.applications.record_decisi
 
     const { rows: currentRows } = await client.query(
       `SELECT ja.current_stage, ja.application_status,
-        ja.stage_status, ja.decision,
+        ja.stage_status, ja.decision, ja.is_escalated,
         jv.max_retraining_count
        FROM job_applications ja
        JOIN job_vacancies jv ON jv.id = ja.job_vacancy_id
@@ -612,6 +753,11 @@ router.patch('/:id/decision', requirePermission('jobs.applications.record_decisi
     );
     if (currentRows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
     const current = currentRows[0];
+    const blockReason = getApplicationProcessingBlockReason(req.user?.role, {
+      currentStage: current.current_stage,
+      isEscalated: current.is_escalated,
+    });
+    if (blockReason) return res.status(403).json({ error: blockReason });
 
     // Count existing retraining for limit check
     let retrainingCount = 0;

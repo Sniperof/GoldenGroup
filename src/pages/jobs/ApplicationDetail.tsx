@@ -14,6 +14,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import PermissionGate from '../../components/PermissionGate';
 import { calculateJobMatchScore } from '../../lib/jobMatch';
+import { getUnifiedApplicationState } from '../../lib/applicationState';
+import { useAuthStore } from '../../hooks/useAuthStore';
 
 const STAGE_LABELS: Record<ApplicationStage, string> = {
   'Submitted': 'استلام الطلب', 'Shortlisted': 'القائمة القصيرة',
@@ -122,6 +124,8 @@ function getDecisionActions(stage: ApplicationStage, status: string): WorkflowAc
 export default function ApplicationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const authUser = useAuthStore(s => s.user);
+  const actorRole = authUser?.role || 'HR_MANAGER';
   const { scheduleInterview: storeScheduleInterview, fetchInterviews } = useInterviewStore();
   const [detail, setDetail] = useState<JobApplicationDetail | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -155,6 +159,8 @@ export default function ApplicationDetail() {
   });
   const [trainingFormError, setTrainingFormError] = useState('');
   const [trainingSubmitting, setTrainingSubmitting] = useState(false);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
+  const [employeeError, setEmployeeError] = useState('');
 
   const fetchDetail = () => {
     setLoading(true);
@@ -180,7 +186,7 @@ export default function ApplicationDetail() {
         body: JSON.stringify({
           stage: newStage, status: newStatus,
           internalNotes: reason || null,
-          performedByRole: 'HR_MANAGER',
+          performedByRole: actorRole,
         }),
       });
       if (!res.ok) {
@@ -206,7 +212,7 @@ export default function ApplicationDetail() {
       const r1 = await authFetch(`/api/admin/applications/${id}/stage`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: 'Submitted', status: 'In Review', performedByRole: 'HR_MANAGER' }),
+        body: JSON.stringify({ stage: 'Submitted', status: 'In Review', performedByRole: actorRole }),
       });
       if (!r1.ok) { const e = await r1.json(); throw new Error(e.error); }
 
@@ -216,8 +222,8 @@ export default function ApplicationDetail() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           decision === 'qualify'
-            ? { stage: 'Shortlisted', status: 'Qualified', internalNotes: reviewNotes || null, performedByRole: 'HR_MANAGER' }
-            : { stage: 'Submitted', status: 'Rejected', internalNotes: reviewNotes || null, performedByRole: 'HR_MANAGER' }
+            ? { stage: 'Shortlisted', status: 'Qualified', internalNotes: reviewNotes || null, performedByRole: actorRole }
+            : { stage: 'Submitted', status: 'Rejected', internalNotes: reviewNotes || null, performedByRole: actorRole }
         ),
       });
       if (!r2.ok) { const e = await r2.json(); throw new Error(e.error); }
@@ -305,7 +311,7 @@ export default function ApplicationDetail() {
       const res = await authFetch(`/api/admin/applications/${id}/hire`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ performedByRole: 'HR_MANAGER' }),
+        body: JSON.stringify({ performedByRole: actorRole }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -319,8 +325,31 @@ export default function ApplicationDetail() {
     }
   };
 
-  const handleFinalReject = () => {
-    setShowReasonModal({ newStage: 'Final Decision', newStatus: 'Final Rejected' });
+  const handleDecisionAction = async (decision: 'Rejected', reason?: string) => {
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const res = await authFetch(`/api/admin/applications/${id}/decision`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision,
+          internalNotes: reason || null,
+          performedByRole: actorRole,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      fetchDetail();
+      setShowReasonModal(null);
+      setRejectReason('');
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleRetreat = () => {
@@ -361,7 +390,7 @@ export default function ApplicationDetail() {
       const res = await authFetch(`/api/admin/applications/${id}/archive`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ performedByRole: 'HR_MANAGER' }),
+        body: JSON.stringify({ performedByRole: actorRole }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -372,6 +401,26 @@ export default function ApplicationDetail() {
       setActionError(err.message);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleCreateEmployeeRecord = async () => {
+    setEmployeeLoading(true);
+    setEmployeeError('');
+    try {
+      const res = await authFetch(`/api/admin/applications/${id}/employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error);
+      }
+      fetchDetail();
+    } catch (err: any) {
+      setEmployeeError(err.message);
+    } finally {
+      setEmployeeLoading(false);
     }
   };
 
@@ -396,6 +445,21 @@ export default function ApplicationDetail() {
   const decisionActions = getDecisionActions(detail.currentStage, detail.applicationStatus);
   const isFinalDecision = detail.currentStage === 'Final Decision';
   const isTerminal = TERMINAL_STATUSES.includes(detail.applicationStatus);
+  const isAssistantEscalationLock = authUser?.role === 'HR_ASSISTANT' && detail.isEscalated;
+  const isAssistantFinalDecisionLock = authUser?.role === 'HR_ASSISTANT' && detail.currentStage === 'Final Decision';
+  const isAssistantWorkflowLocked = isAssistantEscalationLock || isAssistantFinalDecisionLock;
+  const assistantLockMessage = isAssistantEscalationLock
+    ? 'تم تصعيد الطلب للإدارة، ولا يمكن لمساعد الموارد البشرية متابعة هذا الطلب بعد الآن.'
+    : isAssistantFinalDecisionLock
+      ? 'القرار النهائي على هذا الطلب من صلاحية مدير الموارد البشرية فقط.'
+      : '';
+  const unifiedState = getUnifiedApplicationState({
+    currentStage: detail.currentStage,
+    applicationStatus: detail.applicationStatus,
+    stageStatus: detail.stageStatus,
+    decision: detail.decision,
+    hasScheduledInterview: detail.interviews?.some(i => i.interviewStatus === 'Interview Scheduled'),
+  });
 
   // Compute match score once at render time (used in profile card + review modal)
   const matchResult = (detail.applicant && detail.vacancy)
@@ -835,15 +899,7 @@ export default function ApplicationDetail() {
                   <div className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-lg">
                     <p className="text-white text-xs font-bold flex items-center gap-1.5">
                       <CircleDot className="w-3 h-3" />
-                      {detail.stageStatus
-                        ? (() => {
-                            if (detail.currentStage === 'Interview' && detail.stageStatus === 'Scheduled') {
-                              const hasScheduled = detail.interviews?.some(i => i.interviewStatus === 'Interview Scheduled');
-                              return hasScheduled ? 'مجدول' : 'لم تُجدَّل مقابلة بعد';
-                            }
-                            return STAGE_STATUS_LABELS[detail.stageStatus] || detail.stageStatus;
-                          })()
-                        : (STATUS_LABELS[detail.applicationStatus] || detail.applicationStatus)}
+                      {unifiedState.label}
                     </p>
                   </div>
                 </div>
@@ -866,6 +922,12 @@ export default function ApplicationDetail() {
                   <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-2">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     مُصعَّد للإدارة العليا
+                  </div>
+                )}
+                {isAssistantWorkflowLocked && (
+                  <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span className="leading-relaxed">{assistantLockMessage}</span>
                   </div>
                 )}
                 {detail.duplicateFlag && (
@@ -891,9 +953,55 @@ export default function ApplicationDetail() {
                     detail.applicationStatus === 'Final Hired' ? 'text-emerald-700' :
                     detail.applicationStatus === 'Retreated' ? 'text-slate-600' : 'text-red-700'
                   }`}>
-                    {STATUS_LABELS[detail.applicationStatus] || detail.applicationStatus}
+                    {unifiedState.label}
                   </p>
                 </div>
+              )}
+
+              {detail.applicationStatus === 'Final Hired' && (
+                <PermissionGate permission="employees.create">
+                  <div className="mx-5 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                        <UserPlus className="w-5 h-5 text-emerald-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-emerald-800">إجراء ما بعد القبول النهائي</p>
+                        <p className="text-xs text-emerald-700 leading-relaxed mt-1">
+                          يمكن من هنا إضافة مقدم الطلب إلى سجلات الموظفين وربطه نهائيًا بهذا الطلب.
+                        </p>
+                      </div>
+                    </div>
+
+                    {detail.hiredEmployeeId ? (
+                      <div className="rounded-xl border border-emerald-200 bg-white/70 px-3 py-3 text-sm text-emerald-800 flex items-center justify-between gap-3">
+                        <span>تم إنشاء سجل الموظف وربطه بهذا الطلب برقم #{detail.hiredEmployeeId}.</span>
+                        <button
+                          onClick={() => navigate('/employees')}
+                          className="shrink-0 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
+                        >
+                          فتح السجلات
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleCreateEmployeeRecord}
+                        disabled={employeeLoading}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50"
+                      >
+                        {employeeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                        إضافة مقدم الطلب إلى سجلات الموظفين
+                      </button>
+                    )}
+
+                    {employeeError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {employeeError}
+                      </div>
+                    )}
+                  </div>
+                </PermissionGate>
               )}
 
               {/* Archive */}
@@ -917,7 +1025,7 @@ export default function ApplicationDetail() {
             </div>
 
             {/* ── Submitted / New: guidance card to open review modal ── */}
-            {!isTerminal && detail.currentStage === 'Submitted' && detail.applicationStatus === 'New' && (
+            {!isTerminal && !isAssistantWorkflowLocked && detail.currentStage === 'Submitted' && detail.applicationStatus === 'New' && (
               <PermissionGate permission="jobs.applications.change_stage">
                 <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 space-y-3">
                   <h3 className="text-[11px] font-bold text-sky-600 uppercase tracking-widest flex items-center gap-2">
@@ -937,7 +1045,7 @@ export default function ApplicationDetail() {
             )}
 
             {/* ── Interview Scheduled: guide HR to the interview module ── */}
-            {!isTerminal && detail.currentStage === 'Interview' && detail.applicationStatus === 'Interview Scheduled' && (() => {
+            {!isTerminal && !isAssistantWorkflowLocked && detail.currentStage === 'Interview' && detail.applicationStatus === 'Interview Scheduled' && (() => {
               const scheduledInterview = detail.interviews?.find(i => i.interviewStatus === 'Interview Scheduled');
               return (
                 <PermissionGate permission="jobs.interviews.schedule">
@@ -951,7 +1059,7 @@ export default function ApplicationDetail() {
                           المقابلة مجدولة — يتم تحديث حالة الطلب تلقائياً عند تسجيل النتيجة من خلال وحدة المقابلات.
                         </p>
                         <button
-                          onClick={() => navigate(`/jobs/interviews/${scheduledInterview.id}`)}
+                          onClick={() => navigate(`/jobs/interviews?applicationId=${detail.id}&highlightInterviewId=${scheduledInterview.id}`)}
                           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> فتح صفحة المقابلة وتسجيل النتيجة
@@ -976,7 +1084,7 @@ export default function ApplicationDetail() {
             })()}
 
             {/* ── Training stage: guide HR to the training module ── */}
-            {!isTerminal && detail.currentStage === 'Training' && (() => {
+            {!isTerminal && !isAssistantWorkflowLocked && detail.currentStage === 'Training' && (() => {
               const enrollment = detail.trainings?.[detail.trainings.length - 1]; // latest enrollment
               const statusMap: Record<string, { text: string; sub: string }> = {
                 'Training Scheduled': { text: 'الدورة التدريبية مجدولة', sub: 'يتم تحديث حالة الطلب تلقائياً عند تسجيل نتيجة التدريب من خلال وحدة الدورات التدريبية.' },
@@ -1027,7 +1135,7 @@ export default function ApplicationDetail() {
             })()}
 
             {/* ── Workflow Actions (Operational) ── */}
-            {!isTerminal && workflowActions.length > 0 && (
+            {!isTerminal && !isAssistantWorkflowLocked && workflowActions.length > 0 && (
               <PermissionGate permission="jobs.applications.change_stage">
               <div className="bg-white rounded-2xl border border-slate-200 p-5">
                 <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -1068,7 +1176,7 @@ export default function ApplicationDetail() {
             )}
 
             {/* ── HR Decisions ── */}
-            {!isTerminal && decisionActions.length > 0 && (
+            {!isTerminal && !isAssistantWorkflowLocked && decisionActions.length > 0 && (
               <PermissionGate anyOf={["jobs.applications.record_decision", "jobs.applications.hire"]}>
               <div className="bg-white rounded-2xl border border-slate-200 p-5">
                 <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -1122,7 +1230,7 @@ export default function ApplicationDetail() {
             )}
 
             {/* ── Secondary actions row ── */}
-            {!isTerminal && !isFinalDecision && (
+            {!isTerminal && !isFinalDecision && !isAssistantWorkflowLocked && (
               <div className="flex gap-2">
                 {/* Escalate */}
                 {!detail.isEscalated && (
@@ -1194,9 +1302,9 @@ export default function ApplicationDetail() {
                          interview.interviewStatus === 'Interview Completed' ? 'مكتملة' : 'فشلت'}
                       </span>
                       <button
-                        onClick={() => navigate(`/jobs/interviews/${interview.id}`)}
+                        onClick={() => navigate(`/jobs/interviews?applicationId=${detail.id}&highlightInterviewId=${interview.id}`)}
                         className="p-1 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
-                        title="فتح تفاصيل المقابلة"
+                        title="عرض المقابلة ضمن جدول المقابلات"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
@@ -1917,7 +2025,13 @@ export default function ApplicationDetail() {
                   إلغاء
                 </button>
                 <button
-                  onClick={() => handleStageAction(showReasonModal.newStage, showReasonModal.newStatus, rejectReason)}
+                  onClick={() => {
+                    if (showReasonModal.newStatus === 'Final Rejected' && detail.currentStage === 'Final Decision') {
+                      handleDecisionAction('Rejected', rejectReason);
+                      return;
+                    }
+                    handleStageAction(showReasonModal.newStage, showReasonModal.newStatus, rejectReason);
+                  }}
                   disabled={actionLoading}
                   className="px-5 py-2.5 text-sm bg-red-500 text-white rounded-xl hover:bg-red-600 font-bold shadow-lg shadow-red-500/25 transition-all disabled:opacity-50"
                 >
@@ -1949,6 +2063,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   'Stage Transition': 'انتقال مرحلة',
   'Final Hired': 'توظيف نهائي',
   'Decision Made': 'قرار اتُّخذ',
+  'Employee Record Created': 'إنشاء سجل موظف',
   'Escalated': 'تصعيد للإدارة',
   'Application Archived': 'أرشفة الطلب',
   'Interview Scheduled': 'جدولة مقابلة',

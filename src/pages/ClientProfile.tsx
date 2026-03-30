@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,7 +6,7 @@ import {
     History, ArrowLeft,
     Plus, Briefcase, Activity, LayoutDashboard, Contact2, Navigation, Users, MessageCircle, ShieldCheck
 } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
+import { api } from '../lib/api';
 import { useCandidateStore } from '../hooks/useCandidateStore';
 import type { Client, GeoUnit } from '../lib/types';
 
@@ -22,13 +22,52 @@ export default function ClientProfile() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'overview' | 'contacts' | 'visits' | 'network'>('overview');
-
-    // Load Data
-    const clients = StorageManager.load<Client[]>('clients', []);
+    const [client, setClient] = useState<Client | null>(null);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [allGeoUnits, setAllGeoUnits] = useState<GeoUnit[]>([]);
+    const [loading, setLoading] = useState(true);
     const { candidates } = useCandidateStore();
-    const allGeoUnits = StorageManager.load<GeoUnit[]>('geoUnits', []);
 
-    const client = useMemo(() => clients.find(c => c.id === parseInt(id || '0')), [clients, id]);
+    useEffect(() => {
+        const clientId = Number(id);
+        if (!clientId) {
+            setClient(null);
+            setLoading(false);
+            return;
+        }
+
+        let active = true;
+
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                const [clientData, clientsData, geoUnitsData] = await Promise.all([
+                    api.clients.get(clientId),
+                    api.clients.list(),
+                    api.geoUnits.list(),
+                ]);
+
+                if (!active) return;
+                setClient(clientData);
+                setClients(clientsData);
+                setAllGeoUnits(geoUnitsData);
+            } catch (error) {
+                console.error('Failed to fetch client profile:', error);
+                if (!active) return;
+                setClient(null);
+                setClients([]);
+                setAllGeoUnits([]);
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        fetchData();
+
+        return () => {
+            active = false;
+        };
+    }, [id]);
 
     // Format Data Helper
     const getInitials = (name: string) => {
@@ -51,6 +90,14 @@ export default function ClientProfile() {
         if (n) parts.push(n.name);
         return parts.join(' > ') || 'غير محدد';
     };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                <p className="text-lg font-medium">جاري تحميل بيانات الزبون...</p>
+            </div>
+        );
+    }
 
     if (!client) {
         return (

@@ -6,7 +6,7 @@ import {
   ArrowRight, Briefcase, MapPin, Calendar, Users, GraduationCap, Edit,
   XCircle, RotateCcw, Archive, Lock, X, AlertTriangle, CheckCircle,
   ClipboardList, Eye, Mail, Phone, Smartphone, Globe,
-  PhoneCall, User, BookOpen, Clock, TrendingUp, Share2, Plus,
+  PhoneCall, User, BookOpen, Clock, TrendingUp,
   MessageSquare, Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,6 +15,7 @@ import { useSystemListsStore } from '../../hooks/useSystemLists';
 import { useBranchStore } from '../../hooks/useBranchStore';
 import type { BranchContact, BranchContactType } from '../../lib/types';
 import { calculateJobMatchScore } from '../../lib/jobMatch';
+import { getUnifiedApplicationState, getUnifiedApplicationStateDotClasses } from '../../lib/applicationState';
 
 interface VacancyDetailData extends JobVacancy {
   applicationsCount: number;
@@ -212,14 +213,6 @@ export default function VacancyDetail() {
           <p className="text-sm text-slate-400 mt-0.5">
             إدارة شاغر {detail.title} · المرجع: JOB-2024-{id}
           </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold shadow-sm shadow-sky-500/25 transition-all">
-            <Share2 className="w-4 h-4" /> مشاركة الوظيفة
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-sm font-semibold transition-all">
-            <Plus className="w-4 h-4" /> إنشاء وظيفة
-          </button>
         </div>
       </div>
 
@@ -501,7 +494,14 @@ export default function VacancyDetail() {
                   ).score;
                   const initials = `${app.applicantFirstName?.[0] || ''}${app.applicantLastName?.[0] || ''}`;
                   const avatarColor = AVATAR_COLORS[app.id % 5];
-                  const dotColor = APP_STATUS_DOT[app.applicationStatus] || 'bg-slate-400';
+                  const unifiedState = getUnifiedApplicationState({
+                    currentStage: app.currentStage,
+                    applicationStatus: app.applicationStatus,
+                    stageStatus: app.stageStatus,
+                    decision: app.decision,
+                    hasScheduledInterview: app.hasScheduledInterview,
+                  });
+                  const dotColor = getUnifiedApplicationStateDotClasses(unifiedState.tone);
                   return (
                     <tr key={app.id}
                       className="border-b border-slate-100 hover:bg-sky-50/30 transition-colors cursor-pointer"
@@ -542,7 +542,7 @@ export default function VacancyDetail() {
                         <div className="flex items-center justify-center gap-1.5">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
                           <span className="text-xs text-slate-600">
-                            {APP_STATUS_LABELS[app.applicationStatus] || app.applicationStatus}
+                            {unifiedState.label}
                           </span>
                         </div>
                       </td>

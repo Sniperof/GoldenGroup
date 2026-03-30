@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List, ShieldCheck, Edit } from 'lucide-react';
@@ -8,8 +8,8 @@ import ImportCSVModal from '../../components/candidates/ImportCSVModal';
 import ReferralSheetDetailsModal from '../../components/candidates/SessionDetailsModal';
 import QualificationModal from '../../components/candidates/QualificationModal';
 import ClientModal from '../../components/ClientModal';
+import { api } from '../../lib/api';
 import { Client, Candidate } from '../../lib/types';
-import { StorageManager } from '../../lib/storage';
 import { defaultGeoUnits } from '../../lib/defaultData';
 
 export default function CandidatesEntry() {
@@ -41,6 +41,7 @@ export default function CandidatesEntry() {
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [clientInitialData, setClientInitialData] = useState<Client | null>(null);
     const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+    const [geoUnits, setGeoUnits] = useState(defaultGeoUnits);
 
     // Derived State
     const filteredCandidates = candidates
@@ -103,7 +104,22 @@ export default function CandidatesEntry() {
         }
     };
 
-    const geoUnits = useMemo(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
+    useEffect(() => {
+        let active = true;
+
+        api.geoUnits.list()
+            .then((units) => {
+                if (active) setGeoUnits(units);
+            })
+            .catch((error) => {
+                console.error('Failed to load geo units in candidates entry:', error);
+                if (active) setGeoUnits(defaultGeoUnits);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const getNeighborhoodHierarchy = (id?: string) => {
         if (!id) return '--';
