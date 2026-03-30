@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Eye, Trash2, X, ArrowUp, ArrowDown, Route as RouteIcon, ChevronRight } from 'lucide-react';
 import { api } from '../lib/api';
-import { levelNames } from '../lib/defaultData';
+import { levelNames } from '../lib/geoConstants';
 import type { Route, GeoUnit, RoutePoint } from '../lib/types';
 
 const levelColors: Record<number, { bg: string; text: string; border: string }> = {

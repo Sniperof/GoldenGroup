@@ -42,9 +42,7 @@
 - Added `createHrUsers()` called after `fixSchemaConstraints()`:
   - Creates `hr_users (id, name, username, password_hash, role CHECK IN ('HR_MANAGER','HR_ASSISTANT'), is_active, created_at)`
   - Drops FK constraints on `audit_logs.performed_by_user_id`, `job_applications.entered_by_user_id`, `training_courses.created_by_user_id`, `training_course_trainees.result_recorded_by`, `training_attendance.recorded_by_user_id` (all were `REFERENCES employees(id)` — now plain integers referencing hr_users)
-- `seedData()` now seeds two default HR users (idempotent):
-  - `hr_manager` / `manager123` → role `HR_MANAGER`
-  - `hr_assistant` / `assistant123` → role `HR_ASSISTANT`
+- `createHrUsers()` now only creates the schema and user tables without inserting any default records
 
 ### Updated: `server/index.ts`
 

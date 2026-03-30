@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, CheckCircle2, PhoneOff, PhoneMissed, XCircle, MessageSquare, X, Send } from 'lucide-react';
 import { CallOutcome, TaskListItem } from '../../lib/types';
 import { getEntityContacts } from '../../lib/contactUtils';
+import { useAuthStore } from '../../hooks/useAuthStore';
 
 interface OutcomeRecorderModalProps {
     isOpen: boolean;
@@ -11,9 +12,6 @@ interface OutcomeRecorderModalProps {
     entityDetails: any;
     onSave: (contactId: string, outcome: CallOutcome, notes: string, newContactStatus?: string, communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice') => void;
 }
-
-import { defaultEmployees } from '../../lib/defaultData';
-
 const outcomeConfig: Record<CallOutcome, { label: string; icon: any; color: string; bg: string; border: string; activeRing: string }> = {
     booked: { label: 'تم الحجز', icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-300', activeRing: 'ring-emerald-200' },
     busy: { label: 'مشغول', icon: PhoneOff, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-300', activeRing: 'ring-amber-200' },
@@ -29,9 +27,7 @@ export default function OutcomeRecorderModal({ isOpen, onClose, task, entityDeta
     const [notes, setNotes] = useState('');
     const [step, setStep] = useState<1 | 2>(1);
     const [contactStatus, setContactStatus] = useState<string>('');
-
-    // Mock user for now
-    const currentUser = defaultEmployees.find(e => e.id === 1);
+    const currentUser = useAuthStore((state) => state.user);
 
     useEffect(() => {
         if (isOpen) {

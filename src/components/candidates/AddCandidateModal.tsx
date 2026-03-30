@@ -48,8 +48,41 @@ const initialCandidateState = {
 
 export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, initialData, title }: AddCandidateModalProps) {
     const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [allClients, setAllClients] = useState<Client[]>([]);
+    const [visits, setVisits] = useState<Array<{ customerId: number }>>([]);
+    const [contracts, setContracts] = useState<Array<{ customerId: number }>>([]);
+    const [occupationOptions, setOccupationOptions] = useState<string[]>([]);
     useEffect(() => {
-        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+        let active = true;
+
+        Promise.all([
+            api.geoUnits.list(),
+            api.clients.list(),
+            api.visits.list(),
+            api.contracts.list(),
+            api.systemLists.list({ category: 'occupation', activeOnly: true }),
+        ])
+            .then(([units, clients, visitsData, contractsData, occupationList]) => {
+                if (!active) return;
+                setGeoUnits(units);
+                setAllClients(clients);
+                setVisits(visitsData);
+                setContracts(contractsData);
+                setOccupationOptions(occupationList.map((item: any) => item.value));
+            })
+            .catch((error) => {
+                console.error(error);
+                if (!active) return;
+                setGeoUnits([]);
+                setAllClients([]);
+                setVisits([]);
+                setContracts([]);
+                setOccupationOptions([]);
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     const addCandidate = useCandidateStore((state: any) => state.addCandidate);
@@ -188,22 +221,25 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
         }
     };
 
+    const getClientLifecycleStage = (client: Client) => {
+        if (contracts.some(contract => contract.customerId === client.id)) return 'OP';
+        if (visits.some(visit => visit.customerId === client.id)) return 'FOP';
+        return 'Lead';
+    };
+
     const handleClientSearch = async (text: string) => {
         setClientSearch(text);
-        if (text.trim().length < 2) {
-            setClientSuggestions([]);
-            return;
-        }
-        try {
-            const clients = await api.clients.list();
-            const matches = clients.filter((c: any) =>
-                c.name.includes(text) ||
-                c.contacts?.some((con: any) => con.number.includes(text))
-            ).slice(0, 5);
-            setClientSuggestions(matches);
-        } catch {
-            setClientSuggestions([]);
-        }
+        const query = text.trim();
+        const matches = allClients
+            .filter(client => !client.isCandidate)
+            .filter(client =>
+                !query ||
+                client.name.includes(query) ||
+                client.contacts?.some(con => con.number.includes(query)) ||
+                client.mobile?.includes(query)
+            )
+            .slice(0, query ? 10 : 20);
+        setClientSuggestions(matches);
     };
 
     const handleSelectClient = (client: Client) => {
@@ -399,7 +435,7 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                                             <label className="block text-xs font-semibold text-slate-600 mb-1.5">نوع الوسيط *</label>
                                             <select value={referralType} onChange={e => setReferralType(e.target.value as ReferralType)} className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm">
                                                 <option value="Personal">شخصي</option>
-                                                <option value="Client">زبون</option>
+                                                <option value="Client">زبون حالي</option>
                                                 <option value="Employee">موظف</option>
                                                 <option value="Unknown">مجهول</option>
                                             </select>
@@ -455,6 +491,7 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                                                 type="text"
                                                 value={clientSearch}
                                                 onChange={(e) => handleClientSearch(e.target.value)}
+                                                onFocus={() => handleClientSearch(clientSearch)}
                                                 placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
                                                 className="w-full p-2.5 rounded-xl border border-indigo-200 bg-white text-sm"
                                             />
@@ -466,9 +503,19 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                                                             onClick={() => handleSelectClient(client)}
                                                             className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
                                                         >
-                                                            <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                            <div className="flex flex-col items-start gap-1">
+                                                                <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${getClientLifecycleStage(client) === 'OP'
+                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                    : getClientLifecycleStage(client) === 'FOP'
+                                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                                    }`}>
+                                                                    {getClientLifecycleStage(client) === 'OP' ? 'زبون OP' : getClientLifecycleStage(client) === 'FOP' ? 'زبون محتمل FOP' : 'اسم مرشح'}
+                                                                </span>
+                                                            </div>
                                                             <span className="text-xs text-slate-400 font-mono" dir="ltr">
-                                                                {client.contacts?.find(con => con.isPrimary)?.number || client.contacts?.[0]?.number || '--'}
+                                                                {client.contacts?.find(con => con.isPrimary)?.number || client.contacts?.[0]?.number || client.mobile || '--'}
                                                             </span>
                                                         </button>
                                                     ))}
@@ -666,13 +713,16 @@ export default function AddCandidateModal({ isOpen, onClose, initialDirectMode, 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">المهنة</label>
-                                    <input
-                                        type="text"
-                                        placeholder="مثال: موظف، عمل حر، طبيب..."
+                                    <select
                                         value={candidateData.occupation}
                                         onChange={e => setCandidateData({ ...candidateData, occupation: e.target.value })}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm"
-                                    />
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10 text-sm bg-white"
+                                    >
+                                        <option value="">اختر المهنة</option>
+                                        {occupationOptions.map((option) => (
+                                            <option key={option} value={option}>{option}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 

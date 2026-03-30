@@ -29,6 +29,16 @@ interface CategoryMeta {
 
 const CATEGORIES: CategoryMeta[] = [
   {
+    id: 'occupation',
+    label: 'المهن',
+    description: 'القيم المعتمدة لحقل المهنة في الأسماء المقترحة وسجلات الزبائن. أي تعديل هنا يظهر مباشرة في نماذج الإضافة والتأهيل.',
+    impact: 'medium',
+    usedIn: [
+      { label: 'إضافة اسم مقترح', route: 'الأسماء المقترحة ← إضافة اسم', icon: <Users className="w-3 h-3" /> },
+      { label: 'إضافة / تعديل زبون', route: 'الزبائن ← نموذج الزبون', icon: <Briefcase className="w-3 h-3" /> },
+    ],
+  },
+  {
     id: 'job_title',
     label: 'عناوين الوظائف',
     description: 'قائمة بالمسميات الوظيفية المتاحة عند إنشاء شاغر وظيفي. كل قيمة تُصبح خياراً في حقل "عنوان الوظيفة".',

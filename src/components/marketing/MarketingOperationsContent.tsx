@@ -5,7 +5,6 @@ import { useCandidateStore } from "../../hooks/useCandidateStore";
 import { useClientStore } from "../../hooks/useClientStore";
 import SmartTable, { ColumnDef } from "../SmartTable";
 import { Candidate, Client, GeoUnit, Contract, Visit } from "../../lib/types";
-import { defaultGeoUnits } from "../../lib/defaultData";
 import { getPrimaryContact } from "../../lib/contactUtils";
 
 export default function MarketingOperationsContent() {
@@ -15,7 +14,7 @@ export default function MarketingOperationsContent() {
 
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [visits, setVisits] = useState<Visit[]>([]);
-    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>(defaultGeoUnits);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
 
     useEffect(() => {
         loadClients();
@@ -36,7 +35,7 @@ export default function MarketingOperationsContent() {
                 if (!active) return;
                 setContracts([]);
                 setVisits([]);
-                setGeoUnits(defaultGeoUnits);
+                setGeoUnits([]);
             });
 
         return () => {

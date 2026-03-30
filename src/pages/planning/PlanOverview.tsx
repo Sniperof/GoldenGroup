@@ -6,7 +6,7 @@ import {
     AlertTriangle, ArrowRight, ArrowLeft, ClipboardList, MapPin, Briefcase, Eye, PhoneCall, Loader2
 } from 'lucide-react';
 import { api } from '../../lib/api';
-import { levelNames } from '../../lib/defaultData';
+import { levelNames } from '../../lib/geoConstants';
 import type { Route, GeoUnit, DaySchedule, RouteAssignmentData, Contract, Visit } from '../../lib/types';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { useClientStore } from '../../hooks/useClientStore';

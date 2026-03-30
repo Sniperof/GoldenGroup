@@ -50,12 +50,16 @@ const emptyContact = (isPrimary = false): ContactEntry => ({
 });
 
 export default function ClientModal({ isOpen, onClose, onSave, initialData, geoUnits }: ClientModalProps) {
+    const isEditMode = Boolean(initialData?.id);
     const [activeTab, setActiveTab] = useState<Tab>('identity');
     const [formData, setFormData] = useState<Partial<Client>>({});
 
     const candidates = useCandidateStore(state => state.candidates);
     const [allClients, setAllClients] = useState<Client[]>([]);
+    const [visits, setVisits] = useState<Array<{ customerId: number }>>([]);
+    const [contracts, setContracts] = useState<Array<{ customerId: number }>>([]);
     const [employees, setEmployees] = useState<Array<{ id: number; name: string }>>([]);
+    const [occupationOptions, setOccupationOptions] = useState<string[]>([]);
 
     // Identity fields
     const [firstName, setFirstName] = useState('');
@@ -104,19 +108,28 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
 
         const fetchLookupData = async () => {
             try {
-                const [clientsData, employeesData] = await Promise.all([
+                const [clientsData, employeesData, visitsData, contractsData, occupationList] = await Promise.all([
                     api.clients.list(),
                     api.employees.list(),
+                    api.visits.list(),
+                    api.contracts.list(),
+                    api.systemLists.list({ category: 'occupation', activeOnly: true }),
                 ]);
 
                 if (!active) return;
                 setAllClients(clientsData);
                 setEmployees(employeesData.map((employee: any) => ({ id: employee.id, name: employee.name })));
+                setVisits(visitsData);
+                setContracts(contractsData);
+                setOccupationOptions(occupationList.map((item: any) => item.value));
             } catch (error) {
                 console.error('Failed to fetch client modal lookup data:', error);
                 if (!active) return;
                 setAllClients([]);
                 setEmployees([]);
+                setVisits([]);
+                setContracts([]);
+                setOccupationOptions([]);
             }
         };
 
@@ -158,16 +171,23 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
         }
     };
 
+    const getClientLifecycleStage = useCallback((client: Client) => {
+        if (contracts.some(contract => contract.customerId === client.id)) return 'OP';
+        if (visits.some(visit => visit.customerId === client.id)) return 'FOP';
+        return 'Lead';
+    }, [contracts, visits]);
+
     const handleClientSearch = (text: string) => {
         setClientSearch(text);
-        if (text.trim().length < 2) {
-            setClientSuggestions([]);
-            return;
-        }
-        const matches = allClients.filter(c =>
-            c.name.includes(text) ||
-            (c.contacts?.some(con => con.number.includes(text)) || false)
-        ).slice(0, 5);
+        const query = text.trim();
+        const matches = allClients
+            .filter(c => !c.isCandidate && c.id !== initialData?.id)
+            .filter(c =>
+                !query ||
+                c.name.includes(query) ||
+                (c.contacts?.some(con => con.number.includes(query)) || false)
+            )
+            .slice(0, query ? 10 : 20);
         setClientSuggestions(matches);
     };
 
@@ -199,6 +219,8 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                 setReferralType((initialData.referrerType as ReferralType) || 'Personal');
                 setOriginChannel((initialData.sourceChannel as ReferralOriginChannel) || 'App');
                 setReferralNameSnapshot(initialData.referrerName || '');
+                setClientSearch(initialData.referrerType === 'Client' ? (initialData.referrerName || '') : '');
+                setSelectedClientId(initialData.referrerType === 'Client' ? (initialData.referralEntityId || null) : null);
                 setOccupation(initialData.occupation || '');
                 setNotes(initialData.notes || '');
                 setRating(initialData.rating || 'Undefined');
@@ -353,7 +375,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
             referralEntityId: selectedClientId || employeeFound?.id || undefined,
             occupation: occupation.trim() || undefined,
             notes: notes.trim() || undefined,
-            rating: rating,
+            ...(isEditMode ? { rating } : {}),
         } as Client);
     };
 
@@ -374,7 +396,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                         {/* Header */}
                         <div className="bg-white border-b border-gray-100 p-5 flex items-center justify-between shrink-0">
                             <h2 className="text-xl font-bold text-slate-800">
-                                {initialData ? 'تعديل بيانات الزبون' : 'إضافة اسم مرشح جديد'}
+                                {isEditMode ? 'تعديل بيانات الزبون' : 'إضافة زبون جديد'}
                             </h2>
                             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <X className="w-6 h-6" />
@@ -647,6 +669,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                                     type="text"
                                                     value={clientSearch}
                                                     onChange={(e) => handleClientSearch(e.target.value)}
+                                                    onFocus={() => handleClientSearch(clientSearch)}
                                                     placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
                                                     className="w-full p-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:border-sky-500 focus:outline-none"
                                                 />
@@ -658,7 +681,17 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                                                 onClick={() => handleSelectClient(client)}
                                                                 className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
                                                             >
-                                                                <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                                <div className="flex flex-col items-start gap-1">
+                                                                    <span className="font-bold text-slate-700 text-sm">{client.name}</span>
+                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${getClientLifecycleStage(client) === 'OP'
+                                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                        : getClientLifecycleStage(client) === 'FOP'
+                                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                                        }`}>
+                                                                        {getClientLifecycleStage(client) === 'OP' ? 'زبون OP' : getClientLifecycleStage(client) === 'FOP' ? 'زبون محتمل FOP' : 'اسم مرشح'}
+                                                                    </span>
+                                                                </div>
                                                                 <span className="text-xs text-slate-400 font-mono" dir="ltr">
                                                                     {client.contacts.find(con => con.isPrimary)?.number || client.contacts[0]?.number || '--'}
                                                                 </span>
@@ -687,6 +720,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                             {
                                 activeTab === 'additional' && (
                                     <div className="space-y-6">
+                                        {isEditMode && (
                                         <div className="space-y-1">
                                             <label className="text-xs font-semibold text-slate-500">تقييم الزبون</label>
                                             <select
@@ -699,14 +733,19 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                                                 <option value="NotCommitted">غير ملتزم</option>
                                             </select>
                                         </div>
+                                        )}
                                         <div className="space-y-1">
                                             <label className="text-xs font-semibold text-slate-500">المهنة</label>
-                                            <input
+                                            <select
                                                 value={occupation}
                                                 onChange={e => setOccupation(e.target.value)}
-                                                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
-                                                placeholder="مثال: مهندس، تاجر، موظف حكومي..."
-                                            />
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-sky-500 focus:outline-none bg-white"
+                                            >
+                                                <option value="">اختر المهنة</option>
+                                                {occupationOptions.map((option) => (
+                                                    <option key={option} value={option}>{option}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-semibold text-slate-500">ملاحظات إضافية (محرر نصي)</label>
@@ -739,7 +778,7 @@ export default function ClientModal({ isOpen, onClose, onSave, initialData, geoU
                             </button>
                             <button onClick={handleSave} className="px-5 py-2 rounded-lg text-white bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-500/20 font-bold transition-all flex items-center gap-2">
                                 <Save className="w-4 h-4" />
-                                <span>{initialData ? 'حفظ التعديلات' : 'إضافة'}</span>
+                                <span>{isEditMode ? 'حفظ التعديلات' : 'إضافة'}</span>
                             </button>
                         </div >
                     </motion.div >

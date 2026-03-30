@@ -71,9 +71,11 @@ export async function createSchema() {
       last_name VARCHAR(255),
       nickname VARCHAR(255),
       mobile VARCHAR(50) NOT NULL,
+      contacts JSONB DEFAULT '[]',
       address_text TEXT,
+      geo_unit_id INTEGER,
       owner_user_id INTEGER,
-      status VARCHAR(50) DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Qualified', 'Junk')),
+      status VARCHAR(50) DEFAULT 'Suggested' CHECK (status IN ('New', 'Suggested', 'FollowUp', 'Contacted', 'Qualified', 'Junk')),
       referral_sheet_id INTEGER REFERENCES referral_sheets(id) ON DELETE SET NULL,
       referral_date VARCHAR(50),
       referral_reason TEXT,
@@ -82,6 +84,7 @@ export async function createSchema() {
       referral_name_snapshot VARCHAR(255),
       referral_entity_id INTEGER,
       referral_confirmation_status VARCHAR(50) DEFAULT 'Pending',
+      occupation VARCHAR(255),
       candidate_notes TEXT,
       duplicate_flag BOOLEAN DEFAULT FALSE,
       duplicate_type VARCHAR(50),
@@ -684,7 +687,7 @@ async function createHrUsers() {
       name VARCHAR(255) NOT NULL,
       username VARCHAR(100) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(50) NOT NULL CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT', 'ADMIN')),
+      role VARCHAR(100) NOT NULL,
       is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
@@ -692,11 +695,6 @@ async function createHrUsers() {
 
   try {
     await pool.query(`ALTER TABLE hr_users DROP CONSTRAINT IF EXISTS hr_users_role_check`);
-    await pool.query(`
-      ALTER TABLE hr_users
-      ADD CONSTRAINT hr_users_role_check
-      CHECK (role IN ('HR_MANAGER', 'HR_ASSISTANT', 'ADMIN'))
-    `);
   } catch { /* ignore */ }
 
   // Drop FK from audit_logs.performed_by_user_id (was referencing employees)
@@ -853,312 +851,3 @@ async function createPermissionsTables() {
   console.log('Permissions tables created.');
 }
 
-export async function seedData() {
-  // Seed default HR users (idempotent)
-  const { rows: hrRows } = await pool.query('SELECT COUNT(*) FROM hr_users');
-  if (parseInt(hrRows[0].count) === 0) {
-    const bcrypt = await import('bcryptjs');
-    const managerHash = await bcrypt.default.hash('manager123', 10);
-    const assistantHash = await bcrypt.default.hash('assistant123', 10);
-    const adminHash = await bcrypt.default.hash('admin123', 10);
-    await pool.query(`
-      INSERT INTO hr_users (name, username, password_hash, role) VALUES
-        ('مدير الموارد البشرية', 'hr_manager', $1, 'HR_MANAGER'),
-        ('مساعد الموارد البشرية', 'hr_assistant', $2, 'HR_ASSISTANT'),
-        ('مدير النظام', 'system_admin', $3, 'ADMIN')
-    `, [managerHash, assistantHash, adminHash]);
-    console.log('Default HR users seeded.');
-  }
-
-  // Seed system roles (idempotent)
-  await pool.query(`
-    INSERT INTO roles (name, display_name, description, is_system) VALUES
-      ('HR_MANAGER', 'مدير الموارد البشرية', 'صلاحيات كاملة لإدارة قسم الوظائف', TRUE),
-      ('HR_ASSISTANT', 'مساعد الموارد البشرية', 'صلاحيات محدودة للمساعدة في إدارة الوظائف', TRUE),
-      ('ADMIN', 'مدير النظام', 'صلاحيات كاملة على كافة وحدات النظام', TRUE)
-    ON CONFLICT (name) DO NOTHING
-  `);
-
-  // Seed all permissions (idempotent)
-  await pool.query(`
-    INSERT INTO permissions (key, module, sub_module, action, display_name, display_order) VALUES
-      ('jobs.vacancies.view_list', 'jobs', 'vacancies', 'view_list', 'عرض قائمة الشواغر', 1),
-      ('jobs.vacancies.view_detail', 'jobs', 'vacancies', 'view_detail', 'عرض تفاصيل الشاغر', 2),
-      ('jobs.vacancies.create', 'jobs', 'vacancies', 'create', 'إنشاء شاغر وظيفي', 3),
-      ('jobs.vacancies.edit', 'jobs', 'vacancies', 'edit', 'تعديل شاغر وظيفي', 4),
-      ('jobs.vacancies.change_status', 'jobs', 'vacancies', 'change_status', 'تغيير حالة الشاغر', 5),
-      ('jobs.applications.view_list', 'jobs', 'applications', 'view_list', 'عرض قائمة الطلبات', 10),
-      ('jobs.applications.view_detail', 'jobs', 'applications', 'view_detail', 'عرض تفاصيل الطلب', 11),
-      ('jobs.applications.create', 'jobs', 'applications', 'create', 'إنشاء طلب يدوي', 12),
-      ('jobs.applications.change_stage', 'jobs', 'applications', 'change_stage', 'تغيير مرحلة الطلب', 13),
-      ('jobs.applications.record_decision', 'jobs', 'applications', 'record_decision', 'تسجيل قرار على الطلب', 14),
-      ('jobs.applications.hire', 'jobs', 'applications', 'hire', 'التعيين النهائي', 15),
-      ('jobs.applications.escalate', 'jobs', 'applications', 'escalate', 'تصعيد الطلب', 16),
-      ('jobs.applications.archive', 'jobs', 'applications', 'archive', 'أرشفة الطلب', 17),
-      ('jobs.applications.edit_notes', 'jobs', 'applications', 'edit_notes', 'تعديل الملاحظات', 18),
-      ('jobs.applications.view_audit_logs', 'jobs', 'applications', 'view_audit_logs', 'عرض سجل التدقيق', 19),
-      ('jobs.interviews.view_list', 'jobs', 'interviews', 'view_list', 'عرض قائمة المقابلات', 20),
-      ('jobs.interviews.view_detail', 'jobs', 'interviews', 'view_detail', 'عرض تفاصيل المقابلة', 21),
-      ('jobs.interviews.view_eligible', 'jobs', 'interviews', 'view_eligible', 'عرض المرشحين المؤهلين للمقابلة', 22),
-      ('jobs.interviews.schedule', 'jobs', 'interviews', 'schedule', 'جدولة مقابلة', 23),
-      ('jobs.interviews.edit', 'jobs', 'interviews', 'edit', 'تعديل مقابلة', 24),
-      ('jobs.interviews.record_result', 'jobs', 'interviews', 'record_result', 'تسجيل نتيجة المقابلة', 25),
-      ('jobs.training.view_list', 'jobs', 'training', 'view_list', 'عرض قائمة الدورات التدريبية', 30),
-      ('jobs.training.view_detail', 'jobs', 'training', 'view_detail', 'عرض تفاصيل الدورة التدريبية', 31),
-      ('jobs.training.view_eligible', 'jobs', 'training', 'view_eligible', 'عرض المؤهلين للتدريب', 32),
-      ('jobs.training.create', 'jobs', 'training', 'create', 'إنشاء دورة تدريبية', 33),
-      ('jobs.training.start', 'jobs', 'training', 'start', 'بدء الدورة التدريبية', 34),
-      ('jobs.training.complete', 'jobs', 'training', 'complete', 'إكمال الدورة التدريبية', 35),
-      ('jobs.training.record_attendance', 'jobs', 'training', 'record_attendance', 'تسجيل الحضور', 36),
-      ('jobs.training.record_result', 'jobs', 'training', 'record_result', 'تسجيل نتيجة التدريب', 37),
-      ('jobs.training.add_trainees', 'jobs', 'training', 'add_trainees', 'إضافة متدربين', 38),
-      ('admin.roles.view', 'admin', 'roles', 'view', 'عرض الأدوار', 40),
-      ('admin.roles.manage', 'admin', 'roles', 'manage', 'إدارة الأدوار', 41),
-      ('admin.system_lists.view', 'admin', 'system_lists', 'view', 'عرض القوائم النظامية', 42),
-      ('admin.system_lists.manage', 'admin', 'system_lists', 'manage', 'إدارة القوائم النظامية', 43),
-      -- Clients
-      ('clients.view_list', 'clients', 'records', 'view_list', 'عرض قائمة الزبائن', 100),
-      ('clients.view_detail', 'clients', 'records', 'view_detail', 'عرض ملف الزبون', 101),
-      ('clients.create', 'clients', 'records', 'create', 'إضافة زبون جديد', 102),
-      ('clients.edit', 'clients', 'records', 'edit', 'تعديل بيانات الزبون', 103),
-      -- Candidates
-      ('candidates.view_list', 'candidates', 'records', 'view_list', 'عرض الأسماء المقترحة', 110),
-      ('candidates.create', 'candidates', 'records', 'create', 'إضافة اسم مقترح', 111),
-      ('candidates.edit', 'candidates', 'records', 'edit', 'تعديل الاسم المقترح', 112),
-      -- Employees
-      ('employees.view_list', 'employees', 'records', 'view_list', 'عرض قائمة الموظفين', 120),
-      ('employees.create', 'employees', 'records', 'create', 'إضافة موظف جديد', 121),
-      ('employees.edit', 'employees', 'records', 'edit', 'تعديل بيانات الموظف', 122),
-      ('employees.delete', 'employees', 'records', 'delete', 'حذف موظف', 123),
-      -- Contracts
-      ('contracts.view_list', 'contracts', 'records', 'view_list', 'عرض قائمة العقود', 130),
-      ('contracts.create', 'contracts', 'records', 'create', 'إنشاء عقد جديد', 131),
-      ('contracts.edit', 'contracts', 'records', 'edit', 'تعديل العقد', 132),
-      -- Devices
-      ('devices.view', 'devices', 'management', 'view', 'عرض الأجهزة وقطع الغيار', 140),
-      ('devices.manage', 'devices', 'management', 'manage', 'إدارة الأجهزة وقطع الغيار', 141),
-      -- Tasks & Operations
-      ('tasks.view', 'tasks', 'operations', 'view', 'عرض المهام والعمليات', 150),
-      ('tasks.manage', 'tasks', 'operations', 'manage', 'إدارة المهام وتحديث حالاتها', 151),
-      -- Planning
-      ('planning.view', 'planning', 'branch', 'view', 'عرض خطط وجداول الفرع', 160),
-      ('planning.manage', 'planning', 'branch', 'manage', 'إدارة الجدولة وتعيين المسارات', 161),
-      -- Telemarketer / Appointments
-      ('telemarketer.view', 'telemarketer', 'appointments', 'view', 'عرض إدارة المواعيد', 170),
-      ('telemarketer.manage', 'telemarketer', 'appointments', 'manage', 'إدارة المواعيد والعملاء', 171),
-      -- Geo
-      ('geo.view', 'geo', 'geography', 'view', 'عرض المناطق الجغرافية', 180),
-      ('geo.manage', 'geo', 'geography', 'manage', 'إدارة المناطق والمستويات', 181),
-      -- Branches
-      ('branches.view', 'branches', 'management', 'view', 'عرض الفروع', 190),
-      ('branches.manage', 'branches', 'management', 'manage', 'إدارة الفروع', 191),
-      -- Settings
-      ('settings.view', 'settings', 'system', 'view', 'عرض إعدادات النظام', 200),
-      ('settings.manage', 'settings', 'system', 'manage', 'تعديل إعدادات النظام', 201)
-    ON CONFLICT (key) DO NOTHING
-  `);
-
-  // Grant ALL permissions to HR_MANAGER role
-  await pool.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'HR_MANAGER'
-    ON CONFLICT (role_id, permission_id) DO NOTHING
-  `);
-
-  // Grant ALL permissions to ADMIN role
-  await pool.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.name = 'ADMIN'
-    ON CONFLICT (role_id, permission_id) DO NOTHING
-  `);
-
-  // Grant subset to HR_ASSISTANT
-  await pool.query(`
-    INSERT INTO role_permissions (role_id, permission_id)
-      SELECT r.id, p.id FROM roles r JOIN permissions p ON p.key IN (
-        'jobs.vacancies.view_list', 'jobs.vacancies.view_detail',
-        'jobs.applications.view_list', 'jobs.applications.view_detail', 'jobs.applications.create',
-        'jobs.applications.change_stage', 'jobs.applications.record_decision',
-        'jobs.applications.edit_notes', 'jobs.applications.view_audit_logs',
-        'jobs.interviews.view_list', 'jobs.interviews.view_detail', 'jobs.interviews.view_eligible',
-        'jobs.interviews.schedule', 'jobs.interviews.edit', 'jobs.interviews.record_result',
-        'jobs.training.view_list', 'jobs.training.view_detail', 'jobs.training.view_eligible'
-      ) WHERE r.name = 'HR_ASSISTANT'
-    ON CONFLICT (role_id, permission_id) DO NOTHING
-  `);
-
-  // Backfill role_id from legacy role column
-  await pool.query(`
-    UPDATE hr_users SET role_id = (SELECT id FROM roles WHERE name = hr_users.role) WHERE role_id IS NULL
-  `);
-
-  const bcrypt = await import('bcryptjs');
-  const adminHash = await bcrypt.default.hash('admin123', 10);
-  await pool.query(`
-    INSERT INTO hr_users (name, username, password_hash, role, role_id, is_active)
-    VALUES (
-      'مدير النظام',
-      'system_admin',
-      $1,
-      'ADMIN',
-      (SELECT id FROM roles WHERE name = 'ADMIN'),
-      TRUE
-    )
-    ON CONFLICT (username) DO UPDATE
-      SET name = EXCLUDED.name,
-          password_hash = EXCLUDED.password_hash,
-          role = EXCLUDED.role,
-          role_id = EXCLUDED.role_id,
-          is_active = TRUE
-  `, [adminHash]);
-
-  console.log('Permissions seeded and role_id backfilled.');
-
-  await pool.query(`
-    INSERT INTO geo_units (id, name, level, parent_id) VALUES
-      (1, 'بغداد', 1, NULL),
-      (2, 'البصرة', 1, NULL),
-      (10, 'الكرخ', 2, 1),
-      (11, 'الرصافة', 2, 1),
-      (20, 'المنصور', 3, 10),
-      (21, 'الكاظمية', 3, 10),
-      (22, 'الكرادة', 3, 11),
-      (30, 'حي المنصور', 4, 20),
-      (31, 'الداوودي', 4, 20),
-      (32, 'حي العدل', 4, 20),
-      (33, 'حي الكاظمية', 4, 21),
-      (34, 'العطيفية', 4, 21),
-      (35, 'حي الكرادة', 4, 22),
-      (36, 'زيونة', 4, 22)
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('geo_units_id_seq', (SELECT MAX(id) FROM geo_units));
-  `);
-
-  if (false) {
-    await pool.query(`
-    INSERT INTO employees (id, name, role, mobile, status, avatar) VALUES
-      (1, 'ليلى أحمد', 'supervisor', '07701234567', 'active', 'https://ui-avatars.com/api/?name=ليلى+أحمد&background=6366f1&color=fff'),
-      (2, 'عمر حسن', 'supervisor', '07709876543', 'active', 'https://ui-avatars.com/api/?name=عمر+حسن&background=6366f1&color=fff'),
-      (3, 'سارة محمود', 'supervisor', '07705551234', 'leave', 'https://ui-avatars.com/api/?name=سارة+محمود&background=6366f1&color=fff'),
-      (4, 'أحمد علي', 'technician', '07701112233', 'active', 'https://ui-avatars.com/api/?name=أحمد+علي&background=10b981&color=fff'),
-      (5, 'محمد جاسم', 'technician', '07703334455', 'active', 'https://ui-avatars.com/api/?name=محمد+جاسم&background=10b981&color=fff'),
-      (6, 'فاطمة نور', 'technician', '07706667788', 'active', 'https://ui-avatars.com/api/?name=فاطمة+نور&background=10b981&color=fff'),
-      (7, 'حسين كريم', 'technician', '07708889900', 'inactive', 'https://ui-avatars.com/api/?name=حسين+كريم&background=10b981&color=fff'),
-      (8, 'زينب عبد الله', 'technician', '07702223344', 'active', 'https://ui-avatars.com/api/?name=زينب+عبدالله&background=10b981&color=fff'),
-      (9, 'سها جميل', 'telemarketer', '07704445566', 'active', 'https://ui-avatars.com/api/?name=سها+جميل&background=f43f5e&color=fff'),
-      (10, 'نادية كمال', 'telemarketer', '07707778899', 'active', 'https://ui-avatars.com/api/?name=نادية+كمال&background=f43f5e&color=fff')
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('employees_id_seq', (SELECT MAX(id) FROM employees));
-    `);
-  }
-
-  await pool.query(`
-    INSERT INTO tasks (id, type, customer_name, context, location, due_date, status, priority) VALUES
-      (1, 'emergency', 'خالد السامرائي', 'مكيف سبليت 2 طن', 'حي المنصور', '2026-02-18', 'pending', 'high'),
-      (2, 'emergency', 'نور الدين', 'ثلاجة سامسونج', 'الكرادة', '2026-02-18', 'in-progress', 'high'),
-      (3, 'emergency', 'سلمى حسين', 'غسالة LG', 'الكاظمية', '2026-02-19', 'pending', 'high'),
-      (4, 'dues', 'عبد الرحمن الجبوري', 'عقد #2401', 'حي العدل', '2026-02-18', 'pending', NULL),
-      (5, 'dues', 'ريم عباس', 'عقد #2398', 'زيونة', '2026-02-20', 'pending', NULL),
-      (6, 'dues', 'طارق محمود', 'عقد #2387', 'الداوودي', '2026-02-22', 'pending', NULL),
-      (7, 'dues', 'لينا الخطيب', 'عقد #2405', 'حي المنصور', '2026-02-18', 'completed', NULL),
-      (8, 'periodic', 'فادي الموصلي', 'صيانة شهرية - مكيف مركزي', 'حي الكرادة', '2026-02-18', 'pending', NULL),
-      (9, 'periodic', 'ياسمين كريم', 'فحص ربع سنوي', 'العطيفية', '2026-02-25', 'pending', NULL),
-      (10, 'periodic', 'وليد البصري', 'صيانة دورية - نظام تبريد', 'حي الكاظمية', '2026-02-28', 'pending', NULL),
-      (11, 'returns', 'هدى الأنباري', 'إرجاع قطعة غيار', 'حي المنصور', '2026-02-18', 'pending', NULL),
-      (12, 'returns', 'بشار النجار', 'استبدال ضاغط', 'الداوودي', '2026-02-21', 'in-progress', NULL),
-      (13, 'returns', 'دينا الشمري', 'إرجاع فلتر', 'زيونة', '2026-02-23', 'pending', NULL),
-      (14, 'followup', 'أنس جابر', 'تأكيد موعد', 'حي العدل', '2026-02-18', 'pending', NULL),
-      (15, 'followup', 'مروة عادل', 'استبيان رضا', 'الكرادة', '2026-02-24', 'pending', NULL),
-      (16, 'followup', 'جمال الدليمي', 'فحص ما بعد الصيانة', 'حي الكاظمية', '2026-02-24', 'pending', NULL),
-      (17, 'followup', 'سهى العبيدي', 'استفسار عن الخدمة', 'حي المنصور', '2026-02-18', 'completed', NULL)
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('tasks_id_seq', (SELECT MAX(id) FROM tasks));
-  `);
-
-  await pool.query(`
-    INSERT INTO device_models (id, name, brand, category, maintenance_interval, base_price, supported_visit_types) VALUES
-      (1, 'Golden 7 Stages', 'Golden', 'Residential', '6 Months', 250000, '["Installation", "Maintenance", "Delivery"]'),
-      (2, 'Industrial RO System 5000GPD', 'PureTech', 'Industrial', '3 Months', 4500000, '["Installation", "Maintenance"]'),
-      (3, 'Office Dispenser Pro', 'AquaCool', 'Commercial', '6 Months', 650000, '["Installation", "Maintenance", "Delivery"]')
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('device_models_id_seq', (SELECT MAX(id) FROM device_models));
-  `);
-
-  await pool.query(`
-    INSERT INTO spare_parts (id, name, code, base_price, maintenance_type, compatible_device_ids) VALUES
-      (1, 'فلتر PP 5 مايكرون', 'SP-PP5', 5000, 'Periodic', '[1, 3]'),
-      (2, 'فلتر كربون CTO', 'SP-CTO', 7500, 'Periodic', '[1, 3]'),
-      (3, 'غشاء RO 75GPD', 'SP-RO75', 35000, 'Periodic', '[1]'),
-      (4, 'غشاء RO 5000GPD صناعي', 'SP-RO5K', 850000, 'Periodic', '[2]'),
-      (5, 'مضخة ضغط عالي', 'SP-PUMP', 120000, 'Emergency', '[1, 2]'),
-      (6, 'صمام كهربائي', 'SP-VALVE', 25000, 'Emergency', '[2, 3]'),
-      (7, 'حنفية مياه نقية', 'SP-TAP', 15000, 'Accessory', '[1]'),
-      (8, 'خزان ضغط 4 غالون', 'SP-TANK4', 45000, 'Accessory', '[1, 3]')
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('spare_parts_id_seq', (SELECT MAX(id) FROM spare_parts));
-  `);
-
-  await pool.query(`
-    INSERT INTO maintenance_requests (id, request_date, customer_id, customer_name, contract_id, device_model_name, priority, problem_description, telemarketer_id, technician_id, resolution_status, visit_type, location, notes, last_follow_up_date, technical_report) VALUES
-      (101, '2026-02-18T09:30:00', 1, 'خالد السامرائي', 2401, 'مكيف سبليت 2 طن (Samsung)', 'Critical', 'الجهاز لا يعمل والجو حار جداً', 9, 4, 'Pending', 'Emergency', 'حي المنصور', NULL, NULL,
-        '{"water":{"sourceType":"Shatt al-Arab","inputPressure":3.5,"tdsBefore":450,"tdsAfter":120},"components":{"pumpPressure":8.2,"membraneOutput":"Good","flowRestrictor":400,"tankPressure":0.5},"electrical":{"lowPressureSwitch":"Working","highPressureSwitch":"Working","solenoidValve":"Working","uvStatus":"Faulty"},"technicianNotes":"UV Lamp needs replacement immediately.","recommendations":"Suggest installing a voltage stabilizer."}'),
-      (102, '2026-02-18T10:15:00', 2, 'نور الدين', 2398, 'ثلاجة 20 قدم (LG)', 'High', 'تسريب مياه من الخلف', 10, 5, 'Pending', 'Emergency', 'الكرادة', NULL, NULL, NULL),
-      (103, '2026-02-17T14:00:00', 3, 'سلمى حسين', 2387, 'غسالة 7 كغم (Beko)', 'Normal', 'صوت غريب أثناء التشغيل', 9, NULL, 'Pending', 'Emergency', 'الكاظمية', NULL, NULL, NULL),
-      (104, '2026-02-16T11:30:00', 5, 'ريم عباس', 2405, 'مكيف شباك (General)', 'Critical', 'توقف مفاجئ عن العمل', 10, 4, 'Completed', 'Emergency', 'زيونة', 'تم استبدال الكابستور', '2026-02-17T09:00:00',
-        '{"water":{"sourceType":"City Water","inputPressure":4.0,"tdsBefore":200,"tdsAfter":30},"components":{"pumpPressure":7.5,"membraneOutput":"Weak","flowRestrictor":300,"tankPressure":0.6},"electrical":{"lowPressureSwitch":"Working","highPressureSwitch":"Faulty","solenoidValve":"Working","uvStatus":"NotInstalled"},"technicianNotes":"Membrane efficiency dropped to 60%.","recommendations":"Monitor TDS levels weekly."}')
-    ON CONFLICT (id) DO NOTHING;
-
-    SELECT setval('maintenance_requests_id_seq', (SELECT MAX(id) FROM maintenance_requests));
-  `);
-
-  // Seed system lists
-  const { rows: sysListRows } = await pool.query('SELECT COUNT(*) FROM system_lists');
-  if (parseInt(sysListRows[0].count) === 0) {
-    await pool.query(`
-      INSERT INTO system_lists (category, value, display_order) VALUES
-        ('nationality', 'عراقي', 1),
-        ('nationality', 'أردني', 2),
-        ('nationality', 'سوري', 3),
-        ('nationality', 'مصري', 4),
-        ('work_type', 'دوام كامل', 1),
-        ('work_type', 'دوام جزئي', 2),
-        ('work_type', 'نظام الشفتات', 3),
-        ('marital_status', 'أعزب / عزباء', 1),
-        ('marital_status', 'متزوج / متزوجة', 2),
-        ('marital_status', 'أرمل / أرملة', 3),
-        ('marital_status', 'مطلق / مطلقة', 4),
-        ('gender', 'ذكر', 1),
-        ('gender', 'أنثى', 2),
-        ('driving_license', 'نعم', 1),
-        ('driving_license', 'لا', 2),
-        ('job_title', 'فني صيانة أجهزة', 1),
-        ('job_title', 'مندوب مبيعات', 2),
-        ('job_title', 'فني تركيب', 3),
-        ('job_title', 'مسؤول خدمة العملاء', 4),
-        ('job_title', 'محاسب', 5),
-        ('certificate', 'ابتدائية', 1),
-        ('certificate', 'متوسطة', 2),
-        ('certificate', 'إعدادية', 3),
-        ('certificate', 'دبلوم', 4),
-        ('certificate', 'بكالوريوس', 5),
-        ('certificate', 'ماجستير', 6),
-        ('certificate', 'دكتوراه', 7),
-        ('major:دبلوم', 'تقنيات حاسبات', 1),
-        ('major:دبلوم', 'إدارة أعمال', 2),
-        ('major:دبلوم', 'محاسبة', 3),
-        ('major:بكالوريوس', 'هندسة حاسبات', 1),
-        ('major:بكالوريوس', 'هندسة كهرباء', 2),
-        ('major:بكالوريوس', 'إدارة أعمال', 3),
-        ('major:بكالوريوس', 'محاسبة', 4),
-        ('major:ماجستير', 'هندسة حاسبات', 1),
-        ('major:ماجستير', 'إدارة أعمال', 2),
-        ('major:دكتوراه', 'هندسة حاسبات', 1)
-    `);
-    console.log('System lists seeded.');
-  }
-}

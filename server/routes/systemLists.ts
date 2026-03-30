@@ -3,6 +3,45 @@ import pool from '../db.js';
 
 const router = Router();
 
+async function syncJobTitleRole(listId: number, displayName: string, isActive = true) {
+  const roleName = `job_title_${listId}`;
+
+  const { rows: existingRoles } = await pool.query(
+    `SELECT id FROM roles WHERE name = $1`,
+    [roleName]
+  );
+
+  if (existingRoles.length > 0) {
+    await pool.query(
+      `UPDATE roles
+       SET display_name = $1,
+           description = $2,
+           is_active = $3,
+           updated_at = NOW()
+       WHERE name = $4`,
+      [
+        displayName,
+        'دور إداري مرتبط بعنوان وظيفي من القوائم النظامية',
+        isActive,
+        roleName,
+      ]
+    );
+    return;
+  }
+
+  await pool.query(
+    `INSERT INTO roles (name, display_name, description, is_active, is_system)
+     VALUES ($1, $2, $3, $4, FALSE)
+     ON CONFLICT (name) DO NOTHING`,
+    [
+      roleName,
+      displayName,
+      'دور إداري مرتبط بعنوان وظيفي من القوائم النظامية',
+      isActive,
+    ]
+  );
+}
+
 // GET /api/system-lists
 // Get all lists, optionally filtered by category
 router.get('/', async (req, res) => {
@@ -55,6 +94,11 @@ router.post('/', async (req, res) => {
        RETURNING id, category, value, is_active AS "isActive", display_order AS "displayOrder"`,
       [category, value, isActive !== undefined ? isActive : true, displayOrder || 0]
     );
+
+    if (category === 'job_title') {
+      await syncJobTitleRole(rows[0].id, rows[0].value, rows[0].isActive);
+    }
+
     res.status(201).json(rows[0]);
   } catch (err: any) {
     console.error('Error creating system list item:', err);
@@ -68,6 +112,16 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { category, value, isActive, displayOrder } = req.body;
+    const { rows: currentRows } = await pool.query(
+      `SELECT id, category, value, is_active AS "isActive", display_order AS "displayOrder"
+       FROM system_lists
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (currentRows.length === 0) {
+      return res.status(404).json({ error: 'System list item not found' });
+    }
     
     const { rows } = await pool.query(
       `UPDATE system_lists SET 
@@ -81,11 +135,17 @@ router.put('/:id', async (req, res) => {
       [category, value, isActive, displayOrder, id]
     );
     
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'System list item not found' });
+    const updated = rows[0];
+
+    if ((updated.category || currentRows[0].category) === 'job_title') {
+      await syncJobTitleRole(
+        updated.id,
+        updated.value,
+        updated.isActive
+      );
     }
     
-    res.json(rows[0]);
+    res.json(updated);
   } catch (err: any) {
     console.error('Error updating system list item:', err);
     res.status(500).json({ error: err.message });
