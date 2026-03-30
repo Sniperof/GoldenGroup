@@ -104,9 +104,6 @@ export default function Login() {
           <div className="mt-6 pt-4 border-t border-slate-100">
             <p className="text-xs text-slate-400 text-center">بيانات الدخول الافتراضية للتطوير:</p>
             <div className="mt-2 space-y-1 text-xs text-slate-500 text-center">
-              <p>مدير: <code className="bg-slate-100 px-1 rounded">hr_manager</code> / <code className="bg-slate-100 px-1 rounded">manager123</code></p>
-              <p>مساعد: <code className="bg-slate-100 px-1 rounded">hr_assistant</code> / <code className="bg-slate-100 px-1 rounded">assistant123</code></p>
-              <p>مدير النظام: <code className="bg-slate-100 px-1 rounded">system_admin</code> / <code className="bg-slate-100 px-1 rounded">admin123</code></p>
             </div>
           </div>
         </div>
