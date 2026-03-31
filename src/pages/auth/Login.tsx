@@ -44,8 +44,7 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-500 rounded-2xl shadow-lg shadow-sky-500/30 mb-4">
             <Briefcase className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">نظام الموارد البشرية</h1>
-          <p className="text-sm text-slate-500 mt-1">Golden Group CRM</p>
+          <h1 className="text-2xl font-bold text-slate-800">Golden Group Dashboard</h1>
         </div>
 
         {/* Card */}
@@ -101,11 +100,6 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center">بيانات الدخول الافتراضية للتطوير:</p>
-            <div className="mt-2 space-y-1 text-xs text-slate-500 text-center">
-            </div>
-          </div>
         </div>
       </div>
     </div>

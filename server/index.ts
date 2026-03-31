@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createSchema } from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,14 +84,6 @@ app.get('/{*path}', (_req, res) => {
 });
 
 export async function start() {
-  try {
-    await createSchema();
-    console.log('Database schema created.');
-  } catch (err) {
-    console.error('Failed to initialize database:', err);
-    process.exit(1);
-  }
-
   return new Promise<void>((resolve) => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend server running on http://localhost:${PORT}`);

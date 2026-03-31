@@ -119,7 +119,7 @@ export default function MainLayout() {
                     <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
                         <Gem className="w-4 h-4 text-white" />
                     </div>
-                    <span className="text-lg font-bold text-slate-800">Golden CRM</span>
+                    <span className="text-lg font-bold text-slate-800">Golden Group</span>
                 </div>
                 <button
                     onClick={toggleSidebar}
@@ -153,7 +153,7 @@ export default function MainLayout() {
                         <div className="w-8 h-8 rounded-lg bg-sky-500 flex items-center justify-center shadow-lg shadow-sky-500/30">
                             <Gem className="w-4 h-4 text-white" />
                         </div>
-                        <span className="text-xl font-bold text-slate-800 tracking-wide">Golden CRM</span>
+                        <span className="text-xl font-bold text-slate-800 tracking-wide">Golden Group</span>
                     </div>
                     {/* Desktop Collapse Toggle */}
                     <button

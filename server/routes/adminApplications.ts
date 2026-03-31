@@ -9,6 +9,7 @@ import {
 import { checkVacancyCapacity, checkDuplicate } from '../utils/applicationHelpers.js';
 import { sanitizeText } from '../utils/sanitize.js';
 import { requirePermission } from '../middleware/permission.js';
+import { requireRole } from '../middleware/auth.js';
 import {
   deriveEmployeeRoleFromVacancyTitle,
   getApplicationProcessingBlockReason,
