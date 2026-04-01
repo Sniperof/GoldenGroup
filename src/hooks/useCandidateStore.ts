@@ -129,7 +129,7 @@ export const useCandidateStore = create<CandidateState>((set, get) => ({
 
         await api.candidates.create({
             ...candidateData,
-            status: 'New',
+            status: 'Suggested',
             referralConfirmationStatus: 'Pending',
             duplicateFlag: isDupe,
             duplicateType: dupeType,

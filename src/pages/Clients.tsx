@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb, Pencil, MapPin, Loader2 } from 'lucide-react';
+import { Users, Trash2, UserPlus, CheckCircle2, AlertCircle, Clock, Search, Lightbulb, Pencil, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Client, GeoUnit, Visit, Contract } from '../lib/types';
 import ClientModal from '../components/ClientModal';
@@ -108,24 +108,12 @@ export default function Clients() {
     const kpis = useMemo(() => {
         const total = mainList.length;
 
-        const areaCounts: Record<string, number> = {};
-        mainList.forEach(c => {
-            const nId = parseInt(c.neighborhood);
-            const n = geoUnits.find(g => g.id === nId);
-            const subArea = geoUnits.find(g => g.id === n?.parentId);
-            if (subArea) areaCounts[subArea.name] = (areaCounts[subArea.name] || 0) + 1;
-        });
-        const topArea = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '--';
-
         const leadsCount = mainList.filter(c => c.lifecycleStage === 'Lead').length;
         const fopsCount = mainList.filter(c => c.lifecycleStage === 'FOP').length;
         const opsCount = mainList.filter(c => c.lifecycleStage === 'OP').length;
 
-        const leadToFop = (leadsCount + fopsCount) > 0 ? ((fopsCount / (leadsCount + fopsCount)) * 100).toFixed(1) : '0';
-        const fopToOp = (fopsCount + opsCount) > 0 ? ((opsCount / (fopsCount + opsCount)) * 100).toFixed(1) : '0';
-
-        return { total, topArea, leadToFop, fopToOp };
-    }, [mainList, geoUnits]);
+        return { total, leadsCount, fopsCount, opsCount };
+    }, [mainList]);
 
     const convertToLead = async (id: number) => {
         if (!confirm('هل أنت متأكد من تحويل هذا المرشح إلى عميل محتمل؟')) return;
@@ -296,10 +284,10 @@ export default function Clients() {
             {/* 2. KPI Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { label: 'إجمالي السجلات المصفاة', value: kpis.total, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
-                    { label: 'المنطقة الأكثر استهدافاً', value: kpis.topArea, icon: MapPin, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                    { label: 'معدل التحويل (FOP → OP)', value: `${kpis.fopToOp}%`, icon: CheckCircle2, color: 'text-amber-600', bg: 'bg-amber-50' },
-                    { label: 'معدل التحويل (Lead → FOP)', value: `${kpis.leadToFop}%`, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                    { label: 'إجمالي الزبائن', value: kpis.total, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
+                    { label: 'إجمالي الأسماء المرشحة', value: kpis.leadsCount, icon: AlertCircle, color: 'text-slate-600', bg: 'bg-slate-50' },
+                    { label: 'إجمالي الزبائن المحتملة FOP', value: kpis.fopsCount, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'إجمالي الزبائن OP', value: kpis.opsCount, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                 ].map((kpi, idx) => (
                     <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                         <div className="flex items-center justify-between mb-2">
@@ -388,9 +376,6 @@ export default function Clients() {
                         <div className="flex items-center gap-1">
                             <button onClick={(e) => { e.stopPropagation(); openEditModal(c as any); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-sky-500 transition-all border border-transparent hover:border-gray-100" title="تعديل بيانات الزبون">
                                 <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); alert(`Opening map for coordinates: ${c.gpsCoordinates?.lat}, ${c.gpsCoordinates?.lng}`); }} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-gray-400 hover:text-emerald-500 transition-all border border-transparent hover:border-gray-100" title="فتح الموقع على الخريطة">
-                                <MapPin className="w-4 h-4" />
                             </button>
                         </div>
                     )}

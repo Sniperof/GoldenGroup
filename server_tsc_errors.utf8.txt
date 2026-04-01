@@ -1,0 +1,48 @@
+server/index.ts(7,46): error TS1343: The 'import.meta' meta-property is only allowed when the '--module' option is 'es2020', 'es2022', 'esnext', 'system', 'node16', or 'nodenext'.
+server/middleware/auth.ts(2,17): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+server/routes/adminApplications.ts(138,37): error TS2339: Property 'duplicateFlag' does not exist on type '{ blocked: true; duplicateApplicationId: number; } | { blocked: false; duplicateFlag: boolean; }'.
+  Property 'duplicateFlag' does not exist on type '{ blocked: true; duplicateApplicationId: number; }'.
+server/routes/adminApplications.ts(389,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(390,31): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(470,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(471,31): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(484,31): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(523,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(524,31): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(601,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/adminApplications.ts(602,31): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/auth.ts(2,20): error TS2307: Cannot find module 'bcryptjs' or its corresponding type declarations.
+server/routes/auth.ts(3,17): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+server/routes/interviews.ts(255,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/interviews.ts(316,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/publicApplications.ts(65,37): error TS2339: Property 'duplicateFlag' does not exist on type '{ blocked: true; duplicateApplicationId: number; } | { blocked: false; duplicateFlag: boolean; }'.
+  Property 'duplicateFlag' does not exist on type '{ blocked: true; duplicateApplicationId: number; }'.
+server/routes/trainingCourses.ts(310,58): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/trainingCourses.ts(386,62): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/trainingCourses.ts(459,60): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/trainingCourses.ts(485,28): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/trainingCourses.ts(540,56): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/trainingCourses.ts(616,58): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/vacancies.ts(251,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes/vacancies.ts(309,26): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/schema.ts(559,33): error TS2307: Cannot find module 'bcryptjs' or its corresponding type declarations.
+server/start.ts(4,1): error TS1378: Top-level 'await' expressions are only allowed when the 'module' option is set to 'es2022', 'esnext', 'system', 'node16', 'nodenext', or 'preserve', and the 'target' option is set to 'es2017' or higher.

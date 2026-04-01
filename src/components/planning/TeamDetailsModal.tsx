@@ -2,7 +2,6 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, PhoneCall, User, Briefcase, MapPin } from 'lucide-react';
 import { Candidate, Client, GeoUnit } from '../../lib/types';
-import { StorageManager } from '../../lib/storage';
 
 interface TeamDetailsModalProps {
     isOpen: boolean;
@@ -11,6 +10,7 @@ interface TeamDetailsModalProps {
     teamLabel: string;
     candidates: Candidate[];
     leads: Client[];
+    geoUnits: GeoUnit[];
     onGenerate: (teamKey: string, candList: Candidate[], leadList: Client[]) => void;
 }
 
@@ -21,20 +21,17 @@ export default function TeamDetailsModal({
     teamLabel,
     candidates,
     leads,
-    onGenerate
+    geoUnits,
+    onGenerate,
 }: TeamDetailsModalProps) {
     if (!isOpen) return null;
 
     const totalCustomers = candidates.length + leads.length;
 
-    // Quick helper for geo names. In a real app we might pass this as a prop or hook
-    const geoUnits = StorageManager.load<GeoUnit[]>('geoUnits', []);
     const getGeoName = (id: number | null) => {
-        const unit = geoUnits.find((u: GeoUnit) => u.id === id);
+        const unit = geoUnits.find((geoUnit) => geoUnit.id === id);
         return unit ? unit.name : 'غير محدد';
     };
-
-
 
     const handleGenerateClick = () => {
         onGenerate(teamKey, candidates, leads);
@@ -58,7 +55,6 @@ export default function TeamDetailsModal({
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
                     className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
                 >
-                    {/* Header */}
                     <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">{teamLabel}</h2>
@@ -75,7 +71,6 @@ export default function TeamDetailsModal({
                         </button>
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 overflow-y-auto p-6 custom-scroll bg-slate-50/30">
                         {totalCustomers === 0 ? (
                             <div className="text-center py-12">
@@ -107,32 +102,30 @@ export default function TeamDetailsModal({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {candidates.map(c => (
-                                                <tr key={`cand-${c.id}`} className="hover:bg-slate-50/50 transition-colors">
+                                            {candidates.map((candidate) => (
+                                                <tr key={`cand-${candidate.id}`} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="px-4 py-3 text-slate-800 font-medium">
                                                         <div className="flex items-center gap-2">
                                                             <User className="w-4 h-4 text-blue-400" />
-                                                            {`${c.firstName || ''} ${c.lastName || ''}`.trim() || c.nickname || 'بدون اسم'}
+                                                            {`${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || 'بدون اسم'}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3"><span className="px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-bold">اسم مقترح</span></td>
-                                                    <td className="px-4 py-3 text-slate-600" dir="ltr">{c.mobile || (c.contacts && c.contacts.length > 0 ? c.contacts[0].number : '')}</td>
-                                                    <td className="px-4 py-3 text-slate-500">{c.addressText || getGeoName(c.geoUnitId)}</td>
+                                                    <td className="px-4 py-3 text-slate-600" dir="ltr">{candidate.mobile || (candidate.contacts && candidate.contacts.length > 0 ? candidate.contacts[0].number : '')}</td>
+                                                    <td className="px-4 py-3 text-slate-500">{candidate.addressText || getGeoName(candidate.geoUnitId)}</td>
                                                 </tr>
                                             ))}
-                                            {leads.map(l => (
-                                                <tr key={`lead-${l.id}`} className="hover:bg-slate-50/50 transition-colors">
+                                            {leads.map((lead) => (
+                                                <tr key={`lead-${lead.id}`} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="px-4 py-3 text-slate-800 font-medium">
                                                         <div className="flex items-center gap-2">
                                                             <Briefcase className="w-4 h-4 text-amber-500" />
-                                                            {l.name}
+                                                            {lead.name}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3"><span className="px-2 py-1 rounded bg-amber-50 text-amber-700 text-xs font-bold">زبون محتمل</span></td>
-                                                    <td className="px-4 py-3 text-slate-600" dir="ltr">{l.contacts?.find(con => con.isPrimary)?.number || l.contacts?.[0]?.number || '--'}</td>
-                                                    <td className="px-4 py-3 text-slate-500">
-                                                        {getGeoName(parseInt(l.neighborhood)) || l.neighborhood}
-                                                    </td>
+                                                    <td className="px-4 py-3 text-slate-600" dir="ltr">{lead.contacts?.find((contact) => contact.isPrimary)?.number || lead.contacts?.[0]?.number || '--'}</td>
+                                                    <td className="px-4 py-3 text-slate-500">{getGeoName(parseInt(lead.neighborhood)) || lead.neighborhood}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -142,7 +135,6 @@ export default function TeamDetailsModal({
                         )}
                     </div>
 
-                    {/* Footer */}
                     <div className="p-4 border-t border-gray-100 bg-white flex justify-end">
                         <button
                             onClick={onClose}
@@ -151,7 +143,6 @@ export default function TeamDetailsModal({
                             إغلاق
                         </button>
                     </div>
-
                 </motion.div>
             </div>
         </AnimatePresence>

@@ -1,31 +1,40 @@
 import { create } from 'zustand';
-import { StorageManager } from '../lib/storage';
 import { Client, Contract, Visit } from '../lib/types';
+import { api } from '../lib/api';
 
 interface ClientStore {
     clients: Client[];
-    loadClients: () => void;
-    updateClient: (id: number, updates: Partial<Client>) => void;
+    loadClients: () => Promise<void>;
+    updateClient: (id: number, updates: Partial<Client>) => Promise<void>;
     // getLeads is a selector function
     getLeads: (contracts: Contract[], visits: Visit[]) => Client[];
 }
 
 export const useClientStore = create<ClientStore>((set, get) => ({
-    clients: StorageManager.load<Client[]>('clients', []),
+    clients: [],
 
-    loadClients: () => {
-        const loadedClients = StorageManager.load<Client[]>('clients', []);
-        set({ clients: loadedClients });
+    loadClients: async () => {
+        try {
+            const loadedClients = await api.clients.list();
+            set({ clients: loadedClients });
+        } catch (error) {
+            console.error('Failed to load clients from API:', error);
+            set({ clients: [] });
+        }
     },
 
-    updateClient: (id: number, updates: Partial<Client>) => {
-        set((state) => {
-            const updatedClients = state.clients.map((client) =>
-                client.id === id ? { ...client, ...updates } : client
-            );
-            StorageManager.save('clients', updatedClients);
-            return { clients: updatedClients };
-        });
+    updateClient: async (id: number, updates: Partial<Client>) => {
+        const currentClient = get().clients.find((client) => client.id === id);
+        if (!currentClient) return;
+
+        try {
+            const updatedClient = await api.clients.update(id, { ...currentClient, ...updates });
+            set((state) => ({
+                clients: state.clients.map((client) => (client.id === id ? updatedClient : client)),
+            }));
+        } catch (error) {
+            console.error('Failed to update client via API:', error);
+        }
     },
 
     getLeads: (contracts: Contract[], visits: Visit[]) => {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, MapPin, ShieldCheck, FileText, Paperclip, Send, Image, Trash2, AlertTriangle } from 'lucide-react';
 import { useClientStore } from '../hooks/useClientStore';
 import { useEmergencyStore } from '../hooks/useEmergencyStore';
-import { StorageManager } from '../lib/storage';
+import { api } from '../lib/api';
 import type { Client, Contract, ClientRating } from '../lib/types';
 
 interface Props {
@@ -18,8 +18,8 @@ const RATING_LABELS: Record<ClientRating, { label: string; color: string }> = {
 };
 
 export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
-    const { clients } = useClientStore();
-    const { addTicket, tickets } = useEmergencyStore();
+    const { clients, loadClients } = useClientStore();
+    const { addTicket } = useEmergencyStore();
 
     // --- State ---
     const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +27,7 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
     const [showDropdown, setShowDropdown] = useState(false);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [clientContracts, setClientContracts] = useState<Contract[]>([]);
+    const [allContracts, setAllContracts] = useState<Contract[]>([]);
     const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
     const [problemDescription, setProblemDescription] = useState('');
     const [callNotes, setCallNotes] = useState('');
@@ -39,6 +40,7 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
     // --- Reset on open/close ---
     useEffect(() => {
         if (isOpen) {
+            loadClients();
             setSearchQuery('');
             setSearchResults([]);
             setShowDropdown(false);
@@ -50,6 +52,25 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
             setAttachments([]);
             setShowSuccess(false);
         }
+    }, [isOpen, loadClients]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        let active = true;
+
+        api.contracts.list()
+            .then((contracts) => {
+                if (active) setAllContracts(contracts);
+            })
+            .catch((error) => {
+                console.error('Failed to load contracts for emergency ticket modal:', error);
+                if (active) setAllContracts([]);
+            });
+
+        return () => {
+            active = false;
+        };
     }, [isOpen]);
 
     // --- Debounced Search ---
@@ -84,11 +105,10 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
         setSearchQuery(client.name || `${client.firstName || ''} ${client.lastName || ''}`);
         setShowDropdown(false);
         // Load contracts for this client
-        const allContracts = StorageManager.load<Contract[]>('contracts', []);
         const filtered = allContracts.filter(c => c.customerId === client.id);
         setClientContracts(filtered);
         setSelectedContractId(filtered.length === 1 ? filtered[0].id : null);
-    }, []);
+    }, [allContracts]);
 
     // --- Click outside to close dropdown ---
     useEffect(() => {
@@ -127,17 +147,14 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
 
     const canSubmit = selectedClient && problemDescription.trim().length > 0 && !isSubmitting;
 
-    const handleSubmit = useCallback(() => {
+    const handleSubmit = useCallback(async () => {
         if (!selectedClient || !problemDescription.trim()) return;
         setIsSubmitting(true);
 
         const clientAddress = [selectedClient.governorate, selectedClient.district, selectedClient.neighborhood]
             .filter(Boolean).join(' / ') || 'غير محدد';
 
-        const newId = tickets.length > 0 ? Math.max(...tickets.map(t => t.id)) + 1 : 1;
-
-        addTicket({
-            id: newId,
+        const created = await addTicket({
             clientId: selectedClient.id,
             clientName: selectedClient.name || `${selectedClient.firstName || ''} ${selectedClient.lastName || ''}`,
             clientAddress,
@@ -151,15 +168,19 @@ export default function NewEmergencyTicketModal({ isOpen, onClose }: Props) {
             priority: 'Normal',
             status: 'New',
             assignedTechnicianId: null,
-            createdAt: new Date().toISOString(),
         });
+
+        if (!created) {
+            setIsSubmitting(false);
+            return;
+        }
 
         setShowSuccess(true);
         setTimeout(() => {
             onClose();
             setIsSubmitting(false);
         }, 1200);
-    }, [selectedClient, problemDescription, callNotes, attachments, selectedContract, tickets, addTicket, onClose]);
+    }, [selectedClient, problemDescription, callNotes, attachments, selectedContract, addTicket, onClose]);
 
     // --- Render ---
     if (!isOpen) return null;

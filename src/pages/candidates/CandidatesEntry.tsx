@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCandidateStore } from '../../hooks/useCandidateStore';
 import { UserPlus, Search, Building2, MapPin, AlertCircle, ArrowRight, XCircle, FilePlus2, Download, Upload, Info, LayoutGrid, List, ShieldCheck, Edit } from 'lucide-react';
@@ -8,9 +8,8 @@ import ImportCSVModal from '../../components/candidates/ImportCSVModal';
 import ReferralSheetDetailsModal from '../../components/candidates/SessionDetailsModal';
 import QualificationModal from '../../components/candidates/QualificationModal';
 import ClientModal from '../../components/ClientModal';
-import { Client, Candidate } from '../../lib/types';
-import { StorageManager } from '../../lib/storage';
-import { defaultGeoUnits } from '../../lib/defaultData';
+import { api } from '../../lib/api';
+import { Client, Candidate, GeoUnit } from '../../lib/types';
 
 export default function CandidatesEntry() {
     // UI State
@@ -30,6 +29,7 @@ export default function CandidatesEntry() {
     // Data Store
     const candidates = useCandidateStore(state => state.candidates);
     const referralSheets = useCandidateStore(state => state.referralSheets);
+    const fetchData = useCandidateStore(state => state.fetchData);
     const qualifyCandidate = useCandidateStore(state => state.qualifyCandidate);
     const linkCandidateToClient = useCandidateStore(state => state.linkCandidateToClient);
     const markJunk = useCandidateStore(state => state.markJunk);
@@ -41,6 +41,7 @@ export default function CandidatesEntry() {
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [clientInitialData, setClientInitialData] = useState<Client | null>(null);
     const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
+    const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
 
     // Derived State
     const filteredCandidates = candidates
@@ -72,6 +73,9 @@ export default function CandidatesEntry() {
             name: `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.nickname || '',
             mobile: candidate.mobile,
             contacts: candidate.contacts || [],
+            neighborhood: candidate.geoUnitId?.toString() || '',
+            detailedAddress: candidate.addressText || '',
+            occupation: candidate.occupation || '',
             sourceChannel: candidate.referralOriginChannel,
             referrerType: candidate.referralType,
             referrerName: candidate.referralNameSnapshot,
@@ -103,7 +107,26 @@ export default function CandidatesEntry() {
         }
     };
 
-    const geoUnits = useMemo(() => StorageManager.load('geoUnits', defaultGeoUnits), []);
+    useEffect(() => {
+        void fetchData();
+    }, [fetchData]);
+
+    useEffect(() => {
+        let active = true;
+
+        api.geoUnits.list()
+            .then((units) => {
+                if (active) setGeoUnits(units);
+            })
+            .catch((error) => {
+                console.error('Failed to load geo units in candidates entry:', error);
+                if (active) setGeoUnits([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const getNeighborhoodHierarchy = (id?: string) => {
         if (!id) return '--';

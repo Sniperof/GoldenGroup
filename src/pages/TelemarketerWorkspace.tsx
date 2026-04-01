@@ -4,15 +4,14 @@ import {
     AlertTriangle, Calendar, Send, Zap, User, Clock, CheckCircle,
     MapPin, PlusCircle, MessageSquare, ThumbsUp, Wrench, Activity, Briefcase
 } from 'lucide-react';
-import { StorageManager } from '../lib/storage';
+import { api } from '../lib/api';
 import { useCandidateStore } from '../hooks/useCandidateStore';
 import { useClientStore } from '../hooks/useClientStore';
 import { useTelemarketingStore } from '../hooks/useTelemarketingStore';
 import TeamAgendaPanel from '../components/telemarketing/TeamAgendaPanel';
 import OutcomeRecorderModal from '../components/telemarketing/OutcomeRecorderModal';
 import AppointmentSchedulerModal from '../components/telemarketing/AppointmentSchedulerModal';
-import type { DaySchedule, CallOutcome, Contract, Visit, CallLog } from '../lib/types';
-import { defaultEmployees } from '../lib/defaultData';
+import type { DaySchedule, CallOutcome, Contract, Visit, Employee } from '../lib/types';
 import { getEntityContacts } from '../lib/contactUtils';
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -30,31 +29,44 @@ export default function TelemarketerWorkspace() {
     // Stores & Data Load
     const candidates = useCandidateStore(state => state.candidates);
     const { clients, loadClients, updateClient } = useClientStore();
-    const { taskLists, appointments, addCallLog, addAppointment, updateTaskListItemStatus, getTaskList, getAppointmentsForTeamDate } = useTelemarketingStore();
+    const { taskLists, appointments, callLogs, loadData, addCallLog, addAppointment, updateTaskListItemStatus, getTaskList, getAppointmentsForTeamDate } = useTelemarketingStore();
 
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [visits, setVisits] = useState<Visit[]>([]);
-    const [callLogs, setCallLogs] = useState<CallLog[]>([]);
     const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [currentSchedule, setCurrentSchedule] = useState<DaySchedule>({ teams: [], solos: [] });
     const [date] = useState(getToday());
 
     useEffect(() => {
         loadClients();
-        setContracts(StorageManager.load('contracts', []));
-        setVisits(StorageManager.load('visits', []));
-        setCallLogs(StorageManager.load('telemarketing_callLogs', []));
-        setMaintenanceRequests(StorageManager.load('maintenanceRequests', []));
-    }, [loadClients]);
+        loadData();
 
-    useEffect(() => {
-        setCallLogs(StorageManager.load('telemarketing_callLogs', []));
-    }, [taskLists]);
+        Promise.all([
+            api.contracts.list(),
+            api.visits.list(),
+            api.maintenanceRequests.list(),
+            api.employees.list(),
+            api.schedules.get(date),
+        ])
+            .then(([contractsData, visitsData, maintenanceData, employeesData, scheduleData]) => {
+                setContracts(contractsData);
+                setVisits(visitsData);
+                setMaintenanceRequests(maintenanceData);
+                setEmployees(employeesData);
+                setCurrentSchedule(scheduleData || { teams: [], solos: [] });
+            })
+            .catch((error) => {
+                console.error('Failed to load telemarketer workspace data:', error);
+                setContracts([]);
+                setVisits([]);
+                setMaintenanceRequests([]);
+                setEmployees([]);
+                setCurrentSchedule({ teams: [], solos: [] });
+            });
+    }, [date, loadClients, loadData]);
 
-    // Schedule Parsing
-    const schedules = useMemo<Record<string, DaySchedule>>(() => StorageManager.load('schedules', {}), []);
-    const currentSchedule: DaySchedule = schedules[date] || { teams: [], solos: [] };
-
-    const getEmp = (id: number | null) => defaultEmployees.find(e => e.id === id) || null;
+    const getEmp = (id: number | null) => employees.find(e => e.id === id) || null;
 
     const availableTeams = useMemo(() => {
         const teams: { key: string; label: string; type: 'team' | 'solo'; count: number }[] = [];
@@ -73,6 +85,12 @@ export default function TelemarketerWorkspace() {
 
     const [selectedTeamKey, setSelectedTeamKey] = useState<string>(availableTeams[0]?.key || '');
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedTeamKey && availableTeams[0]?.key) {
+            setSelectedTeamKey(availableTeams[0].key);
+        }
+    }, [availableTeams, selectedTeamKey]);
 
     // Active Task List
     const activeTaskList = useMemo(() => {
@@ -116,13 +134,13 @@ export default function TelemarketerWorkspace() {
         return clients.find(c => c.id === selectedTask.entityId);
     }, [selectedTask, candidates, clients]);
 
-    const handleSaveOutcome = (contactId: string, outcome: CallOutcome, notes: string, newContactStatus?: string, communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice') => {
+    const handleSaveOutcome = async (contactId: string, outcome: CallOutcome, notes: string, newContactStatus?: string, communicationMethod?: 'phone' | 'whatsapp_text' | 'whatsapp_voice') => {
         if (!selectedTask) return;
 
         const entityContacts = getEntityContacts(entityDetails as any);
         const selectedContact = entityContacts.find(c => c.id === contactId) || entityContacts[0];
 
-        addCallLog({
+        await addCallLog({
             entityType: selectedTask.entityType,
             entityId: selectedTask.entityId,
             taskListId: activeTaskList!.id,
@@ -145,7 +163,7 @@ export default function TelemarketerWorkspace() {
                 const updatedContacts = client.contacts.map((c: any) =>
                     c.id === contactId ? { ...c, status: finalContactStatus } : c
                 );
-                updateClient(client.id, { contacts: updatedContacts });
+                await updateClient(client.id, { contacts: updatedContacts });
             }
         }
 
@@ -155,7 +173,7 @@ export default function TelemarketerWorkspace() {
         const newStatus = (outcome === 'booked') ? 'booked'
             : (outcome === 'rejected' || attempts >= 3) ? 'called'
                 : 'pending';
-        updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, newStatus, outcome);
+        await updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, newStatus, outcome);
 
         if (newStatus !== 'pending') {
             // Auto move to next pending task after small delay
@@ -168,9 +186,9 @@ export default function TelemarketerWorkspace() {
         }
     };
 
-    const handleSaveAppointment = (visitTime: string, duration: string, occupation: string, waterSource: string, notes: string) => {
+    const handleSaveAppointment = async (visitTime: string, duration: string, occupation: string, waterSource: string, notes: string) => {
         if (!selectedTask) return;
-        addAppointment({
+        await addAppointment({
             entityType: selectedTask.entityType,
             entityId: selectedTask.entityId,
             customerName: selectedTask.name,
@@ -186,11 +204,11 @@ export default function TelemarketerWorkspace() {
         });
 
         if (selectedTask.entityType === 'client') {
-            updateClient(selectedTask.entityId, { occupation, waterSource });
+            await updateClient(selectedTask.entityId, { occupation, waterSource });
         }
 
         if (selectedTask.status === 'pending') {
-            updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, 'booked', 'booked');
+            await updateTaskListItemStatus(activeTaskList!.id, selectedTask.id, 'booked', 'booked');
         }
     };
 

@@ -2,11 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createSchema, seedData } from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import geoUnitsRouter from './routes/geoUnits.js';
+import branchesRouter from './routes/branches.js';
 import employeesRouter from './routes/employees.js';
 import clientsRouter from './routes/clients.js';
 import candidatesRouter from './routes/candidates.js';
@@ -18,10 +18,23 @@ import duesRouter from './routes/dues.js';
 import deviceModelsRouter from './routes/deviceModels.js';
 import sparePartsRouter from './routes/spareParts.js';
 import maintenanceRequestsRouter from './routes/maintenanceRequests.js';
+import emergencyTicketsRouter from './routes/emergencyTickets.js';
 import visitsRouter from './routes/visits.js';
 import schedulesRouter from './routes/schedules.js';
 import routeAssignmentsRouter from './routes/routeAssignments.js';
+import telemarketingRouter from './routes/telemarketing.js';
 import dashboardRouter from './routes/dashboard.js';
+import vacanciesRouter from './routes/vacancies.js';
+import publicVacanciesRouter from './routes/publicVacancies.js';
+import publicApplicationsRouter from './routes/publicApplications.js';
+import adminApplicationsRouter from './routes/adminApplications.js';
+import interviewsRouter from './routes/interviews.js';
+import trainingCoursesRouter from './routes/trainingCourses.js';
+import publicAreasRouter from './routes/publicAreas.js';
+import authRouter from './routes/auth.js';
+import systemListsRouter from './routes/systemLists.js';
+import uploadRouter from './routes/upload.js';
+import rolesRouter from './routes/roles.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -29,7 +42,9 @@ const PORT = parseInt(process.env.PORT || '3000');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+app.use('/api/auth', authRouter);
 app.use('/api/geo-units', geoUnitsRouter);
+app.use('/api/branches', branchesRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/candidates', candidatesRouter);
@@ -41,10 +56,26 @@ app.use('/api/dues', duesRouter);
 app.use('/api/device-models', deviceModelsRouter);
 app.use('/api/spare-parts', sparePartsRouter);
 app.use('/api/maintenance-requests', maintenanceRequestsRouter);
+app.use('/api/emergency-tickets', emergencyTicketsRouter);
 app.use('/api/visits', visitsRouter);
 app.use('/api/schedules', schedulesRouter);
 app.use('/api/route-assignments', routeAssignmentsRouter);
+app.use('/api/telemarketing', telemarketingRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/admin/vacancies', vacanciesRouter);
+app.use('/api/public/vacancies', publicVacanciesRouter);
+app.use('/api/public/applications', publicApplicationsRouter);
+app.use('/api/admin/applications', adminApplicationsRouter);
+app.use('/api/admin/interviews', interviewsRouter);
+app.use('/api/admin/training-courses', trainingCoursesRouter);
+app.use('/api/public/areas', publicAreasRouter);
+app.use('/api/system-lists', systemListsRouter);
+app.use('/api/upload', uploadRouter);
+app.use('/api/admin', rolesRouter);
+
+// Serve uploaded files (photos, CVs)
+const uploadsPath = path.resolve(__dirname, '..', '..', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
 
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));
@@ -53,15 +84,6 @@ app.get('/{*path}', (_req, res) => {
 });
 
 export async function start() {
-  try {
-    await createSchema();
-    await seedData();
-    console.log('Database schema created and seeded.');
-  } catch (err) {
-    console.error('Failed to initialize database:', err);
-    process.exit(1);
-  }
-
   return new Promise<void>((resolve) => {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Backend server running on http://localhost:${PORT}`);

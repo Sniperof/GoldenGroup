@@ -14,7 +14,7 @@ interface Props {
 
 const referralTypes: { value: ReferralType; label: string; icon: any }[] = [
     { value: 'Personal', label: 'شخصي', icon: User },
-    { value: 'Client', label: 'زبون', icon: Handshake },
+    { value: 'Client', label: 'زبون حالي', icon: Handshake },
     { value: 'Employee', label: 'موظف', icon: Building2 },
     { value: 'Unknown', label: 'مجهول', icon: Search }
 ];
@@ -29,8 +29,37 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
     const addReferralSheet = useCandidateStore(state => state.addReferralSheet); // Updated hook
 
     const [geoUnits, setGeoUnits] = useState<GeoUnit[]>([]);
+    const [allClients, setAllClients] = useState<Client[]>([]);
+    const [visits, setVisits] = useState<Array<{ customerId: number }>>([]);
+    const [contracts, setContracts] = useState<Array<{ customerId: number }>>([]);
     useEffect(() => {
-        api.geoUnits.list().then(setGeoUnits).catch(console.error);
+        let active = true;
+
+        Promise.all([
+            api.geoUnits.list(),
+            api.clients.list(),
+            api.visits.list(),
+            api.contracts.list(),
+        ])
+            .then(([units, clients, visitsData, contractsData]) => {
+                if (!active) return;
+                setGeoUnits(units);
+                setAllClients(clients);
+                setVisits(visitsData);
+                setContracts(contractsData);
+            })
+            .catch((error) => {
+                console.error(error);
+                if (!active) return;
+                setGeoUnits([]);
+                setAllClients([]);
+                setVisits([]);
+                setContracts([]);
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     const [referralType, setReferralType] = useState<ReferralType>('Personal');
@@ -105,19 +134,25 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
         }
     };
 
+    const getClientLifecycleStage = (client: Client) => {
+        if (contracts.some(contract => contract.customerId === client.id)) return 'OP';
+        if (visits.some(visit => visit.customerId === client.id)) return 'FOP';
+        return 'Lead';
+    };
+
     const handleClientSearch = async (text: string) => {
         setClientSearch(text);
-        if (text.trim().length < 2) {
-            setClientSuggestions([]);
-            return;
-        }
-        try {
-            const clients = await api.clients.list();
-            const matches = clients.filter((c: any) => c.name.includes(text) || c.mobile?.includes(text)).slice(0, 5);
-            setClientSuggestions(matches);
-        } catch {
-            setClientSuggestions([]);
-        }
+        const query = text.trim();
+        const matches = allClients
+            .filter(client => !client.isCandidate)
+            .filter(client =>
+                !query ||
+                client.name.includes(query) ||
+                client.contacts?.some(con => con.number.includes(query)) ||
+                client.mobile?.includes(query)
+            )
+            .slice(0, query ? 10 : 20);
+        setClientSuggestions(matches);
     };
 
     const handleSelectClient = (client: Client) => {
@@ -270,6 +305,7 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                                 type="text"
                                 value={clientSearch}
                                 onChange={(e) => handleClientSearch(e.target.value)}
+                                onFocus={() => handleClientSearch(clientSearch)}
                                 placeholder="ابحث عن الزبون بالاسم أو رقم الهاتف..."
                                 className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20"
                             />
@@ -281,8 +317,20 @@ export default function CreateReferralSheetModal({ isOpen, onClose, onSheetCreat
                                             onClick={() => handleSelectClient(client)}
                                             className="w-full text-right px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between"
                                         >
-                                            <span className="font-bold text-slate-700">{client.name}</span>
-                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">{client.mobile}</span>
+                                            <div className="flex flex-col items-start gap-1">
+                                                <span className="font-bold text-slate-700">{client.name}</span>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${getClientLifecycleStage(client) === 'OP'
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : getClientLifecycleStage(client) === 'FOP'
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                    }`}>
+                                                    {getClientLifecycleStage(client) === 'OP' ? 'زبون OP' : getClientLifecycleStage(client) === 'FOP' ? 'زبون محتمل FOP' : 'اسم مرشح'}
+                                                </span>
+                                            </div>
+                                            <span className="text-xs text-slate-400 font-mono" dir="ltr">
+                                                {client.contacts?.find(con => con.isPrimary)?.number || client.contacts?.[0]?.number || client.mobile || '--'}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>

@@ -8,7 +8,7 @@ interface ManualSearchModalProps {
     onClose: () => void;
     candidate: Partial<Candidate>;
     clients: Client[];
-    candidates: Candidate[];
+    candidates: any[];
     onLink: (entity: Client | Candidate, type: 'Client' | 'Candidate') => void;
     onNoMatch: () => void;
 }
